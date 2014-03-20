@@ -28,7 +28,9 @@ module.exports.items = [
   name: "profiler close",
   description: gcli.lookup("profilerCloseDesc"),
   exec: function (args, context) {
-    if (!getPanel(context, "jsprofiler"))
+    let toolbox = gDevTools.getToolbox(context.environment.target);
+    let panel = (toolbox == null) ? null : toolbox.getPanel(id);
+    if (panel == null)
       return;
 
     return gDevTools.closeToolbox(context.environment.target)
@@ -40,18 +42,16 @@ module.exports.items = [
   description: gcli.lookup("profilerStartDesc"),
   returnType: "string",
   exec: function (args, context) {
-    function start() {
-      let panel = getPanel(context, "jsprofiler");
+    let target = context.environment.target
+    return gDevTools.showToolbox(target, "jsprofiler").then(toolbox => {
+      let panel = toolbox.getCurrentPanel();
 
       if (panel.recordingProfile)
         throw gcli.lookup("profilerAlreadyStarted2");
 
       panel.toggleRecording();
       return gcli.lookup("profilerStarted2");
-    }
-
-    return gDevTools.showToolbox(context.environment.target, "jsprofiler")
-      .then(start);
+    });
   }
 },
 {
@@ -59,47 +59,54 @@ module.exports.items = [
   description: gcli.lookup("profilerStopDesc"),
   returnType: "string",
   exec: function (args, context) {
-    function stop() {
-      let panel = getPanel(context, "jsprofiler");
+    let target = context.environment.target
+    return gDevTools.showToolbox(target, "jsprofiler").then(toolbox => {
+      let panel = toolbox.getCurrentPanel();
 
       if (!panel.recordingProfile)
         throw gcli.lookup("profilerNotStarted3");
 
       panel.toggleRecording();
       return gcli.lookup("profilerStopped");
-    }
-
-    return gDevTools.showToolbox(context.environment.target, "jsprofiler")
-      .then(stop);
+    });
   }
 },
 {
   name: "profiler list",
   description: gcli.lookup("profilerListDesc"),
-  returnType: "dom",
+  returnType: "profileList",
   exec: function (args, context) {
-    let panel = getPanel(context, "jsprofiler");
+    let toolbox = gDevTools.getToolbox(context.environment.target);
+    let panel = (toolbox == null) ? null : toolbox.getPanel("jsprofiler");
 
-    if (!panel) {
+    if (panel == null) {
       throw gcli.lookup("profilerNotReady");
     }
 
-    let doc = panel.document;
-    let div = createXHTMLElement(doc, "div");
-    let ol = createXHTMLElement(doc, "ol");
-
-    for ([ uid, profile] of panel.profiles) {
-      let li = createXHTMLElement(doc, "li");
-      li.textContent = profile.name;
-      if (profile.isStarted) {
-        li.textContent += " *";
-      }
-      ol.appendChild(li);
+    let profileList = [];
+    for ([ uid, profile ] of panel.profiles) {
+      profileList.push({ name: profile.name, started: profile.isStarted });
     }
-
-    div.appendChild(ol);
-    return div;
+    return profileList;
   }
+},
+{
+  item: "converter",
+  from: "profileList",
+  to: "view",
+  exec: function(profileList, context) {
+    return {
+      html: "<div>" +
+            "  <ol>" +
+            "    <li forEach='profile of ${profiles}'>${profile.name}</li>" +
+            "      ${profile.name} ${profile.started ? '*' : ''}" +
+            "    </li>" +
+            "  </ol>" +
+            "</div>",
+      data: { profiles: profileList.profiles },
+      options: { allowEval: true }
+    };
+  },
 },
 {
   name: "profiler show",
@@ -113,7 +120,8 @@ module.exports.items = [
   ],
 
   exec: function (args, context) {
-    let panel = getPanel(context, "jsprofiler");
+    let toolbox = gDevTools.getToolbox(context.environment.target);
+    let panel = (toolbox == null) ? null : toolbox.getPanel(id);
 
     if (!panel) {
       throw gcli.lookup("profilerNotReady");
@@ -126,17 +134,4 @@ module.exports.items = [
 
     panel.sidebar.selectedItem = panel.sidebar.getItemByProfile(profile);
   }
-
-function getPanel(context, id) {
-  if (context == null) {
-    return undefined;
-  }
-
-  let toolbox = gDevTools.getToolbox(context.environment.target);
-  return toolbox == null ? undefined : toolbox.getPanel(id);
-}
-
-function createXHTMLElement(document, tagname) {
-  return document.createElementNS("http://www.w3.org/1999/xhtml", tagname);
-}
 }];
