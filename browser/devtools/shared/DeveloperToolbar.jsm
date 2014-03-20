@@ -21,9 +21,6 @@ const Node = Ci.nsIDOMNode;
 XPCOMUtils.defineLazyModuleGetter(this, "console",
                                   "resource://gre/modules/devtools/Console.jsm");
 
-XPCOMUtils.defineLazyModuleGetter(this, "CmdCommands",
-                                  "resource:///modules/devtools/BuiltinCommands.jsm");
-
 XPCOMUtils.defineLazyModuleGetter(this, "PluralForm",
                                   "resource://gre/modules/PluralForm.jsm");
 

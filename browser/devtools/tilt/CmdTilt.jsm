@@ -1,14 +1,12 @@
-/* -*- Mode: javascript; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set ft=javascript ts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 "use strict";
 
+const require = Components.utils.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
+const gcli = require("gcli/index");
 
-Components.utils.import('resource://gre/modules/XPCOMUtils.jsm');
-const { devtools } = Components.utils.import("resource://gre/modules/devtools/Loader.jsm", {});
-const gcli = devtools.require("gcli/index");
 this.EXPORTED_SYMBOLS = [ "items" ];
 
 // Fetch TiltManager using the current loader, but don't save a
@@ -16,7 +14,7 @@ this.EXPORTED_SYMBOLS = [ "items" ];
 // We can clean this up once the command line is loadered.
 Object.defineProperty(this, "TiltManager", {
   get: function() {
-    return devtools.require("devtools/tilt/tilt").TiltManager;
+    return require("devtools/tilt/tilt").TiltManager;
   },
   enumerable: true
 });

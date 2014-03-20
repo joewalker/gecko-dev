@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+"use strict";
+
 const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
 
 const BRAND_SHORT_NAME = Cc["@mozilla.org/intl/stringbundle;1"].
@@ -9,9 +11,9 @@ const BRAND_SHORT_NAME = Cc["@mozilla.org/intl/stringbundle;1"].
                          createBundle("chrome://branding/locale/brand.properties").
                          GetStringFromName("brandShortName");
 
+const require = Cu.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
+const gcli = require("gcli/index");
 
-const { devtools } = Cu.import("resource://gre/modules/devtools/Loader.jsm", {});
-const gcli = devtools.require("gcli/index");
 this.EXPORTED_SYMBOLS = [ "items" ];
 
 this.items = [
@@ -81,8 +83,7 @@ this.items = [
 ];
 
 function gcli_cmd_resize(args, context) {
-  let browserDoc = context.environment.chromeDocument;
-  let browserWindow = browserDoc.defaultView;
+  let browserWindow = context.environment.chromeWindow;
   let mgr = browserWindow.ResponsiveUI.ResponsiveUIManager;
   mgr.handleGcliCommand(browserWindow,
                         browserWindow.gBrowser.selectedTab,

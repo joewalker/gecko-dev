@@ -2,10 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+"use strict";
+
 this.EXPORTED_SYMBOLS = [];
 
-const Cu = Components.utils;
-const require = Cu.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
+const require = Components.utils.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
 
 const gcli = require("gcli/index");
 

@@ -2,14 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const { Cu } = require("chrome");
+"use strict";
 
-var gcli = require('gcli/index');
+const gcli = require('gcli/index');
 
 loader.lazyGetter(this, "gDevTools",
   () => Cu.import("resource:///modules/devtools/gDevTools.jsm", {}).gDevTools);
 
-var { Promise: promise } = Cu.import("resource://gre/modules/Promise.jsm", {});
 
 module.exports.items = [
 {
@@ -20,8 +19,6 @@ module.exports.items = [
 {
   name: "profiler open",
   description: gcli.lookup("profilerOpenDesc"),
-  params: [],
-
   exec: function (args, context) {
     return gDevTools.showToolbox(context.environment.target, "jsprofiler")
       .then(function () null);
@@ -30,8 +27,6 @@ module.exports.items = [
 {
   name: "profiler close",
   description: gcli.lookup("profilerCloseDesc"),
-  params: [],
-
   exec: function (args, context) {
     if (!getPanel(context, "jsprofiler"))
       return;
@@ -44,8 +39,6 @@ module.exports.items = [
   name: "profiler start",
   description: gcli.lookup("profilerStartDesc"),
   returnType: "string",
-  params: [],
-
   exec: function (args, context) {
     function start() {
       let panel = getPanel(context, "jsprofiler");
@@ -65,8 +58,6 @@ module.exports.items = [
   name: "profiler stop",
   description: gcli.lookup("profilerStopDesc"),
   returnType: "string",
-  params: [],
-
   exec: function (args, context) {
     function stop() {
       let panel = getPanel(context, "jsprofiler");
@@ -86,8 +77,6 @@ module.exports.items = [
   name: "profiler list",
   description: gcli.lookup("profilerListDesc"),
   returnType: "dom",
-  params: [],
-
   exec: function (args, context) {
     let panel = getPanel(context, "jsprofiler");
 
@@ -115,7 +104,6 @@ module.exports.items = [
 {
   name: "profiler show",
   description: gcli.lookup("profilerShowDesc"),
-
   params: [
     {
       name: "name",
