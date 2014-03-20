@@ -350,13 +350,6 @@ DeveloperToolbar.prototype.show = function(focus) {
   var waitPromise = this._hidePromise || promise.resolve();
 
   this._showPromise = waitPromise.then(() => {
-    try {
-      CmdCommands.refreshAutoCommands(this._chromeWindow);
-    }
-    catch (ex) {
-      console.error(ex);
-    }
-
     Services.prefs.setBoolPref("devtools.toolbar.visible", true);
 
     this._telemetry.toolOpened("developertoolbar");

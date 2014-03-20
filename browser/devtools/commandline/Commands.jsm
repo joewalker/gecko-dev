@@ -23,4 +23,6 @@ const commandModules = [
 gcli.addItemsByModule(commandModules, { delayedLoad: true });
 
 
+const { mozDirLoader } = require("resource:///modules/devtools/BuiltinCommands.jsm");
 
+gcli.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
