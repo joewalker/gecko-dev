@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const { Cu } = require("chrome");
-module.exports = [];
 
 var gcli = require('gcli/index');
 
@@ -12,19 +11,13 @@ loader.lazyGetter(this, "gDevTools",
 
 var { Promise: promise } = Cu.import("resource://gre/modules/Promise.jsm", {});
 
-/*
- * 'profiler' command. Doesn't do anything.
- */
-gcli.addCommand({
+module.exports.items = [
+{
   name: "profiler",
   description: gcli.lookup("profilerDesc"),
   manual: gcli.lookup("profilerManual")
-});
-
-/*
- * 'profiler open' command
- */
-gcli.addCommand({
+},
+{
   name: "profiler open",
   description: gcli.lookup("profilerOpenDesc"),
   params: [],
@@ -33,12 +26,8 @@ gcli.addCommand({
     return gDevTools.showToolbox(context.environment.target, "jsprofiler")
       .then(function () null);
   }
-});
-
-/*
- * 'profiler close' command
- */
-gcli.addCommand({
+},
+{
   name: "profiler close",
   description: gcli.lookup("profilerCloseDesc"),
   params: [],
@@ -50,12 +39,8 @@ gcli.addCommand({
     return gDevTools.closeToolbox(context.environment.target)
       .then(function () null);
   }
-});
-
-/*
- * 'profiler start' command
- */
-gcli.addCommand({
+},
+{
   name: "profiler start",
   description: gcli.lookup("profilerStartDesc"),
   returnType: "string",
@@ -75,12 +60,8 @@ gcli.addCommand({
     return gDevTools.showToolbox(context.environment.target, "jsprofiler")
       .then(start);
   }
-});
-
-/*
- * 'profiler stop' command
- */
-gcli.addCommand({
+},
+{
   name: "profiler stop",
   description: gcli.lookup("profilerStopDesc"),
   returnType: "string",
@@ -100,12 +81,8 @@ gcli.addCommand({
     return gDevTools.showToolbox(context.environment.target, "jsprofiler")
       .then(stop);
   }
-});
-
-/*
- * 'profiler list' command
- */
-gcli.addCommand({
+},
+{
   name: "profiler list",
   description: gcli.lookup("profilerListDesc"),
   returnType: "dom",
@@ -134,12 +111,8 @@ gcli.addCommand({
     div.appendChild(ol);
     return div;
   }
-});
-
-/*
- * 'profiler show' command
- */
-gcli.addCommand({
+},
+{
   name: "profiler show",
   description: gcli.lookup("profilerShowDesc"),
 
@@ -165,7 +138,6 @@ gcli.addCommand({
 
     panel.sidebar.selectedItem = panel.sidebar.getItemByProfile(profile);
   }
-});
 
 function getPanel(context, id) {
   if (context == null) {
@@ -179,3 +151,4 @@ function getPanel(context, id) {
 function createXHTMLElement(document, tagname) {
   return document.createElementNS("http://www.w3.org/1999/xhtml", tagname);
 }
+}];

@@ -32,6 +32,11 @@ XPCOMUtils.defineLazyModuleGetter(this, "Downloads",
 XPCOMUtils.defineLazyModuleGetter(this, "Task",
                                   "resource://gre/modules/Task.jsm");
 
+/**
+ * The commands and converters that are exported to GCLI
+ */
+this.items = [];
+
 /* CmdAddon ---------------------------------------------------------------- */
 
 (function(module) {
@@ -47,7 +52,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'addon' command.
    */
-  gcli.addCommand({
+  this.items.push({
     name: "addon",
     description: gcli.lookup("addonDesc")
   });
@@ -55,7 +60,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'addon list' command.
    */
-  gcli.addCommand({
+  this.items.push({
     name: "addon list",
     description: gcli.lookup("addonListDesc"),
     returnType: "addonsInfo",
@@ -100,7 +105,8 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
     }
   });
 
-  gcli.addConverter({
+  this.items.push({
+    item: "converter",
     from: "addonsInfo",
     to: "view",
     exec: function(addonsInfo, context) {
@@ -263,7 +269,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
     /**
     * 'addon enable' command.
     */
-    gcli.addCommand({
+    this.items.push({
       name: "addon enable",
       description: gcli.lookup("addonEnableDesc"),
       params: [nameParameter],
@@ -308,7 +314,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
     /**
      * 'addon disable' command.
      */
-    gcli.addCommand({
+    this.items.push({
       name: "addon disable",
       description: gcli.lookup("addonDisableDesc"),
       params: [nameParameter],
@@ -374,7 +380,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'calllog' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "calllog",
     description: gcli.lookup("calllogDesc")
   })
@@ -382,7 +388,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'calllog start' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "calllog start",
     description: gcli.lookup("calllogStartDesc"),
 
@@ -431,7 +437,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'calllog stop' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "calllog stop",
     description: gcli.lookup("calllogStopDesc"),
 
@@ -470,7 +476,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'calllog chromestart' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "calllog chromestart",
     description: gcli.lookup("calllogChromeStartDesc"),
     get hidden() gcli.hiddenByChromePref(),
@@ -572,7 +578,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'calllog chromestop' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "calllog chromestop",
     description: gcli.lookup("calllogChromeStopDesc"),
     get hidden() gcli.hiddenByChromePref(),
@@ -741,7 +747,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'cmd' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "cmd",
     get hidden() {
       return !prefBranch.prefHasUserValue(PREF_DIR);
@@ -752,7 +758,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'cmd refresh' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "cmd refresh",
     description: gcli.lookup("cmdRefreshDesc"),
     get hidden() {
@@ -771,7 +777,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'cmd setdir' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "cmd setdir",
     description: gcli.lookup("cmdSetdirDesc"),
     params: [
@@ -816,7 +822,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'console' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "console",
     description: gcli.lookup("consoleDesc"),
     manual: gcli.lookup("consoleManual")
@@ -825,7 +831,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'console clear' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "console clear",
     description: gcli.lookup("consoleclearDesc"),
     exec: function Command_consoleClear(args, context) {
@@ -840,7 +846,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'console close' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "console close",
     description: gcli.lookup("consolecloseDesc"),
     exec: function(args, context) {
@@ -851,7 +857,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'console open' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "console open",
     description: gcli.lookup("consoleopenDesc"),
     exec: function(args, context) {
@@ -907,7 +913,8 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
     "</ul>" +
     "";
 
-  gcli.addConverter({
+  this.items.push({
+    item: "converter",
     from: "cookies",
     to: "view",
     exec: function(cookies, context) {
@@ -967,7 +974,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'cookie' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "cookie",
     description: gcli.lookup("cookieDesc"),
     manual: gcli.lookup("cookieManual")
@@ -976,7 +983,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'cookie list' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "cookie list",
     description: gcli.lookup("cookieListDesc"),
     manual: gcli.lookup("cookieListManual"),
@@ -1013,7 +1020,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'cookie remove' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "cookie remove",
     description: gcli.lookup("cookieRemoveDesc"),
     manual: gcli.lookup("cookieRemoveManual"),
@@ -1043,7 +1050,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'cookie set' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "cookie set",
     description: gcli.lookup("cookieSetDesc"),
     manual: gcli.lookup("cookieSetManual"),
@@ -1119,7 +1126,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'export' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "export",
     description: gcli.lookup("exportDesc"),
   });
@@ -1128,7 +1135,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
    * The 'export html' command. This command allows the user to export the page to
    * HTML after they do DOM changes.
    */
-  gcli.addCommand({
+  this.items.push({
     name: "export html",
     description: gcli.lookup("exportHtmlDesc"),
     exec: function(args, context) {
@@ -1151,7 +1158,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * jsb command.
    */
-  gcli.addCommand({
+  this.items.push({
     name: 'jsb',
     description: gcli.lookup('jsbDesc'),
     returnValue:'string',
@@ -1278,7 +1285,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'pagemod' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "pagemod",
     description: gcli.lookup("pagemodDesc"),
   });
@@ -1287,7 +1294,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
    * The 'pagemod replace' command. This command allows the user to search and
    * replace within text nodes and attributes.
    */
-  gcli.addCommand({
+  this.items.push({
     name: "pagemod replace",
     description: gcli.lookup("pagemodReplaceDesc"),
     params: [
@@ -1394,7 +1401,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'pagemod remove' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "pagemod remove",
     description: gcli.lookup("pagemodRemoveDesc"),
   });
@@ -1403,7 +1410,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * The 'pagemod remove element' command.
    */
-  gcli.addCommand({
+  this.items.push({
     name: "pagemod remove element",
     description: gcli.lookup("pagemodRemoveElementDesc"),
     params: [
@@ -1459,7 +1466,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * The 'pagemod remove attribute' command.
    */
-  gcli.addCommand({
+  this.items.push({
     name: "pagemod remove attribute",
     description: gcli.lookup("pagemodRemoveAttributeDesc"),
     params: [
@@ -1530,14 +1537,14 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
 /* CmdTools -------------------------------------------------------------- */
 
 (function(module) {
-  gcli.addCommand({
+  this.items.push({
     name: "tools",
     description: gcli.lookupFormat("toolsDesc2", [BRAND_SHORT_NAME]),
     manual: gcli.lookupFormat("toolsManual2", [BRAND_SHORT_NAME]),
     get hidden() gcli.hiddenByChromePref(),
   });
 
-  gcli.addCommand({
+  this.items.push({
     name: "tools srcdir",
     description: gcli.lookup("toolsSrcdirDesc"),
     manual: gcli.lookupFormat("toolsSrcdirManual2", [BRAND_SHORT_NAME]),
@@ -1574,7 +1581,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
     }
   });
 
-  gcli.addCommand({
+  this.items.push({
     name: "tools builtin",
     description: gcli.lookup("toolsBuiltinDesc"),
     manual: gcli.lookup("toolsBuiltinManual"),
@@ -1587,7 +1594,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
     }
   });
 
-  gcli.addCommand({
+  this.items.push({
     name: "tools reload",
     description: gcli.lookup("toolsReloadDesc"),
     get hidden() gcli.hiddenByChromePref() || !Services.prefs.prefHasUserValue("devtools.loader.srcdir"),
@@ -1615,7 +1622,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
    * >> restart --nocache
    * - restarts immediately and starts Firefox without using cache
    */
-  gcli.addCommand({
+  this.items.push({
     name: "restart",
     description: gcli.lookupFormat("restartBrowserDesc", [BRAND_SHORT_NAME]),
     params: [
@@ -1661,7 +1668,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Task",
   /**
    * 'screenshot' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: "screenshot",
     description: gcli.lookup("screenshotDesc"),
     manual: gcli.lookup("screenshotManual"),
@@ -1885,7 +1892,7 @@ const { DebuggerServer } = Cu.import("resource://gre/modules/devtools/dbg-server
 /**
  * 'listen' command
  */
-gcli.addCommand({
+this.items.push({
   name: "listen",
   description: gcli.lookup("listenDesc"),
   manual: gcli.lookupFormat("listenManual2", [BRAND_SHORT_NAME]),
@@ -1924,12 +1931,12 @@ gcli.addCommand({
   /**
    * 'paintflashing' command
    */
-  gcli.addCommand({
+  this.items.push({
     name: 'paintflashing',
     description: gcli.lookup('paintflashingDesc')
   });
 
-  gcli.addCommand({
+  this.items.push({
     name: 'paintflashing on',
     description: gcli.lookup('paintflashingOnDesc'),
     manual: gcli.lookup('paintflashingManual'),
@@ -1956,7 +1963,7 @@ gcli.addCommand({
     }
   });
 
-  gcli.addCommand({
+  this.items.push({
     name: 'paintflashing off',
     description: gcli.lookup('paintflashingOffDesc'),
     manual: gcli.lookup('paintflashingManual'),
@@ -1983,7 +1990,7 @@ gcli.addCommand({
     }
   });
 
-  gcli.addCommand({
+  this.items.push({
     name: 'paintflashing toggle',
     hidden: true,
     buttonId: "command-button-paintflashing",
@@ -2047,13 +2054,13 @@ gcli.addCommand({
   /**
    * 'appcache' command
    */
-
-  gcli.addCommand({
+  this.items.push({
     name: 'appcache',
     description: gcli.lookup('appCacheDesc')
   });
 
-  gcli.addConverter({
+  this.items.push({
+    item: "converter",
     from: "appcacheerrors",
     to: "view",
     exec: function([errors, manifestURI], context) {
@@ -2081,11 +2088,11 @@ gcli.addCommand({
     }
   });
 
-  gcli.addCommand({
-    name: 'appcache validate',
-    description: gcli.lookup('appCacheValidateDesc'),
-    manual: gcli.lookup('appCacheValidateManual'),
-    returnType: 'appcacheerrors',
+  this.items.push({
+    name: "appcache validate",
+    description: gcli.lookup("appCacheValidateDesc"),
+    manual: gcli.lookup("appCacheValidateManual"),
+    returnType: "appcacheerrors",
     params: [{
       group: "options",
       params: [
@@ -2115,10 +2122,10 @@ gcli.addCommand({
     }
   });
 
-  gcli.addCommand({
-    name: 'appcache clear',
-    description: gcli.lookup('appCacheClearDesc'),
-    manual: gcli.lookup('appCacheClearManual'),
+  this.items.push({
+    name: "appcache clear",
+    description: gcli.lookup("appCacheClearDesc"),
+    manual: gcli.lookup("appCacheClearManual"),
     exec: function(args, context) {
       let utils = new AppCacheUtils(args.uri);
       utils.clearAll();
@@ -2167,7 +2174,8 @@ gcli.addCommand({
     "  </li>" +
     "</ul>";
 
-  gcli.addConverter({
+  this.items.push({
+    item: "converter",
     from: "appcacheentries",
     to: "view",
     exec: function(entries, context) {
@@ -2182,7 +2190,7 @@ gcli.addCommand({
     }
   });
 
-  gcli.addCommand({
+  this.items.push({
     name: 'appcache list',
     description: gcli.lookup('appCacheListDesc'),
     manual: gcli.lookup('appCacheListManual'),
@@ -2204,7 +2212,7 @@ gcli.addCommand({
     }
   });
 
-  gcli.addCommand({
+  this.items.push({
     name: 'appcache viewentry',
     description: gcli.lookup('appCacheViewEntryDesc'),
     manual: gcli.lookup('appCacheViewEntryManual'),
@@ -2229,13 +2237,12 @@ gcli.addCommand({
   /**
    * 'media' command
    */
-
-  gcli.addCommand({
+  this.items.push({
     name: "media",
     description: gcli.lookup("mediaDesc")
   });
 
-  gcli.addCommand({
+  this.items.push({
     name: "media emulate",
     description: gcli.lookup("mediaEmulateDesc"),
     manual: gcli.lookup("mediaEmulateManual"),
@@ -2257,7 +2264,7 @@ gcli.addCommand({
     }
   });
 
-  gcli.addCommand({
+  this.items.push({
     name: "media reset",
     description: gcli.lookup("mediaResetDesc"),
     manual: gcli.lookup("mediaEmulateManual"),
@@ -2275,8 +2282,7 @@ gcli.addCommand({
   /**
    * 'splitconsole' command (hidden)
    */
-
-  gcli.addCommand({
+  this.items.push({
     name: 'splitconsole',
     hidden: true,
     buttonId: "command-button-splitconsole",

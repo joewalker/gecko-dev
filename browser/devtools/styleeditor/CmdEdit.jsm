@@ -4,19 +4,16 @@
 
 const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
 
-this.EXPORTED_SYMBOLS = [ ];
 
 let devtools = Cu.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools;
 const gcli = devtools.require("gcli/index");
+this.EXPORTED_SYMBOLS = [ "items" ];
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "gDevTools",
                                   "resource:///modules/devtools/gDevTools.jsm");
 
-/**
- * 'edit' command
- */
-gcli.addCommand({
+this.items = [{
   name: "edit",
   description: gcli.lookup("editDesc"),
   manual: gcli.lookup("editManual2"),
@@ -48,4 +45,4 @@ gcli.addCommand({
        return null;
      });
    }
-});
+}];

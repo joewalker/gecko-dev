@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
-this.EXPORTED_SYMBOLS = [ ];
 
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 XPCOMUtils.defineLazyModuleGetter(this, "gDevTools",
@@ -11,11 +10,9 @@ XPCOMUtils.defineLazyModuleGetter(this, "gDevTools",
 
 const { devtools } = Cu.import("resource://gre/modules/devtools/Loader.jsm", {});
 const gcli = devtools.require('gcli/index');
+this.EXPORTED_SYMBOLS = [ "items" ];
 
-/**
- * 'inspect' command
- */
-gcli.addCommand({
+this.items = [{
   name: "inspect",
   description: gcli.lookup("inspectDesc"),
   manual: gcli.lookup("inspectManual"),
@@ -35,4 +32,4 @@ gcli.addCommand({
       toolbox.getCurrentPanel().selection.setNode(args.selector, "gcli");
     }.bind(this));
   }
-});
+}];

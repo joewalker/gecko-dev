@@ -43,7 +43,8 @@ XPCOMUtils.defineLazyGetter(this, "toolboxStrings", function () {
 
 const Telemetry = require("devtools/shared/telemetry");
 
-XPCOMUtils.defineLazyGetter(this, "gcli", () => require("gcli/index"));
+const gcli = require("gcli/index");
+gcli.load();
 
 Object.defineProperty(this, "ConsoleServiceListener", {
   get: function() {
