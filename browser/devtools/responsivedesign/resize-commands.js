@@ -4,19 +4,16 @@
 
 "use strict";
 
-const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
+const { Cc, Ci, Cu } = require("chrome");
 
 const BRAND_SHORT_NAME = Cc["@mozilla.org/intl/stringbundle;1"].
                          getService(Ci.nsIStringBundleService).
                          createBundle("chrome://branding/locale/brand.properties").
                          GetStringFromName("brandShortName");
 
-const require = Cu.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
 const gcli = require("gcli/index");
 
-this.EXPORTED_SYMBOLS = [ "items" ];
-
-this.items = [
+exports.items = [
   {
     name: 'resize',
     description: gcli.lookup('resizeModeDesc')

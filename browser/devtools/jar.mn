@@ -79,6 +79,7 @@ browser.jar:
     content/browser/devtools/profiler/cleopatra/images/noise.png       (profiler/cleopatra/images/noise.png)
     content/browser/devtools/profiler/cleopatra/images/throbber.svg    (profiler/cleopatra/images/throbber.svg)
     content/browser/devtools/profiler/cleopatra/images/treetwisty.svg  (profiler/cleopatra/images/treetwisty.svg)
+    content/browser/devtools/responsivedesign/resize-commands.js       (responsivedesign/resize-commands.js)
     content/browser/devtools/commandline.css                           (commandline/commandline.css)
     content/browser/devtools/commandlineoutput.xhtml                   (commandline/commandlineoutput.xhtml)
     content/browser/devtools/commandlinetooltip.xhtml                  (commandline/commandlinetooltip.xhtml)

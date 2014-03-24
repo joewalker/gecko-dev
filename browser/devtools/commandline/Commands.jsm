@@ -15,7 +15,7 @@ const commandModules = [
   "devtools/debugger/debugger-commands",
   "devtools/styleeditor/styleeditor-commands",
   "devtools/inspector/inspector-commands",
-  "resource:///modules/devtools/CmdResize.jsm",
+  "devtools/responsivedesign/resize-commands",
   "resource:///modules/devtools/CmdTilt.jsm",
   "resource:///modules/devtools/CmdScratchpad.jsm",
   "devtools/profiler/commands.js",
