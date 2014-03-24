@@ -4,12 +4,9 @@
 
 "use strict";
 
-const require = Components.utils.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
 const gcli = require("gcli/index");
 
-this.EXPORTED_SYMBOLS = [ "items" ];
-
-this.items = [{
+exports.items = [{
   name: "edit",
   description: gcli.lookup("editDesc"),
   manual: gcli.lookup("editManual2"),
