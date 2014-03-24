@@ -17,7 +17,7 @@ const commandModules = [
   "devtools/inspector/inspector-commands",
   "devtools/responsivedesign/resize-commands",
   "devtools/tilt/tilt-commands",
-  "resource:///modules/devtools/CmdScratchpad.jsm",
+  "devtools/scratchpad/scratchpad-commands",
   "devtools/profiler/commands.js",
 ];
 

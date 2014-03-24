@@ -4,19 +4,16 @@
 
 "use strict";
 
-const require = Components.utils.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
 const gcli = require("gcli/index");
 
-this.EXPORTED_SYMBOLS = [ "items" ];
-
-this.items = [{
+exports.items = [{
   name: "scratchpad",
   buttonId: "command-button-scratchpad",
   buttonClass: "command-button command-button-invertable",
   tooltipText: gcli.lookup("scratchpadOpenTooltip"),
   hidden: true,
   exec: function(args, context) {
-    let chromeWindow = context.environment.chromeDocument.defaultView;
-    chromeWindow.Scratchpad.ScratchpadManager.openScratchpad();
+    let Scratchpad = context.environment.chromeWindow.Scratchpad;
+    Scratchpad.ScratchpadManager.openScratchpad();
   }
 }];
