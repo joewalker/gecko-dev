@@ -120,6 +120,10 @@ Tools.inspector = {
   label: l10n("inspector.label", inspectorStrings),
   tooltip: l10n("inspector.tooltip", inspectorStrings),
   inMenu: true,
+  commands: [
+    "devtools/resize-commands",
+    "devtools/inspector/inspector-commands",
+  ],
 
   preventClosingOnKey: true,
   onkey: function(panel) {
@@ -149,6 +153,7 @@ Tools.jsdebugger = {
   label: l10n("ToolboxDebugger.label", debuggerStrings),
   tooltip: l10n("ToolboxDebugger.tooltip", debuggerStrings),
   inMenu: true,
+  commands: "devtools/debugger/debugger-commands",
 
   isTargetSupported: function(target) {
     return true;
@@ -172,6 +177,7 @@ Tools.styleEditor = {
   label: l10n("ToolboxStyleEditor.label", styleEditorStrings),
   tooltip: l10n("ToolboxStyleEditor.tooltip2", styleEditorStrings),
   inMenu: true,
+  commands: "devtools/styleeditor/styleeditor-commands",
 
   isTargetSupported: function(target) {
     return !target.isAddon;
@@ -236,6 +242,7 @@ Tools.jsprofiler = {
   label: l10n("profiler.label", profilerStrings),
   tooltip: l10n("profiler.tooltip2", profilerStrings),
   inMenu: true,
+  commands: "devtools/profiler/commands",
 
   isTargetSupported: function (target) {
     return !target.isAddon;
@@ -282,6 +289,7 @@ Tools.scratchpad = {
   label: l10n("scratchpad.label", scratchpadStrings),
   tooltip: l10n("scratchpad.tooltip", scratchpadStrings),
   inMenu: false,
+  commands: "devtools/scratchpad/scratchpad-commands",
 
   isTargetSupported: function(target) {
     return !target.isAddon && target.isRemote;

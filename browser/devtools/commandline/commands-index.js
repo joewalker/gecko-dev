@@ -4,25 +4,21 @@
 
 "use strict";
 
-this.EXPORTED_SYMBOLS = [];
-
-const require = Components.utils.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
-
 const gcli = require("gcli/index");
 
 const commandModules = [
   "resource:///modules/devtools/BuiltinCommands.jsm",
-  "devtools/debugger/debugger-commands",
-  "devtools/styleeditor/styleeditor-commands",
-  "devtools/inspector/inspector-commands",
-  "devtools/responsivedesign/resize-commands",
   "devtools/tilt/tilt-commands",
-  "devtools/scratchpad/scratchpad-commands",
-  "devtools/profiler/commands.js",
 ];
 
 gcli.addItemsByModule(commandModules, { delayedLoad: true });
 
+const defaultTools = require("main").defaultTools;
+for (let definition of defaultTools) {
+  if (definition.commands) {
+    gcli.addItemsByModule(definition.commands, { delayedLoad: true });
+  }
+}
 
 const { mozDirLoader } = require("resource:///modules/devtools/BuiltinCommands.jsm");
 

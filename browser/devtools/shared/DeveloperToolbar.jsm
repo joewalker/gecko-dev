@@ -12,7 +12,6 @@ const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
-Cu.import("resource:///modules/devtools/Commands.jsm");
 
 const { require, TargetFactory } = Cu.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools;
 
@@ -41,6 +40,8 @@ XPCOMUtils.defineLazyGetter(this, "toolboxStrings", function () {
 const Telemetry = require("devtools/shared/telemetry");
 
 const gcli = require("gcli/index");
+require("devtools/commandline/commands-index");
+
 gcli.load();
 
 Object.defineProperty(this, "ConsoleServiceListener", {
