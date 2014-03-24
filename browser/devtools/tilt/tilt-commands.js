@@ -4,10 +4,7 @@
 
 "use strict";
 
-const require = Components.utils.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
 const gcli = require("gcli/index");
-
-this.EXPORTED_SYMBOLS = [ "items" ];
 
 // Fetch TiltManager using the current loader, but don't save a
 // reference to it, because it might change with a tool reload.
@@ -19,7 +16,7 @@ Object.defineProperty(this, "TiltManager", {
   enumerable: true
 });
 
-this.items = [
+exports.items = [
 {
   name: 'tilt',
   description: gcli.lookup("tiltDesc"),
