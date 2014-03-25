@@ -90,6 +90,7 @@ Tools.webConsole = {
   menuLabel: l10n("MenuWebconsole.label", webConsoleStrings),
   tooltip: l10n("ToolboxWebconsole.tooltip", webConsoleStrings),
   inMenu: true,
+  commands: "devtools/webconsole/console-commands",
 
   preventClosingOnKey: true,
   onkey: function(panel, toolbox) {
