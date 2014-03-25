@@ -59,5 +59,36 @@ exports.items = [
         toolbox.toggleSplitConsole();
       }
     }
+  },
+  {
+    name: "console",
+    description: gcli.lookup("consoleDesc"),
+    manual: gcli.lookup("consoleManual")
+  },
+  {
+    name: "console clear",
+    description: gcli.lookup("consoleclearDesc"),
+    exec: function Command_consoleClear(args, context) {
+      let HUDService = require("devtools/webconsole/hudservice");
+      let hud = HUDService.getHudByWindow(context.environment.window);
+      // hud will be null if the web console has not been opened for this window
+      if (hud) {
+        hud.jsterm.clearOutput();
+      }
+    }
+  },
+  {
+    name: "console close",
+    description: gcli.lookup("consolecloseDesc"),
+    exec: function(args, context) {
+      return gDevTools.closeToolbox(context.environment.target);
+    }
+  },
+  {
+    name: "console open",
+    description: gcli.lookup("consoleopenDesc"),
+    exec: function(args, context) {
+      return gDevTools.showToolbox(context.environment.target, "webconsole");
+    }
   }
 ];
