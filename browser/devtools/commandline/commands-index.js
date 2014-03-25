@@ -10,6 +10,7 @@ const commandModules = [
   "resource:///modules/devtools/BuiltinCommands.jsm",
   "devtools/tilt/tilt-commands",
   "gcli/commands/appcache",
+  "gcli/commands/cmd",
   "gcli/commands/cookie",
   "gcli/commands/jsb",
   "gcli/commands/listen",
@@ -30,6 +31,6 @@ for (let definition of defaultTools) {
   }
 }
 
-const { mozDirLoader } = require("resource:///modules/devtools/BuiltinCommands.jsm");
+const { mozDirLoader } = require("gcli/commands/cmd");
 
 gcli.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
