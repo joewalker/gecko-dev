@@ -9,6 +9,7 @@ const gcli = require("gcli/index");
 const commandModules = [
   "resource:///modules/devtools/BuiltinCommands.jsm",
   "devtools/tilt/tilt-commands",
+  "gcli/commands/media"
 ];
 
 gcli.addItemsByModule(commandModules, { delayedLoad: true });
