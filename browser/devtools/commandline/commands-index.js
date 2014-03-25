@@ -13,6 +13,7 @@ const commandModules = [
   "gcli/commands/listen",
   "gcli/commands/media",
   "gcli/commands/paintflashing",
+  "gcli/commands/restart",
   "gcli/commands/screenshot",
 ];
 
