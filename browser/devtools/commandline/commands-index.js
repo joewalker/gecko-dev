@@ -11,6 +11,7 @@ const commandModules = [
   "devtools/tilt/tilt-commands",
   "gcli/commands/appcache",
   "gcli/commands/media"
+  "gcli/commands/paintflashing",
 ];
 
 gcli.addItemsByModule(commandModules, { delayedLoad: true });
