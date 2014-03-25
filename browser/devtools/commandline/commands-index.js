@@ -10,6 +10,7 @@ const commandModules = [
   "resource:///modules/devtools/BuiltinCommands.jsm",
   "devtools/tilt/tilt-commands",
   "gcli/commands/appcache",
+  "gcli/commands/calllog",
   "gcli/commands/cmd",
   "gcli/commands/cookie",
   "gcli/commands/jsb",
