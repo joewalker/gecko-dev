@@ -15,6 +15,7 @@ const commandModules = [
   "gcli/commands/paintflashing",
   "gcli/commands/restart",
   "gcli/commands/screenshot",
+  "gcli/commands/tools",
 ];
 
 gcli.addItemsByModule(commandModules, { delayedLoad: true });
