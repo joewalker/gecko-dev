@@ -4,76 +4,75 @@
 
 "use strict";
 
-const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
-const { Services } = require("resource://gre/modules/Services.jsm");
-const { Promise: promise } = require("resource://gre/modules/commonjs/sdk/core/promise.js");
+const { Cc, Ci, Cu } = require("chrome");
+const { Promise: promise } = Cu.import("resource://gre/modules/commonjs/sdk/core/promise.js", {});
+const { AddonManager } = Cu.import("resource://gre/modules/AddonManager.jsm", {});
 const gcli = require("gcli/index");
-
-loader.lazyImporter(this, "AddonManager", "resource://gre/modules/AddonManager.jsm");
+const { Promise } = require("resource://gre/modules/Promise.jsm");
 
 const BRAND_SHORT_NAME = Cc["@mozilla.org/intl/stringbundle;1"]
                            .getService(Ci.nsIStringBundleService)
                            .createBundle("chrome://branding/locale/brand.properties")
                            .GetStringFromName("brandShortName");
 
-// When we've done the initial lookup of addons, we'll store them in addonCache,
-// and keep them up to date with addon listeners. We use addonCacheDeferred to
-// indicate when they're first ready
-let addonCache = undefined;
-let addonCacheDeferred = promise.defer();
-
 /**
- * Returns a string that represents the passed add-on.
+ * Takes a function that uses a callback as its last parameter, and returns a
+ * new function that returns a promise instead.
+ * This should probably live in async-util
  */
-function representAddon(addon) {
-  let name = addon.name + " " + addon.version;
-  return name.trim();
-}
-
-// We need a list of addon names for the enable and disable commands. Because
-// getting the name list is async we do not add the commands until we have the
-// list.
-AddonManager.getAllAddons(function addonAsync(addons) {
-  // We listen for installs to keep our addon list up to date. There is no need
-  // to listen for uninstalls because uninstalled addons are simply disabled
-  // until restart (to enable undo functionality).
-  AddonManager.addAddonListener({
-    onInstalled: function(addon) {
-      addonCache.push({
-        name: representAddon(addon).replace(/\s/g, "_"),
-        value: addon.name
+const promiseify = function(scope, functionWithLastParamCallback) {
+  return (...args) => {
+    return new Promise(resolve => {
+      args.push((...results) => {
+        resolve(results.length > 1 ? results : results[0]);
       });
-    },
-    onUninstalled: function(addon) {
-      let name = representAddon(addon).replace(/\s/g, "_");
-
-      for (let i = 0; i < addonCache.length; i++) {
-        if(addonCache[i].name == name) {
-          addonCache.splice(i, 1);
-          break;
-        }
-      }
-    },
-  });
-
-  let addonCache = [];
-
-  for (let addon of addons) {
-    addonCache.push({
-      name: representAddon(addon).replace(/\s/g, "_"),
-      value: addon.name
+      functionWithLastParamCallback.apply(scope, args);
     });
   }
-});
+};
+
+// Convert callback based functions to promise based ones
+const getAllAddons = promiseify(AddonManager, AddonManager.getAllAddons);
+const getAddonsByTypes = promiseify(AddonManager, AddonManager.getAddonsByTypes);
+
+/**
+ * Return a string array containing the pending operations on an addon
+ */
+function pendingOperations(addon) {
+  let allOperations = [
+    "PENDING_ENABLE", "PENDING_DISABLE", "PENDING_UNINSTALL",
+    "PENDING_INSTALL", "PENDING_UPGRADE"
+  ];
+  return allOperations.reduce(function(operations, opName) {
+    return addon.pendingOperations & AddonManager[opName] ?
+      operations.concat(opName) :
+      operations;
+  }, []);
+}
 
 exports.items = [
   {
-    item: 'type',
-    name: 'addons',
-    parent: 'selection',
-    stringifyProperty: 'name',
+    item: "type",
+    name: "addon",
+    parent: "selection",
+    stringifyProperty: "name",
+    cacheable: true,
+    constructor: function() {
+      // Tell GCLI to clear the cache of addons when one is added or removed
+      let listener = {
+        onInstalled: addon => { this.clearCache(); },
+        onUninstalled: addon => { this.clearCache(); },
+      };
+      AddonManager.addAddonListener(listener);
+    },
     lookup: function() {
-      return (addonCache != null) ? addonCache : addonCacheDeferred.promise;
+      return getAllAddons().then(addons => {
+        return addons.map(addon => {
+          let name = addon.name + " " + addon.version;
+          name = name.trim().replace(/\s/g, "_");
+          return { name: name, value: addon };
+        });
+      });
     }
   },
   {
@@ -85,43 +84,27 @@ exports.items = [
     description: gcli.lookup("addonListDesc"),
     returnType: "addonsInfo",
     params: [{
-      name: 'type',
+      name: "type",
       type: {
-        name: 'selection',
-        data: ["dictionary", "extension", "locale", "plugin", "theme", "all"]
+        name: "selection",
+        data: [ "dictionary", "extension", "locale", "plugin", "theme", "all" ]
       },
-      defaultValue: 'all',
+      defaultValue: "all",
       description: gcli.lookup("addonListTypeDesc")
     }],
-    exec: function(aArgs, context) {
-      let deferred = context.defer();
-      function pendingOperations(addon) {
-        let allOperations = ["PENDING_ENABLE",
-                             "PENDING_DISABLE",
-                             "PENDING_UNINSTALL",
-                             "PENDING_INSTALL",
-                             "PENDING_UPGRADE"];
-        return allOperations.reduce(function(operations, opName) {
-          return addon.pendingOperations & AddonManager[opName] ?
-            operations.concat(opName) :
-            operations;
-        }, []);
-      }
-      let types = aArgs.type === "all" ? null : [aArgs.type];
-      AddonManager.getAddonsByTypes(types, function(addons) {
-        deferred.resolve({
-          addons: addons.map(function(addon) {
-            return {
-              name: addon.name,
-              version: addon.version,
-              isActive: addon.isActive,
-              pendingOperations: pendingOperations(addon)
-            };
-          }),
-          type: aArgs.type
+    exec: function(args, context) {
+      let types = (args.type === "all") ? null : [ args.type ];
+      return getAddonsByTypes(types).then(addons => {
+        addons = addons.map(function(addon) {
+          return {
+            name: addon.name,
+            version: addon.version,
+            isActive: addon.isActive,
+            pendingOperations: pendingOperations(addon)
+          };
         });
+        return { addons: addons, type: args.type };
       });
-      return deferred.promise;
     }
   },
   {
@@ -194,9 +177,8 @@ exports.items = [
           "    <td>${addon.pendingOperations}</td>" +
           "    <td>" +
           "      <span class='gcli-out-shortcut'" +
-          "            data-command='addon ${addon.toggleActionName} ${addon.label}'" +
-          "       onclick='${onclick}'" +
-          "       ondblclick='${ondblclick}'" +
+          "          data-command='addon ${addon.toggleActionName} ${addon.label}'" +
+          "          onclick='${onclick}' ondblclick='${ondblclick}'" +
           "      >${addon.toggleActionMessage}</span>" +
           "    </td>" +
           "  </tr>" +
@@ -233,40 +215,19 @@ exports.items = [
     description: gcli.lookup("addonEnableDesc"),
     params: [
       {
-        name: "name",
+        name: "addon",
         type: "addon",
         description: gcli.lookup("addonNameDesc")
       }
     ],
-    exec: function(aArgs, context) {
-      function enable(name, addons) {
-        // Find the add-on.
-        let addon = null;
-        addons.some(function(candidate) {
-          if (candidate.name == name) {
-            addon = candidate;
-            return true;
-          } else {
-            return false;
-          }
-        });
-
-        let name = representAddon(addon);
-        let message = "";
-
-        if (!addon.userDisabled) {
-          message = gcli.lookupFormat("addonAlreadyEnabled", [name]);
-        } else {
-          addon.userDisabled = false;
-          message = gcli.lookupFormat("addonEnabled", [name]);
-        }
-        this.resolve(message);
+    exec: function(args, context) {
+      let name = (args.addon.name + " " + args.addon.version).trim();
+      if (args.addon.userDisabled) {
+        args.addon.userDisabled = false;
+        return gcli.lookupFormat("addonEnabled", [ name ]);
       }
 
-      let deferred = context.defer();
-      // List the installed add-ons, enable one when done listing.
-      AddonManager.getAllAddons(enable.bind(deferred, aArgs.name));
-      return deferred.promise;
+      return gcli.lookupFormat("addonAlreadyEnabled", [ name ]);
     }
   },
   {
@@ -274,44 +235,23 @@ exports.items = [
     description: gcli.lookup("addonDisableDesc"),
     params: [
       {
-        name: "name",
+        name: "addon",
         type: "addon",
         description: gcli.lookup("addonNameDesc")
       }
     ],
-    exec: function(aArgs, context) {
-      function disable(name, addons) {
-        // Find the add-on.
-        let addon = null;
-        addons.some(function(candidate) {
-          if (candidate.name == name) {
-            addon = candidate;
-            return true;
-          } else {
-            return false;
-          }
-        });
-
-        let name = representAddon(addon);
-        let message = "";
-
-        // If the addon is not disabled or is set to "click to play" then
-        // disable it. Otherwise display the message "Add-on is already
-        // disabled."
-        if (!addon.userDisabled ||
-            addon.userDisabled === AddonManager.STATE_ASK_TO_ACTIVATE) {
-          addon.userDisabled = true;
-          message = gcli.lookupFormat("addonDisabled", [name]);
-        } else {
-          message = gcli.lookupFormat("addonAlreadyDisabled", [name]);
-        }
-        this.resolve(message);
+    exec: function(args, context) {
+      // If the addon is not disabled or is set to "click to play" then
+      // disable it. Otherwise display the message "Add-on is already
+      // disabled."
+      let name = (args.addon.name + " " + args.addon.version).trim();
+      if (!args.addon.userDisabled ||
+          args.addon.userDisabled === AddonManager.STATE_ASK_TO_ACTIVATE) {
+        args.addon.userDisabled = true;
+        return gcli.lookupFormat("addonDisabled", [ name ]);
       }
 
-      let deferred = context.defer();
-      // List the installed add-ons, disable one when done listing.
-      AddonManager.getAllAddons(disable.bind(deferred, aArgs.name));
-      return deferred.promise;
+      return gcli.lookupFormat("addonAlreadyDisabled", [ name ]);
     }
   }
 ];

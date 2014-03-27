@@ -115,7 +115,12 @@ function spawnTest() {
         status: 'VALID',
         args: {
           command: { name: 'addon enable' },
-          name: { value: 'Test Plug-in', status: 'VALID' },
+          addon: {
+            value: function(addon) {
+              is(addon.name, 'Test Plug-in', 'test plugin name');
+            },
+            status: 'VALID'
+          }
         }
       },
       exec: {
