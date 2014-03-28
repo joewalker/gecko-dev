@@ -4,24 +4,15 @@
 
 "use strict";
 
-const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
+const { Cc, Ci, Cu } = require("chrome");
+const gcli = require("gcli/index");
 
-this.EXPORTED_SYMBOLS = [ "items" ];
-
-let devtools = Cu.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools;
-var gcli = devtools.require('gcli/index');
-Cu.import('resource://gre/modules/XPCOMUtils.jsm');
-
-XPCOMUtils.defineLazyModuleGetter(this, "gDevTools",
-  "resource:///modules/devtools/gDevTools.jsm");
-
-XPCOMUtils.defineLazyModuleGetter(this, "console",
-  "resource://gre/modules/devtools/Console.jsm");
+loader.lazyImporter(this, "gDevTools", "resource:///modules/devtools/gDevTools.jsm");
 
 /**
  * The commands and converters that are exported to GCLI
  */
-this.items = [];
+exports.items = [];
 
 /**
  * Utility to get access to the current breakpoint list.
@@ -60,7 +51,7 @@ function getAllBreakpoints(dbg) {
 /**
  * 'break' command
  */
-this.items.push({
+exports.items.push({
   name: "break",
   description: gcli.lookup("breakDesc"),
   manual: gcli.lookup("breakManual")
@@ -69,7 +60,7 @@ this.items.push({
 /**
  * 'break list' command
  */
-this.items.push({
+exports.items.push({
   name: "break list",
   description: gcli.lookup("breaklistDesc"),
   returnType: "breakpoints",
@@ -79,7 +70,7 @@ this.items.push({
   }
 });
 
-this.items.push({
+exports.items.push({
   item: "converter",
   from: "breakpoints",
   to: "view",
@@ -134,7 +125,7 @@ var MAX_LABEL_LENGTH = 20;
 /**
  * 'break add' command
  */
-this.items.push({
+exports.items.push({
   name: "break add",
   description: gcli.lookup("breakaddDesc"),
   manual: gcli.lookup("breakaddManual")
@@ -143,7 +134,7 @@ this.items.push({
 /**
  * 'break add line' command
  */
-this.items.push({
+exports.items.push({
   name: "break add line",
   description: gcli.lookup("breakaddlineDesc"),
   params: [
@@ -190,7 +181,7 @@ this.items.push({
 /**
  * 'break del' command
  */
-this.items.push({
+exports.items.push({
   name: "break del",
   description: gcli.lookup("breakdelDesc"),
   params: [
@@ -236,7 +227,7 @@ this.items.push({
 /**
  * 'dbg' command
  */
-this.items.push({
+exports.items.push({
   name: "dbg",
   description: gcli.lookup("dbgDesc"),
   manual: gcli.lookup("dbgManual")
@@ -245,7 +236,7 @@ this.items.push({
 /**
  * 'dbg open' command
  */
-this.items.push({
+exports.items.push({
   name: "dbg open",
   description: gcli.lookup("dbgOpen"),
   params: [],
@@ -258,7 +249,7 @@ this.items.push({
 /**
  * 'dbg close' command
  */
-this.items.push({
+exports.items.push({
   name: "dbg close",
   description: gcli.lookup("dbgClose"),
   params: [],
@@ -274,7 +265,7 @@ this.items.push({
 /**
  * 'dbg interrupt' command
  */
-this.items.push({
+exports.items.push({
   name: "dbg interrupt",
   description: gcli.lookup("dbgInterrupt"),
   params: [],
@@ -295,7 +286,7 @@ this.items.push({
 /**
  * 'dbg continue' command
  */
-this.items.push({
+exports.items.push({
   name: "dbg continue",
   description: gcli.lookup("dbgContinue"),
   params: [],
@@ -316,7 +307,7 @@ this.items.push({
 /**
  * 'dbg step' command
  */
-this.items.push({
+exports.items.push({
   name: "dbg step",
   description: gcli.lookup("dbgStepDesc"),
   manual: gcli.lookup("dbgStepManual")
@@ -325,7 +316,7 @@ this.items.push({
 /**
  * 'dbg step over' command
  */
-this.items.push({
+exports.items.push({
   name: "dbg step over",
   description: gcli.lookup("dbgStepOverDesc"),
   params: [],
@@ -346,7 +337,7 @@ this.items.push({
 /**
  * 'dbg step in' command
  */
-this.items.push({
+exports.items.push({
   name: 'dbg step in',
   description: gcli.lookup("dbgStepInDesc"),
   params: [],
@@ -367,7 +358,7 @@ this.items.push({
 /**
  * 'dbg step over' command
  */
-this.items.push({
+exports.items.push({
   name: 'dbg step out',
   description: gcli.lookup("dbgStepOutDesc"),
   params: [],
@@ -388,7 +379,7 @@ this.items.push({
 /**
  * 'dbg list' command
  */
-this.items.push({
+exports.items.push({
   name: "dbg list",
   description: gcli.lookup("dbgListSourcesDesc"),
   params: [],
@@ -434,7 +425,7 @@ this.items.push({
     return gcli.lookup(cmd.l10nPrefix + id);
   };
 
-  gcli.addCommand({
+  exports.items.push({
     name: "dbg " + cmd.name,
     description: lookup("Desc"),
     params: [

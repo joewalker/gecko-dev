@@ -12,7 +12,7 @@ const gcli = require("gcli/index");
 
 const commandModules = [
   "resource:///modules/devtools/BuiltinCommands.jsm",
-  "resource:///modules/devtools/CmdDebugger.jsm",
+  "devtools/debugger/debugger-commands",
   "resource:///modules/devtools/CmdEdit.jsm",
   "resource:///modules/devtools/CmdInspect.jsm",
   "resource:///modules/devtools/CmdResize.jsm",
