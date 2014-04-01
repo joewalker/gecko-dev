@@ -39,10 +39,13 @@ XPCOMUtils.defineLazyGetter(this, "toolboxStrings", function () {
 
 const Telemetry = require("devtools/shared/telemetry");
 
-const gcli = require("gcli/index");
-require("devtools/commandline/commands-index");
-
-gcli.load();
+// This lazy getter is needed to prevent a require loop
+XPCOMUtils.defineLazyGetter(this, "gcli", () => {
+  let gcli = require("gcli/index");
+  require("devtools/commandline/commands-index");
+  gcli.load();
+  return gcli;
+});
 
 Object.defineProperty(this, "ConsoleServiceListener", {
   get: function() {

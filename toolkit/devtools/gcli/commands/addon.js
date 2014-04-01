@@ -5,7 +5,6 @@
 "use strict";
 
 const { Cc, Ci, Cu } = require("chrome");
-const { Promise: promise } = Cu.import("resource://gre/modules/commonjs/sdk/core/promise.js", {});
 const { AddonManager } = Cu.import("resource://gre/modules/AddonManager.jsm", {});
 const gcli = require("gcli/index");
 const { Promise } = require("resource://gre/modules/Promise.jsm");
