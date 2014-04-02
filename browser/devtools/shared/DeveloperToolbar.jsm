@@ -62,6 +62,15 @@ const promise = Cu.import('resource://gre/modules/Promise.jsm', {}).Promise;
  */
 let CommandUtils = {
   /**
+   * Utility to ensure that things are loaded in the correct order
+   */
+  createRequisition: function(environment) {
+    let temp = gcli.createDisplay; // Ensure GCLI is loaded
+    let Requisition = require("gcli/cli").Requisition
+    return new Requisition({ environment: environment });
+  },
+
+  /**
    * Read a toolbarSpec from preferences
    * @param pref The name of the preference to read
    */
