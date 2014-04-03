@@ -6,7 +6,8 @@
 
 const { Cc, Ci, Cu } = require("chrome");
 
-const { Promise: promise } = Cu.import("resource://gre/modules/commonjs/sdk/core/promise.js", {});
+const { Promise: promise } = require("resource://gre/modules/Promise.jsm");
+
 const { OS } = Cu.import("resource://gre/modules/osfile.jsm", {});
 const { TextEncoder, TextDecoder } = Cu.import('resource://gre/modules/commonjs/toolkit/loader.js', {});
 const gcli = require("gcli/index");

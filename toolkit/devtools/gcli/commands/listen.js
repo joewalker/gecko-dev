@@ -5,7 +5,7 @@
 "use strict";
 
 const { Cc, Ci, Cu } = require("chrome");
-const { Services } = Cu.import("resource://gre/modules/Services.jsm", {});
+const Services = require("Services");
 const gcli = require("gcli/index");
 const { DebuggerServer } = require("resource://gre/modules/devtools/dbg-server.jsm");
 

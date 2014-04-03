@@ -7,7 +7,7 @@
 const { Cc, Ci, Cu } = require("chrome");
 const { AddonManager } = Cu.import("resource://gre/modules/AddonManager.jsm", {});
 const gcli = require("gcli/index");
-const { Promise } = require("resource://gre/modules/Promise.jsm");
+const { Promise: promise } = require("resource://gre/modules/Promise.jsm");
 
 const BRAND_SHORT_NAME = Cc["@mozilla.org/intl/stringbundle;1"]
                            .getService(Ci.nsIStringBundleService)

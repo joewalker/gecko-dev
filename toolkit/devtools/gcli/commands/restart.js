@@ -6,7 +6,7 @@
 
 const { Cc, Ci, Cu } = require("chrome");
 const gcli = require("gcli/index");
-const { Services } = require("resource://gre/modules/Services.jsm");
+const Services = require("Services");
 
 const BRAND_SHORT_NAME = Cc["@mozilla.org/intl/stringbundle;1"]
                            .getService(Ci.nsIStringBundleService)

@@ -5,7 +5,7 @@
 "use strict";
 
 const { Cc, Ci, Cu } = require("chrome");
-const { Services } = require("resource://gre/modules/Services.jsm");
+const Services = require("Services");
 const { OS } = require("resource://gre/modules/osfile.jsm");
 const { devtools } = require("resource://gre/modules/devtools/Loader.jsm");
 const gcli = require("gcli/index");

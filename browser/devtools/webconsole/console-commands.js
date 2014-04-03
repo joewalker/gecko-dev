@@ -68,13 +68,18 @@ exports.items = [
   {
     name: "console clear",
     description: gcli.lookup("consoleclearDesc"),
-    exec: function Command_consoleClear(args, context) {
-      let HUDService = require("devtools/webconsole/hudservice");
-      let hud = HUDService.getHudByWindow(context.environment.window);
-      // hud will be null if the web console has not been opened for this window
-      if (hud) {
-        hud.jsterm.clearOutput();
+    exec: function(args, context) {
+      let toolbox = gDevTools.getToolbox(context.environment.target);
+      if (toolbox == null) {
+        return;
       }
+
+      let panel = toolbox.getPanel("webconsole");
+      if (panel == null) {
+        return;
+      }
+
+      panel.hud.jsterm.clearOutput();
     }
   },
   {
