@@ -21,7 +21,7 @@ public:
   HTMLProgressElement(already_AddRefed<nsINodeInfo>& aNodeInfo);
   virtual ~HTMLProgressElement();
 
-  nsEventStates IntrinsicState() const MOZ_OVERRIDE;
+  EventStates IntrinsicState() const MOZ_OVERRIDE;
 
   nsresult Clone(nsINodeInfo* aNodeInfo, nsINode** aResult) const MOZ_OVERRIDE;
 
@@ -42,8 +42,7 @@ public:
   double Position() const;
 
 protected:
-  virtual JSObject* WrapNode(JSContext* aCx,
-                             JS::Handle<JSObject*> aScope) MOZ_OVERRIDE;
+  virtual JSObject* WrapNode(JSContext* aCx) MOZ_OVERRIDE;
 
 protected:
   /**

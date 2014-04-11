@@ -14,7 +14,6 @@
 #include "mozilla/dom/HTMLSelectElement.h"
 #include "nsContentCreatorFunctions.h"
 #include "nsError.h"
-#include "nsEventStates.h"
 #include "nsFormSubmission.h"
 #include "nsGkAtoms.h"
 #include "nsIComboboxControlFrame.h"
@@ -109,9 +108,9 @@ NS_IMPL_CYCLE_COLLECTING_RELEASE(HTMLOptionsCollection)
 
 
 JSObject*
-HTMLOptionsCollection::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aScope)
+HTMLOptionsCollection::WrapObject(JSContext* aCx)
 {
-  return HTMLOptionsCollectionBinding::Wrap(aCx, aScope, this);
+  return HTMLOptionsCollectionBinding::Wrap(aCx, this);
 }
 
 NS_IMETHODIMP

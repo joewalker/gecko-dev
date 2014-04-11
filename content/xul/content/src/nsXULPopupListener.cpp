@@ -31,6 +31,7 @@
 #include "nsHTMLReflowState.h"
 #include "nsIObjectLoadingContent.h"
 #include "mozilla/EventStateManager.h"
+#include "mozilla/EventStates.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/dom/Event.h" // for nsIDOMEvent::InternalDOMEvent()
 #include "mozilla/dom/EventTarget.h"
@@ -296,7 +297,7 @@ nsXULPopupListener::ClosePopup()
     // fire events during destruction.  
     nsXULPopupManager* pm = nsXULPopupManager::GetInstance();
     if (pm)
-      pm->HidePopup(mPopupContent, false, true, true);
+      pm->HidePopup(mPopupContent, false, true, true, false);
     mPopupContent = nullptr;  // release the popup
   }
 } // ClosePopup

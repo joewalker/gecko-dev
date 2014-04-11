@@ -218,9 +218,9 @@ EVENT(ended,
       EventNameType_HTML,
       NS_EVENT)
 EVENT(input,
-      NS_FORM_INPUT,
+      NS_EDITOR_INPUT,
       EventNameType_HTMLXUL,
-      NS_UI_EVENT)
+      NS_EDITOR_INPUT_EVENT)
 EVENT(invalid,
       NS_FORM_INVALID,
       EventNameType_HTMLXUL,
@@ -790,10 +790,6 @@ NON_IDL_EVENT(repeatEvent,
               EventNameType_None,
               NS_SMIL_TIME_EVENT)
 
-NON_IDL_EVENT(MozAudioAvailable,
-              NS_MOZAUDIOAVAILABLE,
-              EventNameType_None,
-              NS_EVENT)
 NON_IDL_EVENT(MozAfterPaint,
               NS_AFTERPAINT,
               EventNameType_None,

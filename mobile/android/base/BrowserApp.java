@@ -567,6 +567,7 @@ abstract public class BrowserApp extends GeckoApp
         registerEventListener("Menu:Update");
         registerEventListener("Accounts:Create");
         registerEventListener("Accounts:Exist");
+        registerEventListener("Prompt:ShowTop");
 
         Distribution.init(this);
         JavaAddonManager.getInstance().init(getApplicationContext());
@@ -1631,7 +1632,7 @@ abstract public class BrowserApp extends GeckoApp
             message.put("type", BrowserHealthRecorder.EVENT_SEARCH);
             message.put("location", where);
             message.put("identifier", identifier);
-            GeckoAppShell.getEventDispatcher().dispatchEvent(message);
+            GeckoAppShell.getEventDispatcher().dispatchEvent(message, null);
         } catch (Exception e) {
             Log.w(LOGTAG, "Error recording search.", e);
         }

@@ -11,7 +11,6 @@
 #include "ReadbackLayer.h"              // for ReadbackLayer
 #include "gfxASurface.h"                // for gfxASurface
 #include "gfxContext.h"                 // for gfxContext, etc
-#include "ipc/AutoOpenSurface.h"        // for AutoOpenSurface
 #include "mozilla/Attributes.h"         // for MOZ_DELETE, MOZ_STACK_CLASS
 #include "mozilla/Maybe.h"              // for Maybe
 #include "nsAutoPtr.h"                  // for nsRefPtr
@@ -26,7 +25,6 @@ class DrawTarget;
 
 namespace layers {
 
-class AutoMaskData;
 class AutoMoz2DMaskData;
 class BasicContainerLayer;
 class Layer;
@@ -84,8 +82,6 @@ protected:
  * false otherwise.
  * The transform for the layer will be put in aMaskData
  */
-bool
-GetMaskData(Layer* aMaskLayer, AutoMaskData* aMaskData);
 bool
 GetMaskData(Layer* aMaskLayer, AutoMoz2DMaskData* aMaskData);
 

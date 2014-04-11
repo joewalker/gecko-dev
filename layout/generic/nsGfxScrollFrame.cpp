@@ -52,6 +52,7 @@
 #include "nsIScrollPositionListener.h"
 #include "StickyScrollContainer.h"
 #include "nsIFrameInlines.h"
+#include "gfxPrefs.h"
 #include <algorithm>
 #include <cstdlib> // for std::abs(int/long)
 #include <cmath> // for std::abs(float/double)
@@ -2127,13 +2128,17 @@ AppendToTop(nsDisplayListBuilder* aBuilder, const nsDisplayListSet& aLists,
                                      aFlags, aScrollTargetId) :
     new (aBuilder) nsDisplayWrapList(aBuilder, aSourceFrame, aSource);
 
-  nsDisplayList* positionedDescendants = aLists.PositionedDescendants();
-  if (aPositioned && !positionedDescendants->IsEmpty()) {
+  if (aPositioned) {
     // We want overlay scrollbars to always be on top of the scrolled content,
     // but we don't want them to unnecessarily cover overlapping elements from
     // outside our scroll frame.
-    newItem->SetOverrideZIndex(MaxZIndexInList(positionedDescendants, aBuilder));
-    positionedDescendants->AppendNewToTop(newItem);
+    nsDisplayList* positionedDescendants = aLists.PositionedDescendants();
+    if (!positionedDescendants->IsEmpty()) {
+      newItem->SetOverrideZIndex(MaxZIndexInList(positionedDescendants, aBuilder));
+      positionedDescendants->AppendNewToTop(newItem);
+    } else {
+      aLists.Outlines()->AppendNewToTop(newItem);
+    }
   } else {
     aLists.BorderBackground()->AppendNewToTop(newItem);
   }
@@ -2585,10 +2590,10 @@ ScrollFrameHelper::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
     bool wantLayerV = isVScrollable && (mVScrollbarBox || isFocused);
     bool wantLayerH = isHScrollable && (mHScrollbarBox || isFocused);
     // TODO Turn this on for inprocess OMTC on all platforms
-    bool wantSubAPZC = (XRE_GetProcessType() == GeckoProcessType_Content);
-#ifdef XP_WIN
-    if (XRE_GetWindowsEnvironment() == WindowsEnvironmentType_Metro) {
-      wantSubAPZC = true;
+    bool wantSubAPZC = gfxPrefs::APZSubframeEnabled();
+#ifdef MOZ_WIDGET_GONK
+    if (XRE_GetProcessType() != GeckoProcessType_Content) {
+      wantSubAPZC = false;
     }
 #endif
     shouldBuildLayer =

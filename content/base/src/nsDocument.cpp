@@ -122,6 +122,7 @@
 #include "nsDateTimeFormatCID.h"
 #include "nsIDateTimeFormat.h"
 #include "mozilla/EventDispatcher.h"
+#include "mozilla/EventStates.h"
 #include "mozilla/InternalMutationEvent.h"
 #include "nsDOMCID.h"
 
@@ -2239,6 +2240,7 @@ nsDocument::Reset(nsIChannel* aChannel, nsILoadGroup* aLoadGroup)
                                 NS_GET_IID(nsIURI), getter_AddRefs(baseURI));
     if (baseURI) {
       mDocumentBaseURI = baseURI;
+      mChromeXHRDocBaseURI = baseURI;
     }
   }
 
@@ -2320,9 +2322,11 @@ nsDocument::ResetToURI(nsIURI *aURI, nsILoadGroup *aLoadGroup,
   mOriginalURI = nullptr;
 
   SetDocumentURI(aURI);
+  mChromeXHRDocURI = aURI;
   // If mDocumentBaseURI is null, nsIDocument::GetBaseURI() returns
   // mDocumentURI.
   mDocumentBaseURI = nullptr;
+  mChromeXHRDocBaseURI = nullptr;
 
   if (aLoadGroup) {
     mDocumentLoadGroup = do_GetWeakReference(aLoadGroup);
@@ -2945,6 +2949,18 @@ nsDocument::SetDocumentURI(nsIURI* aURI)
   }
 }
 
+void
+nsDocument::SetChromeXHRDocURI(nsIURI* aURI)
+{
+  mChromeXHRDocURI = aURI;
+}
+
+void
+nsDocument::SetChromeXHRDocBaseURI(nsIURI* aURI)
+{
+  mChromeXHRDocBaseURI = aURI;
+}
+
 NS_IMETHODIMP
 nsDocument::GetLastModified(nsAString& aLastModified)
 {
@@ -3420,9 +3436,15 @@ nsIDocument::ReleaseCapture() const
 }
 
 already_AddRefed<nsIURI>
-nsIDocument::GetBaseURI() const
+nsIDocument::GetBaseURI(bool aTryUseXHRDocBaseURI) const
 {
-  nsCOMPtr<nsIURI> uri = GetDocBaseURI();
+  nsCOMPtr<nsIURI> uri;
+  if (aTryUseXHRDocBaseURI && mChromeXHRDocBaseURI) {
+    uri = mChromeXHRDocBaseURI;
+  } else {
+    uri = GetDocBaseURI();
+  }
+
   return uri.forget();
 }
 
@@ -4936,7 +4958,7 @@ nsDocument::EndLoad()
 }
 
 void
-nsDocument::ContentStateChanged(nsIContent* aContent, nsEventStates aStateMask)
+nsDocument::ContentStateChanged(nsIContent* aContent, EventStates aStateMask)
 {
   NS_PRECONDITION(!nsContentUtils::IsSafeToRunScript(),
                   "Someone forgot a scriptblocker");
@@ -4945,7 +4967,7 @@ nsDocument::ContentStateChanged(nsIContent* aContent, nsEventStates aStateMask)
 }
 
 void
-nsDocument::DocumentStatesChanged(nsEventStates aStateMask)
+nsDocument::DocumentStatesChanged(EventStates aStateMask)
 {
   // Invalidate our cached state.
   mGotDocumentState &= ~aStateMask;
@@ -5487,8 +5509,7 @@ nsDocument::CustomElementConstructor(JSContext* aCx, unsigned aArgc, JS::Value* 
     return true;
   }
 
-  rv = nsContentUtils::WrapNative(aCx, global, newElement, newElement,
-                                  args.rval());
+  rv = nsContentUtils::WrapNative(aCx, newElement, newElement, args.rval());
   NS_ENSURE_SUCCESS(rv, true);
 
   return true;
@@ -7154,6 +7175,29 @@ nsIDocument::GetURL(nsString& aURL) const
   return GetDocumentURI(aURL);
 }
 
+void
+nsIDocument::GetDocumentURIFromJS(nsString& aDocumentURI) const
+{
+  if (!mChromeXHRDocURI || !nsContentUtils::IsCallerChrome()) {
+    return GetDocumentURI(aDocumentURI);
+  }
+
+  nsAutoCString uri;
+  mChromeXHRDocURI->GetSpec(uri);
+  CopyUTF8toUTF16(uri, aDocumentURI);
+}
+
+nsIURI*
+nsIDocument::GetDocumentURIObject() const
+{
+  if (!mChromeXHRDocURI) {
+    return GetDocumentURI();
+  }
+
+  return mChromeXHRDocURI;
+}
+
+
 // readonly attribute DOMString compatMode;
 // Returns "BackCompat" if we are in quirks mode, "CSS1Compat" if we are
 // in almost standards or full standards mode. See bug 105640.  This was
@@ -7383,14 +7427,13 @@ nsIDocument::AdoptNode(nsINode& aAdoptedNode, ErrorResult& rv)
   if (!sameDocument) {
     newScope = GetWrapper();
     if (!newScope && GetScopeObject() && GetScopeObject()->GetGlobalJSObject()) {
-      // We need to pass some sort of scope object to WrapNative. It's kind of
-      // irrelevant, given that we're passing aAllowWrapping = false, and
-      // documents should always insist on being wrapped in an canonical
-      // scope. But we try to pass something sane anyway.
-      JS::Rooted<JSObject*> global(cx, GetScopeObject()->GetGlobalJSObject());
-
+      // Make sure cx is in a semi-sane compartment before we call WrapNative.
+      // It's kind of irrelevant, given that we're passing aAllowWrapping =
+      // false, and documents should always insist on being wrapped in an
+      // canonical scope. But we try to pass something sane anyway.
+      JSAutoCompartment ac(cx, GetScopeObject()->GetGlobalJSObject());
       JS::Rooted<JS::Value> v(cx);
-      rv = nsContentUtils::WrapNative(cx, global, this, this, &v,
+      rv = nsContentUtils::WrapNative(cx, this, this, &v,
                                       /* aAllowWrapping = */ false);
       if (rv.Failed())
         return nullptr;
@@ -9024,9 +9067,11 @@ nsDocument::CloneDocHelper(nsDocument* clone) const
 
   // Set URI/principal
   clone->nsDocument::SetDocumentURI(nsIDocument::GetDocumentURI());
+  clone->SetChromeXHRDocURI(mChromeXHRDocURI);
   // Must set the principal first, since SetBaseURI checks it.
   clone->SetPrincipal(NodePrincipal());
   clone->mDocumentBaseURI = mDocumentBaseURI;
+  clone->SetChromeXHRDocBaseURI(mChromeXHRDocBaseURI);
 
   if (mCreatingStaticClone) {
     nsCOMPtr<nsILoadGroup> loadGroup;
@@ -9251,7 +9296,7 @@ nsDocument::MaybePreLoadImage(nsIURI* uri, const nsAString &aCrossOriginAttr)
   }
 }
 
-nsEventStates
+EventStates
 nsDocument::GetDocumentState()
 {
   if (!mGotDocumentState.HasState(NS_DOCUMENT_STATE_RTL_LOCALE)) {
@@ -9864,23 +9909,6 @@ nsDocument::AddImage(imgIRequest* aImage)
   }
 
   return rv;
-}
-
-static void
-NotifyAudioAvailableListener(nsIContent *aContent, void *aUnused)
-{
-  nsCOMPtr<nsIDOMHTMLMediaElement> domMediaElem(do_QueryInterface(aContent));
-  if (domMediaElem) {
-    HTMLMediaElement* mediaElem = static_cast<HTMLMediaElement*>(aContent);
-    mediaElem->NotifyAudioAvailableListener();
-  }
-}
-
-void
-nsDocument::NotifyAudioAvailableListener()
-{
-  mHasAudioAvailableListener = true;
-  EnumerateFreezableElements(::NotifyAudioAvailableListener, nullptr);
 }
 
 nsresult
@@ -12099,11 +12127,11 @@ nsDocument::Evaluate(const nsAString& aExpression, nsIDOMNode* aContextNode,
 // This is just a hack around the fact that window.document is not
 // [Unforgeable] yet.
 JSObject*
-nsIDocument::WrapObject(JSContext *aCx, JS::Handle<JSObject*> aScope)
+nsIDocument::WrapObject(JSContext *aCx)
 {
   MOZ_ASSERT(IsDOMBinding());
 
-  JS::Rooted<JSObject*> obj(aCx, nsINode::WrapObject(aCx, aScope));
+  JS::Rooted<JSObject*> obj(aCx, nsINode::WrapObject(aCx));
   if (!obj) {
     return nullptr;
   }
@@ -12122,16 +12150,13 @@ nsIDocument::WrapObject(JSContext *aCx, JS::Handle<JSObject*> aScope)
   JSAutoCompartment ac(aCx, obj);
 
   JS::Rooted<JS::Value> winVal(aCx);
-  nsresult rv = nsContentUtils::WrapNative(aCx, obj, win,
-                                           &NS_GET_IID(nsIDOMWindow),
-                                           &winVal);
+  nsresult rv = nsContentUtils::WrapNative(aCx, win, &NS_GET_IID(nsIDOMWindow),
+                                           &winVal,
+                                           false);
   if (NS_FAILED(rv)) {
     Throw(aCx, rv);
     return nullptr;
   }
-
-  MOZ_ASSERT(&winVal.toObject() == js::UncheckedUnwrap(&winVal.toObject()),
-             "WrapNative shouldn't create a cross-compartment wrapper");
 
   NS_NAMED_LITERAL_STRING(doc_str, "document");
 

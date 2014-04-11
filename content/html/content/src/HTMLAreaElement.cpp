@@ -9,6 +9,7 @@
 #include "mozilla/Attributes.h"
 #include "mozilla/dom/HTMLAreaElementBinding.h"
 #include "mozilla/EventDispatcher.h"
+#include "mozilla/EventStates.h"
 #include "mozilla/MemoryReporting.h"
 
 NS_IMPL_NS_NEW_HTML_ELEMENT(Area)
@@ -245,7 +246,7 @@ HTMLAreaElement::GetHrefURI() const
   return GetHrefURIForAnchors();
 }
 
-nsEventStates
+EventStates
 HTMLAreaElement::IntrinsicState() const
 {
   return Link::LinkState() | nsGenericHTMLElement::IntrinsicState();
@@ -259,9 +260,9 @@ HTMLAreaElement::SizeOfExcludingThis(mozilla::MallocSizeOf aMallocSizeOf) const
 }
 
 JSObject*
-HTMLAreaElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aScope)
+HTMLAreaElement::WrapNode(JSContext* aCx)
 {
-  return HTMLAreaElementBinding::Wrap(aCx, aScope, this);
+  return HTMLAreaElementBinding::Wrap(aCx, this);
 }
 
 } // namespace dom

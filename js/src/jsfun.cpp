@@ -32,7 +32,6 @@
 #include "frontend/TokenStream.h"
 #include "gc/Marking.h"
 #ifdef JS_ION
-#include "jit/AsmJSModule.h"
 #include "jit/Ion.h"
 #include "jit/IonFrameIterator.h"
 #endif
@@ -165,7 +164,7 @@ fun_enumerate(JSContext *cx, HandleObject obj)
     RootedId id(cx);
     bool found;
 
-    if (!obj->isBoundFunction()) {
+    if (!obj->isBoundFunction() && !obj->as<JSFunction>().isArrow()) {
         id = NameToId(cx->names().prototype);
         if (!JSObject::hasProperty(cx, obj, id, &found, 0))
             return false;
@@ -286,8 +285,10 @@ js::fun_resolve(JSContext *cx, HandleObject obj, HandleId id, unsigned flags,
          * ES5 15.3.4.5: bound functions don't have a prototype property. The
          * isBuiltin() test covers this case because bound functions are native
          * (and thus built-in) functions by definition/construction.
+         *
+         * ES6 19.2.4.3: arrow functions also don't have a prototype property.
          */
-        if (fun->isBuiltin() || fun->isFunctionPrototype())
+        if (fun->isBuiltin() || fun->isArrow() || fun->isFunctionPrototype())
             return true;
 
         if (!ResolveInterpretedFunctionPrototype(cx, fun))
@@ -420,6 +421,11 @@ js::XDRInterpretedFunction(XDRState<mode> *xdr, HandleObject enclosingScope, Han
     if (!xdr->codeUint32(&firstword))
         return false;
 
+    if ((firstword & HasAtom) && !XDRAtom(xdr, &atom))
+        return false;
+    if (!xdr->codeUint32(&flagsword))
+        return false;
+
     if (mode == XDR_DECODE) {
         JSObject *proto = nullptr;
         if (firstword & IsStarGenerator) {
@@ -428,19 +434,16 @@ js::XDRInterpretedFunction(XDRState<mode> *xdr, HandleObject enclosingScope, Han
                 return false;
         }
 
+        gc::AllocKind allocKind = JSFunction::FinalizeKind;
+        if (uint16_t(flagsword) & JSFunction::EXTENDED)
+            allocKind = JSFunction::ExtendedFinalizeKind;
         fun = NewFunctionWithProto(cx, NullPtr(), nullptr, 0, JSFunction::INTERPRETED,
                                    /* parent = */ NullPtr(), NullPtr(), proto,
-                                   JSFunction::FinalizeKind, TenuredObject);
+                                   allocKind, TenuredObject);
         if (!fun)
             return false;
-        atom = nullptr;
         script = nullptr;
     }
-
-    if ((firstword & HasAtom) && !XDRAtom(xdr, &atom))
-        return false;
-    if (!xdr->codeUint32(&flagsword))
-        return false;
 
     if (firstword & IsLazy) {
         if (!XDRLazyScript(xdr, enclosingScope, enclosingScript, fun, &lazy))
@@ -487,10 +490,13 @@ js::CloneFunctionAndScript(JSContext *cx, HandleObject enclosingScope, HandleFun
         if (!cloneProto)
             return nullptr;
     }
+
+    gc::AllocKind allocKind = JSFunction::FinalizeKind;
+    if (srcFun->isExtended())
+        allocKind = JSFunction::ExtendedFinalizeKind;
     RootedFunction clone(cx, NewFunctionWithProto(cx, NullPtr(), nullptr, 0,
                                                   JSFunction::INTERPRETED, NullPtr(), NullPtr(),
-                                                  cloneProto, JSFunction::FinalizeKind,
-                                                  TenuredObject));
+                                                  cloneProto, allocKind, TenuredObject));
     if (!clone)
         return nullptr;
 
@@ -571,6 +577,7 @@ JSFunction::trace(JSTracer *trc)
             // - they are not in the self-hosting compartment
             // - they aren't generators
             // - they don't have JIT code attached
+            // - they haven't ever been inlined
             // - they don't have child functions
             // - they have information for un-lazifying them again later
             // This information can either be a LazyScript, or the name of a
@@ -681,15 +688,6 @@ js::FunctionToString(JSContext *cx, HandleFunction fun, bool bodyOnly, bool lamb
 {
     if (fun->isInterpretedLazy() && !fun->getOrCreateScript(cx))
         return nullptr;
-
-    // If the object is an automatically-bound arrow function, get the source
-    // of the pre-binding target.
-    if (fun->isArrow() && fun->isBoundFunction()) {
-        JSObject *target = fun->getBoundFunctionTarget();
-        RootedFunction targetFun(cx, &target->as<JSFunction>());
-        JS_ASSERT(targetFun->isArrow());
-        return FunctionToString(cx, targetFun, bodyOnly, lambdaParen);
-    }
 
     if (IsAsmJSModule(fun))
         return AsmJSModuleToString(cx, fun, !lambdaParen);
@@ -1248,17 +1246,6 @@ js::CallOrConstructBoundFunction(JSContext *cx, unsigned argc, Value *vp)
     RootedFunction fun(cx, &args.callee().as<JSFunction>());
     JS_ASSERT(fun->isBoundFunction());
 
-    bool constructing = args.isConstructing();
-    if (constructing && fun->isArrow()) {
-        /*
-         * Per spec, arrow functions do not even have a [[Construct]] method.
-         * So before anything else, if we are an arrow function, make sure we
-         * don't even get here. You never saw me. Burn this comment.
-         */
-        RootedValue v(cx, ObjectValue(*fun));
-        return ReportIsNotFunction(cx, v, -1, CONSTRUCT);
-    }
-
     /* 15.3.4.5.1 step 1, 15.3.4.5.2 step 3. */
     unsigned argslen = fun->getBoundFunctionArgumentCount();
 
@@ -1285,6 +1272,7 @@ js::CallOrConstructBoundFunction(JSContext *cx, unsigned argc, Value *vp)
     /* 15.3.4.5.1, 15.3.4.5.2 step 5. */
     invokeArgs.setCallee(ObjectValue(*target));
 
+    bool constructing = args.isConstructing();
     if (!constructing)
         invokeArgs.setThis(boundThis);
 

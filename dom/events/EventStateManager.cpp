@@ -7,10 +7,12 @@
 #include "mozilla/Attributes.h"
 #include "mozilla/EventDispatcher.h"
 #include "mozilla/EventStateManager.h"
+#include "mozilla/EventStates.h"
 #include "mozilla/IMEStateManager.h"
 #include "mozilla/MiscEvents.h"
 #include "mozilla/MathAlgorithms.h"
 #include "mozilla/MouseEvents.h"
+#include "mozilla/TextComposition.h"
 #include "mozilla/TextEvents.h"
 #include "mozilla/TouchEvents.h"
 #include "mozilla/dom/Event.h"
@@ -608,6 +610,16 @@ EventStateManager::PreHandleEvent(nsPresContext* aPresContext,
       nsIContent* content = GetFocusedContent();
       if (content)
         mCurrentTargetContent = content;
+
+      // NOTE: Don't refer TextComposition::IsComposing() since DOM Level 3
+      //       Events defines that KeyboardEvent.isComposing is true when it's
+      //       dispatched after compositionstart and compositionend.
+      //       TextComposition::IsComposing() is false even before
+      //       compositionend if there is no composing string.
+      WidgetKeyboardEvent* keyEvent = aEvent->AsKeyboardEvent();
+      nsRefPtr<TextComposition> composition =
+        IMEStateManager::GetTextCompositionFor(keyEvent);
+      keyEvent->mIsComposing = !!composition;
     }
     break;
   case NS_WHEEL_WHEEL:
@@ -4393,7 +4405,7 @@ EventStateManager::SetFullScreenState(Element* aElement, bool aIsFullScreen)
 
 /* static */
 inline void
-EventStateManager::DoStateChange(Element* aElement, nsEventStates aState,
+EventStateManager::DoStateChange(Element* aElement, EventStates aState,
                                  bool aAddState)
 {
   if (aAddState) {
@@ -4405,7 +4417,7 @@ EventStateManager::DoStateChange(Element* aElement, nsEventStates aState,
 
 /* static */
 inline void
-EventStateManager::DoStateChange(nsIContent* aContent, nsEventStates aState,
+EventStateManager::DoStateChange(nsIContent* aContent, EventStates aState,
                                  bool aStateAdded)
 {
   if (aContent->IsElement()) {
@@ -4417,7 +4429,7 @@ EventStateManager::DoStateChange(nsIContent* aContent, nsEventStates aState,
 void
 EventStateManager::UpdateAncestorState(nsIContent* aStartNode,
                                        nsIContent* aStopBefore,
-                                       nsEventStates aState,
+                                       EventStates aState,
                                        bool aAddState)
 {
   for (; aStartNode && aStartNode != aStopBefore;
@@ -4463,7 +4475,7 @@ EventStateManager::UpdateAncestorState(nsIContent* aStartNode,
 }
 
 bool
-EventStateManager::SetContentState(nsIContent *aContent, nsEventStates aState)
+EventStateManager::SetContentState(nsIContent* aContent, EventStates aState)
 {
   // We manage 4 states here: ACTIVE, HOVER, DRAGOVER, URLTARGET
   // The input must be exactly one of them.

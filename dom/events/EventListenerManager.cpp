@@ -92,7 +92,6 @@ EventListenerManager::EventListenerManager(EventTarget* aTarget)
   , mMayHaveMutationListeners(false)
   , mMayHaveCapturingListeners(false)
   , mMayHaveSystemGroupListeners(false)
-  , mMayHaveAudioAvailableEventListener(false)
   , mMayHaveTouchEventListener(false)
   , mMayHaveMouseEnterLeaveEventListener(false)
   , mMayHavePointerEnterLeaveEventListener(false)
@@ -281,12 +280,6 @@ EventListenerManager::AddEventListenerInternal(
     nsPIDOMWindow* window = GetInnerWindowForTarget();
     if (window) {
       window->SetHasPaintEventListeners();
-    }
-  } else if (aType == NS_MOZAUDIOAVAILABLE) {
-    mMayHaveAudioAvailableEventListener = true;
-    nsPIDOMWindow* window = GetInnerWindowForTarget();
-    if (window) {
-      window->SetHasAudioAvailableEventListeners();
     }
   } else if (aType >= NS_MUTATION_START && aType <= NS_MUTATION_END) {
     // For mutation listeners, we need to update the global bit on the DOM window.
@@ -870,7 +863,7 @@ EventListenerManager::CompileEventHandlerInternal(Listener* aListener,
   JS::Rooted<JS::Value> v(cx);
   {
     JSAutoCompartment ac(cx, wrapScope);
-    nsresult rv = nsContentUtils::WrapNative(cx, wrapScope, mTarget, &v,
+    nsresult rv = nsContentUtils::WrapNative(cx, mTarget, &v,
                                              /* aAllowWrapping = */ false);
     if (NS_WARN_IF(NS_FAILED(rv))) {
       return rv;

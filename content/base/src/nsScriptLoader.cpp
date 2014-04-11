@@ -1027,8 +1027,9 @@ nsScriptLoader::FillCompileOptionsForRequest(nsScriptLoadRequest *aRequest,
   // compartments with it... and in particular, it will compile in the
   // compartment of aScopeChain, so we want to wrap into that compartment as
   // well.
-  if (NS_SUCCEEDED(nsContentUtils::WrapNative(cx, aScopeChain,
-                                              aRequest->mElement, &elementVal,
+  JSAutoCompartment ac(cx, aScopeChain);
+  if (NS_SUCCEEDED(nsContentUtils::WrapNative(cx, aRequest->mElement,
+                                              &elementVal,
                                               /* aAllowWrapping = */ true))) {
     MOZ_ASSERT(elementVal.isObject());
     aOptions->setElement(&elementVal.toObject());
@@ -1333,12 +1334,16 @@ nsScriptLoader::OnStreamComplete(nsIStreamLoader* aLoader,
     } else {
       mPreloads.RemoveElement(request, PreloadRequestComparator());
     }
+    rv = NS_OK;
+  } else {
+    NS_Free(const_cast<uint8_t *>(aString));
+    rv = NS_SUCCESS_ADOPTED_DATA;
   }
 
   // Process our request and/or any pending ones
   ProcessPendingRequests();
 
-  return NS_OK;
+  return rv;
 }
 
 void

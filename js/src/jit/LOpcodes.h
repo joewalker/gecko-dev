@@ -64,6 +64,7 @@
     _(SetArgumentsObjectArg)        \
     _(ReturnFromCtor)               \
     _(ComputeThis)                  \
+    _(LoadArrowThis)                \
     _(BitNotI)                      \
     _(BitNotV)                      \
     _(BitOpI)                       \
@@ -159,6 +160,7 @@
     _(RegExpReplace)                \
     _(StringReplace)                \
     _(Lambda)                       \
+    _(LambdaArrow)                  \
     _(LambdaForSingleton)           \
     _(LambdaPar)                    \
     _(ImplicitThis)                 \
@@ -248,6 +250,7 @@
     _(TypedArrayLength)             \
     _(TypedArrayElements)           \
     _(TypedObjectElements)          \
+    _(SetTypedObjectOffset)         \
     _(StringLength)                 \
     _(ArgumentsLength)              \
     _(GetFrameArgument)             \
@@ -270,7 +273,7 @@
     _(CallInstanceOf)               \
     _(InterruptCheck)               \
     _(InterruptCheckImplicit)       \
-    _(FunctionBoundary)             \
+    _(ProfilerStackOp)              \
     _(GetDOMProperty)               \
     _(GetDOMMember)                 \
     _(SetDOMProperty)               \

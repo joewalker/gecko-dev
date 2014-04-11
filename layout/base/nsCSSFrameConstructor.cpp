@@ -14,6 +14,7 @@
 #include "mozilla/AutoRestore.h"
 #include "mozilla/DebugOnly.h"
 #include "mozilla/dom/HTMLSelectElement.h"
+#include "mozilla/EventStates.h"
 #include "mozilla/Likely.h"
 #include "mozilla/LinkedList.h"
 #include "nsAbsoluteContainingBlock.h"
@@ -30,7 +31,6 @@
 #include "nsUnicharUtils.h"
 #include "nsStyleSet.h"
 #include "nsViewManager.h"
-#include "nsEventStates.h"
 #include "nsStyleConsts.h"
 #include "nsIDOMXULElement.h"
 #include "nsContainerFrame.h"
@@ -9434,8 +9434,9 @@ nsCSSFrameConstructor::ProcessChildren(nsFrameConstructorState& aState,
     // no?  And if we cared we could look through the item list
     // instead of groveling through the framelist here..
     nsStyleContext *frameStyleContext = aFrame->StyleContext();
-    // Report a warning for non-GC frames:
-    if (!aFrame->IsGeneratedContentFrame()) {
+    // Report a warning for non-GC frames, for chrome:
+    if (!aFrame->IsGeneratedContentFrame() &&
+        mPresShell->GetPresContext()->IsChrome()) {
       nsIContent *badKid = AnyKidsNeedBlockParent(aFrameItems.FirstChild());
       nsDependentAtomString parentTag(aContent->Tag()), kidTag(badKid->Tag());
       const char16_t* params[] = { parentTag.get(), kidTag.get() };

@@ -16,6 +16,7 @@
 #include "frontend/BytecodeCompiler.h"
 #include "jit/IonBuilder.h"
 #include "vm/Debugger.h"
+#include "vm/TraceLogging.h"
 
 #include "jscntxtinlines.h"
 #include "jscompartmentinlines.h"
@@ -169,7 +170,9 @@ static const JSClass workerGlobalClass = {
     JS_PropertyStub,  JS_DeletePropertyStub,
     JS_PropertyStub,  JS_StrictPropertyStub,
     JS_EnumerateStub, JS_ResolveStub,
-    JS_ConvertStub,   nullptr
+    JS_ConvertStub,   nullptr,
+    nullptr, nullptr, nullptr,
+    JS_GlobalObjectTraceHook
 };
 
 ParseTask::ParseTask(ExclusiveContext *cx, JSObject *exclusiveContextGlobal, JSContext *initCx,
@@ -307,6 +310,9 @@ js::StartOffThreadParseScript(JSContext *cx, const ReadOnlyCompileOptions &optio
     compartmentOptions.setInvisibleToDebugger(true);
     compartmentOptions.setMergeable(true);
 
+    // Don't falsely inherit the host's global trace hook.
+    compartmentOptions.setTrace(nullptr);
+
     JSObject *global = JS_NewGlobalObject(cx, &workerGlobalClass, nullptr,
                                           JS::FireOnNewGlobalHook, compartmentOptions);
     if (!global)
@@ -431,7 +437,7 @@ GlobalWorkerThreadState::ensureInitialized()
         helper.threadData.construct(static_cast<JSRuntime *>(nullptr));
         helper.thread = PR_CreateThread(PR_USER_THREAD,
                                         WorkerThread::ThreadMain, &helper,
-                                        PR_PRIORITY_NORMAL, PR_LOCAL_THREAD, PR_JOINABLE_THREAD, WORKER_STACK_SIZE);
+                                        PR_PRIORITY_NORMAL, PR_GLOBAL_THREAD, PR_JOINABLE_THREAD, WORKER_STACK_SIZE);
         if (!helper.thread || !helper.threadData.ref().init()) {
             for (size_t j = 0; j < threadCount; j++)
                 threads[j].destroy();
@@ -774,12 +780,9 @@ WorkerThread::handleIonWorkload()
 
     ionBuilder = WorkerThreadState().ionWorklist().popCopy();
 
-#if JS_TRACE_LOGGING
-    AutoTraceLog logger(TraceLogging::getLogger(TraceLogging::ION_BACKGROUND_COMPILER),
-                        TraceLogging::ION_COMPILE_START,
-                        TraceLogging::ION_COMPILE_STOP,
-                        ionBuilder->script());
-#endif
+    TraceLogger *logger = TraceLoggerForThread(thread);
+    AutoTraceLog logScript(logger, TraceLogCreateTextId(logger, ionBuilder->script()));
+    AutoTraceLog logCompile(logger, TraceLogger::IonCompilation);
 
     JSRuntime *rt = ionBuilder->script()->compartment()->runtimeFromAnyThread();
 

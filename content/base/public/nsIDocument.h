@@ -33,7 +33,6 @@ class nsCSSStyleSheet;
 class nsIDocShell;
 class nsDocShell;
 class nsDOMNavigationTiming;
-class nsEventStates;
 class nsFrameLoader;
 class nsHTMLCSSStyleSheet;
 class nsHTMLDocument;
@@ -85,6 +84,7 @@ class nsCSSSelectorList;
 
 namespace mozilla {
 class ErrorResult;
+class EventStates;
 
 namespace css {
 class Loader;
@@ -126,8 +126,8 @@ typedef CallbackObjectHolder<NodeFilter, nsIDOMNodeFilter> NodeFilterHolder;
 } // namespace mozilla
 
 #define NS_IDOCUMENT_IID \
-{ 0x94629cb0, 0xfe8a, 0x4627, \
-  { 0x8e, 0x59, 0xab, 0x1a, 0xaf, 0xdc, 0x99, 0x56 } }
+{ 0xa7679e4a, 0xa5ec, 0x45bf, \
+  { 0x8f, 0xe4, 0xad, 0x4a, 0xb8, 0xc7, 0x7f, 0xc7 } }
 
 // Flag for AddStyleSheet().
 #define NS_STYLESHEET_FROM_CATALOG                (1 << 0)
@@ -252,6 +252,18 @@ public:
   virtual void SetDocumentURI(nsIURI* aURI) = 0;
 
   /**
+   * Set the URI for the document loaded via XHR, when accessed from
+   * chrome privileged script.
+   */
+  virtual void SetChromeXHRDocURI(nsIURI* aURI) = 0;
+
+  /**
+   * Set the base URI for the document loaded via XHR, when accessed from
+   * chrome privileged script.
+   */
+  virtual void SetChromeXHRDocBaseURI(nsIURI* aURI) = 0;
+
+  /**
    * Set the principal responsible for this document.
    */
   virtual void SetPrincipal(nsIPrincipal *aPrincipal) = 0;
@@ -278,7 +290,7 @@ public:
     }
     return mDocumentBaseURI ? mDocumentBaseURI : mDocumentURI;
   }
-  virtual already_AddRefed<nsIURI> GetBaseURI() const MOZ_OVERRIDE;
+  virtual already_AddRefed<nsIURI> GetBaseURI(bool aTryUseXHRDocBaseURI = false) const MOZ_OVERRIDE;
 
   virtual nsresult SetBaseURI(nsIURI* aURI) = 0;
 
@@ -1093,12 +1105,12 @@ public:
   // notify that a content node changed state.  This must happen under
   // a scriptblocker but NOT within a begin/end update.
   virtual void ContentStateChanged(nsIContent* aContent,
-                                   nsEventStates aStateMask) = 0;
+                                   mozilla::EventStates aStateMask) = 0;
 
   // Notify that a document state has changed.
   // This should only be called by callers whose state is also reflected in the
   // implementation of nsDocument::GetDocumentState.
-  virtual void DocumentStatesChanged(nsEventStates aStateMask) = 0;
+  virtual void DocumentStatesChanged(mozilla::EventStates aStateMask) = 0;
 
   // Observation hooks for style data to propagate notifications
   // to document observers
@@ -1794,7 +1806,7 @@ public:
    * Document state bits have the form NS_DOCUMENT_STATE_* and are declared in
    * nsIDocument.h.
    */
-  virtual nsEventStates GetDocumentState() = 0;
+  virtual mozilla::EventStates GetDocumentState() = 0;
 
   virtual nsISupports* GetCurrentContentSink() = 0;
 
@@ -1891,14 +1903,6 @@ public:
 
   virtual Element* FindImageMap(const nsAString& aNormalizedMapName) = 0;
 
-  // Called to notify the document that a listener on the "mozaudioavailable"
-  // event has been added. Media elements in the document need to ensure they
-  // fire the event.
-  virtual void NotifyAudioAvailableListener() = 0;
-
-  // Returns true if the document has "mozaudioavailable" event listeners.
-  virtual bool HasAudioAvailableListeners() = 0;
-
   // Add aLink to the set of links that need their status resolved. 
   void RegisterPendingLinkUpdate(mozilla::dom::Link* aLink);
   
@@ -1993,6 +1997,11 @@ public:
     GetImplementation(mozilla::ErrorResult& rv) = 0;
   void GetURL(nsString& retval) const;
   void GetDocumentURI(nsString& retval) const;
+  // Return the URI for the document.
+  // The returned value may differ if the document is loaded via XHR, and
+  // when accessed from chrome privileged script and
+  // from content privileged script for compatibility.
+  void GetDocumentURIFromJS(nsString& aDocumentURI) const;
   void GetCompatMode(nsString& retval) const;
   void GetCharacterSet(nsAString& retval) const;
   // Skip GetContentType, because our NS_IMETHOD version above works fine here.
@@ -2128,10 +2137,7 @@ public:
   void ReleaseCapture() const;
   virtual void MozSetImageElement(const nsAString& aImageElementId,
                                   Element* aElement) = 0;
-  nsIURI* GetDocumentURIObject()
-  {
-    return GetDocumentURI();
-  }
+  nsIURI* GetDocumentURIObject() const;
   // Not const because all the full-screen goop is not const
   virtual bool MozFullScreenEnabled() = 0;
   virtual Element* GetMozFullScreenElement(mozilla::ErrorResult& rv) = 0;
@@ -2235,8 +2241,7 @@ public:
 
   virtual nsHTMLDocument* AsHTMLDocument() { return nullptr; }
 
-  virtual JSObject* WrapObject(JSContext *aCx,
-                               JS::Handle<JSObject*> aScope) MOZ_OVERRIDE;
+  virtual JSObject* WrapObject(JSContext *aCx) MOZ_OVERRIDE;
 
 private:
   uint64_t mWarnedAbout;
@@ -2283,7 +2288,9 @@ protected:
 
   nsCOMPtr<nsIURI> mDocumentURI;
   nsCOMPtr<nsIURI> mOriginalURI;
+  nsCOMPtr<nsIURI> mChromeXHRDocURI;
   nsCOMPtr<nsIURI> mDocumentBaseURI;
+  nsCOMPtr<nsIURI> mChromeXHRDocBaseURI;
 
   nsWeakPtr mDocumentLoadGroup;
 
@@ -2298,8 +2305,9 @@ protected:
   // A reference to the element last returned from GetRootElement().
   mozilla::dom::Element* mCachedRootElement;
 
-  // We hold a strong reference to mNodeInfoManager through mNodeInfo
-  nsNodeInfoManager* mNodeInfoManager; // [STRONG]
+  // This is a weak reference, but we hold a strong reference to mNodeInfo,
+  // which in turn holds a strong reference to this mNodeInfoManager.
+  nsNodeInfoManager* mNodeInfoManager;
   nsRefPtr<mozilla::css::Loader> mCSSLoader;
   nsRefPtr<mozilla::css::ImageLoader> mStyleImageLoader;
   nsRefPtr<nsHTMLStyleSheet> mAttrStyleSheet;

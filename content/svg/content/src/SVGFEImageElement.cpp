@@ -5,6 +5,7 @@
 
 #include "mozilla/dom/SVGFEImageElement.h"
 
+#include "mozilla/EventStates.h"
 #include "mozilla/dom/SVGFEImageElementBinding.h"
 #include "mozilla/dom/SVGFilterElement.h"
 #include "nsContentUtils.h"
@@ -22,9 +23,9 @@ namespace mozilla {
 namespace dom {
 
 JSObject*
-SVGFEImageElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aScope)
+SVGFEImageElement::WrapNode(JSContext *aCx)
 {
-  return SVGFEImageElementBinding::Wrap(aCx, aScope, this);
+  return SVGFEImageElementBinding::Wrap(aCx, this);
 }
 
 nsSVGElement::StringInfo SVGFEImageElement::sStringInfo[2] =
@@ -169,7 +170,7 @@ SVGFEImageElement::UnbindFromTree(bool aDeep, bool aNullParent)
   SVGFEImageElementBase::UnbindFromTree(aDeep, aNullParent);
 }
 
-nsEventStates
+EventStates
 SVGFEImageElement::IntrinsicState() const
 {
   return SVGFEImageElementBase::IntrinsicState() |

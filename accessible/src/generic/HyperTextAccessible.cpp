@@ -32,6 +32,7 @@
 #include "nsITextControlElement.h"
 #include "nsTextFragment.h"
 #include "mozilla/dom/Element.h"
+#include "mozilla/EventStates.h"
 #include "mozilla/Selection.h"
 #include "mozilla/MathAlgorithms.h"
 #include "gfxSkipChars.h"
@@ -1036,13 +1037,12 @@ HyperTextAccessible::TextBounds(int32_t aStartOffset, int32_t aEndOffset,
   int32_t offset1 = startOffset - prevOffset;
 
   while (childIdx < ChildCount()) {
-    nsIFrame* frame = GetChildAt(childIdx)->GetFrame();
+    nsIFrame* frame = GetChildAt(childIdx++)->GetFrame();
     if (!frame) {
       NS_NOTREACHED("No frame for a child!");
       continue;
     }
 
-    childIdx++;
     int32_t nextOffset = GetChildOffset(childIdx);
     if (nextOffset >= endOffset) {
       bounds.UnionRect(bounds, GetBoundsInFrame(frame, offset1,
