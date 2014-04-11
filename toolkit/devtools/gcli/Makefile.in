@@ -2,6 +2,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+gcli_commands_internal_FILES = $(wildcard $(srcdir)/commands/*)
+gcli_commands_internal_DEST = $(FINAL_TARGET)/modules/devtools/gcli/commands
+INSTALL_TARGETS += gcli_commands_internal
+
 gcli_commands_FILES = $(wildcard $(srcdir)/source/lib/gcli/commands/*)
 gcli_commands_DEST = $(FINAL_TARGET)/modules/devtools/gcli/commands
 INSTALL_TARGETS += gcli_commands
@@ -46,5 +50,3 @@ include $(topsrcdir)/config/rules.mk
 
 libs::
 	$(INSTALL) $(IFLAGS1) $(srcdir)/*.jsm $(FINAL_TARGET)/modules/devtools
-	$(INSTALL) $(IFLAGS1) $(srcdir)/commands/*.js $(FINAL_TARGET)/modules/devtools/gcli/commands
-
