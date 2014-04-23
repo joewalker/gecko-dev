@@ -28,6 +28,8 @@ XPCOMUtils.defineLazyModuleGetter(this, "PluralForm",
 
 const require = Cu.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
 const { PrefObserver, PREF_ORIG_SOURCES } = require("devtools/styleeditor/utils");
+const coverage = require("devtools/server/actors/coverage");
+const console = require("resource://gre/modules/devtools/Console.jsm").console;
 
 const LOAD_ERROR = "error-load";
 const STYLE_EDITOR_TEMPLATE = "stylesheet";
@@ -69,6 +71,14 @@ function StyleEditorUI(debuggee, target, panelDoc) {
 
   this._prefObserver = new PrefObserver("devtools.styleeditor.");
   this._prefObserver.on(PREF_ORIG_SOURCES, this._onNewDocument);
+
+  this._loadDeferred = promise.defer();
+  this.loadPromise = this._loadDeferred.promise;
+
+  // We need a list of tokens for each unused rule, but don't want to
+  // re-parse the stylesheet for each rule, so we cache the tokens here,
+  // but in case the sheets have changed, we clear the cache
+  this.parsePromises = new Map;
 }
 
 StyleEditorUI.prototype = {
@@ -188,6 +198,7 @@ StyleEditorUI.prototype = {
     this._root.classList.remove("loading");
 
     this.emit("stylesheets-reset");
+    this._loadDeferred.resolve();
   },
 
   /**
@@ -220,6 +231,33 @@ StyleEditorUI.prototype = {
     this.selectedEditor = null;
 
     this._root.classList.add("loading");
+  },
+
+  getTokens: function(href) {
+    let parsePromise = this.parsePromises.get(href);
+
+    if (parsePromise == null) {
+      parsePromise = this.fetchSource(href).then(source => {
+        let tokens = cssTokenizer(source, { loc: true });
+        return tokens;
+      });
+      this.parsePromises.set(href, parsePromise);
+    }
+
+    return parsePromise;
+  },
+
+  fetchSource: function(href) {
+    return this._debuggee.getStyleSheets().then(styleSheets => {
+      for (let styleSheet of styleSheets) {
+        if (styleSheet.href === href) {
+          return styleSheet.getText().then(longStr => longStr.string());
+        }
+      }
+
+      console.error('Can\'t find source for ' + href);
+      return '';
+    });
   },
 
   /**
@@ -467,6 +505,14 @@ StyleEditorUI.prototype = {
           }
 
           editor.onShow();
+
+          coverage.getUsage(this._target).then(usage => {
+            let href = editor.styleSheet.href || editor.styleSheet.nodeHref;
+            usage.createEditorReport(href).then(data => {
+              editor.removeAllUnusedRegions();
+              editor.addUnusedRegions(data.reports);
+            });
+          }, console.error);
 
           this.emit("editor-selected", editor);
         }.bind(this)).then(null, Cu.reportError);
