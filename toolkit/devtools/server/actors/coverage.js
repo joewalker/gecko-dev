@@ -7,9 +7,9 @@
 const { Cc, Ci, Cu } = require("chrome");
 
 const { XPCOMUtils } = require("resource://gre/modules/XPCOMUtils.jsm");
+const Services = require("Services");
 
 const promise = require("resource://gre/modules/Promise.jsm").Promise;
-const l10n = require("gcli/l10n");
 const { gDevTools } = require("resource:///modules/devtools/gDevTools.jsm");
 
 const protocol = require("devtools/server/protocol");
@@ -23,6 +23,19 @@ loader.lazyGetter(this, "prettifyCSS", () => {
 });
 
 const CSSRule = Ci.nsIDOMCSSRule;
+
+/**
+ * Allow: let foo = l10n.lookup("coverageFoo");
+ */
+const l10n = exports.l10n = {
+  _URI: "chrome://global/locale/devtools/coverage.properties",
+  lookup: function(msg) {
+    if (this._stringBundle == null) {
+      this._stringBundle = Services.strings.createBundle(this._URI);
+    }
+    return this._stringBundle.GetStringFromName(msg);
+  }
+};
 
 /**
  * UsageReport manages the collection of CSS usage data.

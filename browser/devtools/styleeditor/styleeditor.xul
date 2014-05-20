@@ -9,8 +9,8 @@
  %editMenuStrings;
 <!ENTITY % sourceEditorStrings SYSTEM "chrome://browser/locale/devtools/sourceeditor.dtd">
  %sourceEditorStrings;
-<!ENTITY % csscoverageDTD SYSTEM "chrome://browser/locale/devtools/csscoverage.dtd">
- %csscoverageDTD;
+<!ENTITY % coverageDTD SYSTEM "chrome://global/locale/devtools/coverage.dtd">
+ %coverageDTD;
 ]>
 
 <?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>

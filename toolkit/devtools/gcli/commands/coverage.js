@@ -22,8 +22,8 @@ const { gDevTools } = require("resource:///modules/devtools/gDevTools.jsm");
 const promise = require("resource://gre/modules/Promise.jsm").Promise;
 
 const domtemplate = require("gcli/util/domtemplate");
-const l10n = require("gcli/l10n");
 const coverage = require("devtools/server/actors/coverage");
+const l10n = coverage.l10n;
 
 /**
  * The commands/converters for GCLI
@@ -86,6 +86,7 @@ exports.items = [
   {
     name: "coverage report",
     hidden: true,
+    description: l10n.lookup("coverageReportDesc"),
     exec: function*(args, context) {
       let usage = yield coverage.getUsage(context.environment.target);
       return {
