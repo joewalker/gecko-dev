@@ -23,7 +23,6 @@ let test = asyncTest(function*() {
   yield usage.start();
 
   let running = yield usage._testOnly_isRunning();
-console.log(running);
   ok(running, "coverage is running");
 
   yield helpers.navigate(PAGE_3, options);
