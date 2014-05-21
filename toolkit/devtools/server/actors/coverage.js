@@ -24,6 +24,8 @@ loader.lazyGetter(this, "prettifyCSS", () => {
 
 const CSSRule = Ci.nsIDOMCSSRule;
 
+const MAX_UNUSED_RULES = 10000;
+
 /**
  * Allow: let foo = l10n.lookup("coverageFoo");
  */
@@ -101,7 +103,7 @@ let UsageReportActor = protocol.ActorClass({
     this._visitedPages = new Set();
     this._knownRules = new Map();
     this._running = true;
-    this._tooMuchUnused = false;
+    this._tooManyUnused = false;
 
     this._tabActor.browser.addEventListener("load", this._onTabLoad, true);
 
@@ -247,14 +249,13 @@ let UsageReportActor = protocol.ActorClass({
       }
 
       qsaCount++;
-      if (qsaCount > 100000) {
-        console.error("Too many unused rule on " + url + " ");
-        this._tooMuchUnused = true;
+      if (qsaCount > MAX_UNUSED_RULES) {
+        console.error("Too many unused rules on " + url + " ");
+        this._tooManyUnused = true;
         continue;
       }
 
       try {
-        // If there are more than 100,000 rules to check then
         let match = document.querySelector(ruleData.test);
         if (match != null) {
           ruleData.isUsed = true;
