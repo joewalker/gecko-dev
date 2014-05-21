@@ -88,35 +88,49 @@ exports.items = [
     item: "converter",
     from: "coveragePageReport",
     to: "dom",
-    exec: function(coveragePageReport, context) {
+    exec: function*(coveragePageReport, context) {
       let target = context.environment.target;
-      return gDevTools.showToolbox(target, "styleeditor").then(toolbox => {
-        let panel = toolbox.getCurrentPanel();
 
-        let addOnClick = rule => {
-          rule.onclick = () => {
-            panel.selectStyleSheet(rule.url, rule.start.line);
-          };
+      let toolbox = yield gDevTools.showToolbox(target, "styleeditor");
+      let panel = toolbox.getCurrentPanel();
+
+      let host = panel._panelDoc.querySelector(".coverage-report");
+      let templ = panel._panelDoc.querySelector(".coverage-template");
+
+      templ = templ.cloneNode(true);
+      templ.hidden = false;
+
+      let data = {
+        pages: coveragePageReport.pages,
+        unusedRules: coveragePageReport.unusedRules,
+        onback: () => {
+          // The back button clears and hides .coverage-report
+          while (host.hasChildNodes()) {
+            host.removeChild(host.firstChild);
+          }
+          host.hidden = true;
+        }
+      };
+
+      let addOnClick = rule => {
+        rule.onclick = () => {
+          panel.selectStyleSheet(rule.url, rule.start.line);
         };
+      };
 
-        let reportElement = panel._panelDoc.querySelector(".coverage-template");
-        reportElement.hidden = false;
-
-        let data = {
-          pages: coveragePageReport.pages,
-          unusedRules: coveragePageReport.unusedRules,
-          onback: () => { reportElement.hidden = true; }
-        };
-
-        data.pages.forEach(page => {
-          page.preloadRules.forEach(addOnClick);
-        });
-
-        data.unusedRules.forEach(addOnClick);
-
-        let options = { allowEval: true, stack: "styleeditor.xul" };
-        domtemplate.template(reportElement, data, options);
+      data.pages.forEach(page => {
+        page.preloadRules.forEach(addOnClick);
       });
+
+      data.unusedRules.forEach(addOnClick);
+
+      let options = { allowEval: true, stack: "styleeditor.xul" };
+      domtemplate.template(templ, data, options);
+
+      while (templ.hasChildNodes()) {
+        host.appendChild(templ.firstChild);
+      }
+      host.hidden = false;
     }
   }
 ];
