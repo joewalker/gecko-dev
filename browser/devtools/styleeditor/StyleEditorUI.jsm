@@ -470,13 +470,22 @@ StyleEditorUI.prototype = {
 
           editor.onShow();
 
-          csscoverage.getUsage(this._target).then(usage => {
-            let href = editor.styleSheet.href || editor.styleSheet.nodeHref;
-            usage.createEditorReport(href).then(data => {
-              editor.removeAllUnusedRegions();
-              editor.addUnusedRegions(data.reports);
-            });
-          }, console.error);
+          // CSS Coverage: If the CSS text contains a '}' with some
+          // non-whitespace after then we assume this is compressed CSS and
+          // stop marking-up.
+          let text = editor.sourceEditor.getText();
+          if (!/}\s*\S+\s*\n/.test(text)) {
+            csscoverage.getUsage(this._target).then(usage => {
+              let href = editor.styleSheet.href || editor.styleSheet.nodeHref;
+              usage.createEditorReport(href).then(data => {
+                editor.removeAllUnusedRegions();
+                editor.addUnusedRegions(data.reports);
+              });
+            }, console.error);
+          }
+          else {
+            console.log("Compressed: " + (editor.styleSheet.href || editor.styleSheet.nodeHref));
+          }
 
           this.emit("editor-selected", editor);
         }.bind(this)).then(null, Cu.reportError);
