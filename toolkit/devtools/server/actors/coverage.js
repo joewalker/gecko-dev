@@ -11,6 +11,7 @@ const Services = require("Services");
 
 const promise = require("resource://gre/modules/Promise.jsm").Promise;
 const { gDevTools } = require("resource:///modules/devtools/gDevTools.jsm");
+const { getRuleLocation } = require("devtools/server/actors/stylesheets");
 
 const protocol = require("devtools/server/protocol");
 const { method, custom, RetVal, Arg } = protocol;
@@ -479,9 +480,8 @@ function getImportedSheets(stylesheet) {
  * @see deconstructRuleId(ruleId)
  */
 function ruleToId(rule) {
-  return sheetToUrl(rule.parentStyleSheet) +
-          "|" + DOMUtils.getRuleLine(rule) +
-          "|" + DOMUtils.getRuleColumn(rule);
+  let loc = getRuleLocation(rule);
+  return sheetToUrl(rule.parentStyleSheet) + "|" + loc.line + "|" + loc.column;
 }
 
 /**
