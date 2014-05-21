@@ -71,11 +71,6 @@ function StyleEditorUI(debuggee, target, panelDoc) {
 
   this._prefObserver = new PrefObserver("devtools.styleeditor.");
   this._prefObserver.on(PREF_ORIG_SOURCES, this._onNewDocument);
-
-  // We need a list of tokens for each unused rule, but don't want to
-  // re-parse the stylesheet for each rule, so we cache the tokens here,
-  // but in case the sheets have changed, we clear the cache
-  this.parsePromises = new Map;
 }
 
 StyleEditorUI.prototype = {
@@ -227,33 +222,6 @@ StyleEditorUI.prototype = {
     this.selectedEditor = null;
 
     this._root.classList.add("loading");
-  },
-
-  getTokens: function(href) {
-    let parsePromise = this.parsePromises.get(href);
-
-    if (parsePromise == null) {
-      parsePromise = this.fetchSource(href).then(source => {
-        let tokens = cssTokenizer(source, { loc: true });
-        return tokens;
-      });
-      this.parsePromises.set(href, parsePromise);
-    }
-
-    return parsePromise;
-  },
-
-  fetchSource: function(href) {
-    return this._debuggee.getStyleSheets().then(styleSheets => {
-      for (let styleSheet of styleSheets) {
-        if (styleSheet.href === href) {
-          return styleSheet.getText().then(longStr => longStr.string());
-        }
-      }
-
-      console.error('Can\'t find source for ' + href);
-      return '';
-    });
   },
 
   /**
