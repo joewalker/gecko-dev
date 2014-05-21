@@ -47,7 +47,11 @@ let test = asyncTest(function*() {
     reports: [
       {
         selectorText: ".page3-test2",
-        start: { line: 14, column: 5 },
+        start: { line: 9, column: 5 },
+      },
+      {
+        selectorText: ".page3-test3",
+        start: { line: 3, column: 5 },
       }
     ]
   };

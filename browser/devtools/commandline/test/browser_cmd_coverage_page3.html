@@ -8,15 +8,17 @@
 
     /* This should match below */
     .page3-test1 {
-      color: #011;
+      color: #031;
     }
     /* This should not match below */
     .page3-test2 {
-      color: #012;
+      color: #032;
     }
-    /* This doesn't match until the event fires */
+  </style>
+  <style>
+    /* This also should not match below, but in a second inline sheet */
     .page3-test3 {
-      color: #015;
+      color: #033;
     }
   </style>
   <link rel="stylesheet" type="text/css" href="browser_cmd_coverage_sheetA.css">
@@ -27,7 +29,6 @@
 <h2>Page 3</h2>
 
 <div class=page3-test1>.page3-test1</div>
-<div class=page3-test3>.page3-test3</div>
 
 <div class=sheetA-test1>.sheetA-test1</div>
 <div class=sheetA-test5>.sheetA-test5</div>
