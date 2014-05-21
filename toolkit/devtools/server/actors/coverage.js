@@ -73,12 +73,20 @@ let UsageReportActor = protocol.ActorClass({
 
   initialize: function(conn, tabActor) {
     protocol.Actor.prototype.initialize.call(this, conn);
+
     this._tabActor = tabActor;
     this._running = false;
+
+    this._onTabLoad = this._onTabLoad.bind(this);
+    this._onChange = this._onChange.bind(this);
   },
 
   destroy: function() {
     this._tabActor = undefined;
+
+    delete this._onTabLoad;
+    delete this._onChange;
+
     protocol.Actor.prototype.destroy.call(this);
   },
 
@@ -94,9 +102,6 @@ let UsageReportActor = protocol.ActorClass({
     this._knownRules = new Map();
     this._running = true;
     this._tooMuchUnused = false;
-
-    this._onTabLoad = this._onTabLoad.bind(this);
-    this._onChange = this._onChange.bind(this);
 
     this._tabActor.browser.addEventListener("load", this._onTabLoad, true);
 
@@ -116,11 +121,6 @@ let UsageReportActor = protocol.ActorClass({
 
     this._tabActor.browser.removeEventListener("load", this._onTabLoad, true);
     this._running = false;
-
-    // Note on dictionary mode. Normally we'd "this.blah = undefined", however
-    // that would make the next call to start() fail, so we do it properly
-    delete this._onTabLoad;
-    delete this._onChange;
   }),
 
   /**
