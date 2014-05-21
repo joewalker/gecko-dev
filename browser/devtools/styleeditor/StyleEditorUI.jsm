@@ -28,7 +28,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "PluralForm",
 
 const require = Cu.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
 const { PrefObserver, PREF_ORIG_SOURCES } = require("devtools/styleeditor/utils");
-const coverage = require("devtools/server/actors/coverage");
+const csscoverage = require("devtools/server/actors/csscoverage");
 const console = require("resource://gre/modules/devtools/Console.jsm").console;
 
 const LOAD_ERROR = "error-load";
@@ -470,7 +470,7 @@ StyleEditorUI.prototype = {
 
           editor.onShow();
 
-          coverage.getUsage(this._target).then(usage => {
+          csscoverage.getUsage(this._target).then(usage => {
             let href = editor.styleSheet.href || editor.styleSheet.nodeHref;
             usage.createEditorReport(href).then(data => {
               editor.removeAllUnusedRegions();

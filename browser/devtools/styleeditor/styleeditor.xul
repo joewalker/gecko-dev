@@ -9,8 +9,8 @@
  %editMenuStrings;
 <!ENTITY % sourceEditorStrings SYSTEM "chrome://browser/locale/devtools/sourceeditor.dtd">
  %sourceEditorStrings;
-<!ENTITY % coverageDTD SYSTEM "chrome://global/locale/devtools/coverage.dtd">
- %coverageDTD;
+<!ENTITY % csscoverageDTD SYSTEM "chrome://global/locale/devtools/csscoverage.dtd">
+ %csscoverageDTD;
 ]>
 
 <?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
@@ -134,17 +134,17 @@
       </div> <!-- #splitview-templates -->
     </xul:box>   <!-- .splitview-root -->
 
-    <xul:box class="coverage-template" hidden="true">
-      <xul:toolbar class="devtools-toolbar coverage-toolbar">
-        <xul:button class="devtools-toolbarbutton coverage-toolbarbutton"
-            label="&coverage.backButton;"
+    <xul:box class="csscoverage-template" hidden="true">
+      <xul:toolbar class="devtools-toolbar csscoverage-toolbar">
+        <xul:button class="devtools-toolbarbutton csscoverage-toolbarbutton"
+            label="&csscoverage.backButton;"
             onclick="${onback}"/>
       </xul:toolbar>
       <!-- The data for this comes from UsageReportActor.createPageReport -->
-      <div class="coverage-report-container">
-        <div class="coverage-report-content">
-          <h2>&coverage.unused;</h2>
-          <p>&coverage.noMatch;</p>
+      <div class="csscoverage-report-container">
+        <div class="csscoverage-report-content">
+          <h2>&csscoverage.unused;</h2>
+          <p>&csscoverage.noMatch;</p>
           <ul>
             <li foreach="rule in ${unusedRules}">
               <code>${rule.selectorText}</code>
@@ -152,16 +152,16 @@
                   title="${rule.url}">(${rule.shortHref} : ${rule.start.line})</span>
             </li>
           </ul>
-          <h2>&coverage.optimize;</h2>
+          <h2>&csscoverage.optimize;</h2>
           <p>
-            &coverage.preload1;
+            &csscoverage.preload1;
             <code>&lt;link ...></code>
-            &coverage.preload2;
+            &csscoverage.preload2;
             <code>&lt;style>...</code>
-            &coverage.preload3;
+            &csscoverage.preload3;
           </p>
           <div if="${pages.length == 0}">
-            &coverage.noPreload;
+            &csscoverage.noPreload;
           </div>
           <div if="${pages.length > 0}">
             <div foreach="page in ${pages}">
@@ -172,16 +172,16 @@
             </div>
           </div>
           <p>
-            &coverage.footer1;
-            <a target="_blank" href="&coverage.footer2;">&coverage.footer3;</a>
-            &coverage.footer4;
+            &csscoverage.footer1;
+            <a target="_blank" href="&csscoverage.footer2;">&csscoverage.footer3;</a>
+            &csscoverage.footer4;
           </p>
           <p>&#160;</p>
         </div>
       </div>
     </xul:box>
 
-    <xul:box class="coverage-report" hidden="true">
+    <xul:box class="csscoverage-report" hidden="true">
     </xul:box>
 
   </xul:stack>

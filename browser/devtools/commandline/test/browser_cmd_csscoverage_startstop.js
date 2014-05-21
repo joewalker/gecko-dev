@@ -3,34 +3,34 @@
 
 // Tests that the addon commands works as they should
 
-const coverage = require("devtools/server/actors/coverage");
+const csscoverage = require("devtools/server/actors/csscoverage");
 
-const PAGE_1 = TEST_BASE_HTTPS + "browser_cmd_coverage_page1.html";
-const PAGE_2 = TEST_BASE_HTTPS + "browser_cmd_coverage_page2.html";
-const PAGE_3 = TEST_BASE_HTTPS + "browser_cmd_coverage_page3.html";
+const PAGE_1 = TEST_BASE_HTTPS + "browser_cmd_csscoverage_page1.html";
+const PAGE_2 = TEST_BASE_HTTPS + "browser_cmd_csscoverage_page2.html";
+const PAGE_3 = TEST_BASE_HTTPS + "browser_cmd_csscoverage_page3.html";
 
-const SHEET_A = TEST_BASE_HTTPS + "browser_cmd_coverage_sheetA.css";
-const SHEET_B = TEST_BASE_HTTPS + "browser_cmd_coverage_sheetB.css";
-const SHEET_C = TEST_BASE_HTTPS + "browser_cmd_coverage_sheetC.css";
-const SHEET_D = TEST_BASE_HTTPS + "browser_cmd_coverage_sheetD.css";
+const SHEET_A = TEST_BASE_HTTPS + "browser_cmd_csscoverage_sheetA.css";
+const SHEET_B = TEST_BASE_HTTPS + "browser_cmd_csscoverage_sheetB.css";
+const SHEET_C = TEST_BASE_HTTPS + "browser_cmd_csscoverage_sheetC.css";
+const SHEET_D = TEST_BASE_HTTPS + "browser_cmd_csscoverage_sheetD.css";
 
 let test = asyncTest(function*() {
   let options = yield helpers.openTab("about:blank");
   yield helpers.openToolbar(options);
 
-  let usage = yield coverage.getUsage(options.target);
+  let usage = yield csscoverage.getUsage(options.target);
 
   yield usage.start();
 
   let running = yield usage._testOnly_isRunning();
-  ok(running, "coverage is running");
+  ok(running, "csscoverage is running");
 
   yield helpers.navigate(PAGE_3, options);
 
   yield usage.stop();
 
   running = yield usage._testOnly_isRunning();
-  ok(!running, "coverage not is running");
+  ok(!running, "csscoverage not is running");
 
   // Page1
   let expectedPage1 = { reports: [] };
