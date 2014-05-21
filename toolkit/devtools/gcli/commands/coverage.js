@@ -4,18 +4,6 @@
 
 "use strict";
 
-/*
-# Outstanding things
-
-TODO: Can we detect compressed sheets?
-TODO: Clone report template so it works next time
-TODO: UI review.
-TODO: Patrick: Line numbers are off for inline style elements because the
-      DOMUtils gives the line num relative to the HTML, and the style editor
-      just uses the contents of the style element
-TODO: Add tests for start/stop and page report and more selectors
-*/
-
 const { Cc, Ci } = require("chrome");
 
 const { gDevTools } = require("resource:///modules/devtools/gDevTools.jsm");
