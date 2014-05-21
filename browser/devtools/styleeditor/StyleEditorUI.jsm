@@ -72,9 +72,6 @@ function StyleEditorUI(debuggee, target, panelDoc) {
   this._prefObserver = new PrefObserver("devtools.styleeditor.");
   this._prefObserver.on(PREF_ORIG_SOURCES, this._onNewDocument);
 
-  this._loadDeferred = promise.defer();
-  this.loadPromise = this._loadDeferred.promise;
-
   // We need a list of tokens for each unused rule, but don't want to
   // re-parse the stylesheet for each rule, so we cache the tokens here,
   // but in case the sheets have changed, we clear the cache
@@ -198,7 +195,6 @@ StyleEditorUI.prototype = {
     this._root.classList.remove("loading");
 
     this.emit("stylesheets-reset");
-    this._loadDeferred.resolve();
   },
 
   /**
