@@ -10,12 +10,14 @@ const { XPCOMUtils } = require("resource://gre/modules/XPCOMUtils.jsm");
 const Services = require("Services");
 
 const promise = require("resource://gre/modules/Promise.jsm").Promise;
-const { gDevTools } = require("resource:///modules/devtools/gDevTools.jsm");
 const { getRuleLocation } = require("devtools/server/actors/stylesheets");
 
 const protocol = require("devtools/server/protocol");
 const { method, custom, RetVal, Arg } = protocol;
 
+loader.lazyGetter(this, "gDevTools", () => {
+  return require("resource:///modules/devtools/gDevTools.jsm").gDevTools;
+});
 loader.lazyGetter(this, "DOMUtils", () => {
   return Cc["@mozilla.org/inspector/dom-utils;1"].getService(Ci.inIDOMUtils)
 });
