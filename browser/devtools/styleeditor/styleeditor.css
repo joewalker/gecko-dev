@@ -7,15 +7,15 @@
   -moz-box-flex: 1;
 }
 
-.coverage-report-container {
+.csscoverage-report-container {
   -moz-box-flex: 1;
 }
 
-.coverage-report {
+.csscoverage-report {
   -moz-box-orient: horizontal;
 }
 
-.coverage-report-container {
+.csscoverage-report-container {
   overflow-x: hidden;
   overflow-y: auto;
 }

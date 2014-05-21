@@ -28,10 +28,10 @@ const CSSRule = Ci.nsIDOMCSSRule;
 const MAX_UNUSED_RULES = 10000;
 
 /**
- * Allow: let foo = l10n.lookup("coverageFoo");
+ * Allow: let foo = l10n.lookup("csscoverageFoo");
  */
 const l10n = exports.l10n = {
-  _URI: "chrome://global/locale/devtools/coverage.properties",
+  _URI: "chrome://global/locale/devtools/csscoverage.properties",
   lookup: function(msg) {
     if (this._stringBundle == null) {
       this._stringBundle = Services.strings.createBundle(this._URI);
@@ -98,7 +98,7 @@ let UsageReportActor = protocol.ActorClass({
    */
   start: method(function() {
     if (this._running) {
-      throw new Error(l10n.lookup("coverageRunningError"));
+      throw new Error(l10n.lookup("csscoverageRunningError"));
     }
 
     this._visitedPages = new Set();
@@ -119,7 +119,7 @@ let UsageReportActor = protocol.ActorClass({
    */
   stop: method(function() {
     if (!this._running) {
-      throw new Error(l10n.lookup("coverageNotRunningError"));
+      throw new Error(l10n.lookup("csscoverageNotRunningError"));
     }
 
     this._tabActor.browser.removeEventListener("load", this._onTabLoad, true);
@@ -143,7 +143,7 @@ let UsageReportActor = protocol.ActorClass({
    */
   oneshot: method(function() {
     if (this._running) {
-      throw new Error(l10n.lookup("coverageRunningError"));
+      throw new Error(l10n.lookup("csscoverageRunningError"));
     }
 
     this._visitedPages = new Set();
@@ -338,15 +338,14 @@ let UsageReportActor = protocol.ActorClass({
    *       }
    *     ]
    *   }
-   * @see coverage.xhtml
    */
   createPageReport: method(function() {
     if (this._running) {
-      throw new Error(l10n.lookup("coverageRunningError"));
+      throw new Error(l10n.lookup("csscoverageRunningError"));
     }
 
     if (this._visitedPages == null) {
-      throw new Error(l10n.lookup("coverageNotRunError"));
+      throw new Error(l10n.lookup("csscoverageNotRunError"));
     }
 
     // Create a JSONable data structure representing a rule
@@ -401,7 +400,7 @@ let UsageReportActor = protocol.ActorClass({
   }),
 
   /**
-   * For testing only. Is coverage running.
+   * For testing only. Is css coverage running.
    */
   _testOnly_isRunning: method(function() {
     return this._running;
@@ -541,7 +540,7 @@ const SEL_EXTERNAL = [
  * which probably aren't and which are unlikely to be covered by manual tests.
  * We're currently stripping them out,
  * Action: Remove from selectors (but consider future command line flag to
- * enable them in the future. e.g. 'coverage start --strict')
+ * enable them in the future. e.g. 'csscoverage start --strict')
  */
 const SEL_FORM = [
   "checked", "default", "disabled", "enabled", "fullscreen", "in-range",
@@ -660,7 +659,7 @@ const UsageReportFront = protocol.FrontClass(UsageReportActor, {
   start: custom(function(chromeWindow, target) {
     if (chromeWindow != null) {
       let gnb = chromeWindow.document.getElementById("global-notificationbox");
-      let notification = gnb.getNotificationWithValue("coverage-running");
+      let notification = gnb.getNotificationWithValue("csscoverage-running");
 
       if (!notification) {
         let notifyStop = ev => {
@@ -670,8 +669,8 @@ const UsageReportFront = protocol.FrontClass(UsageReportActor, {
           }
         };
 
-        gnb.appendNotification(l10n.lookup("coverageRunningReply"),
-                               "coverage-running",
+        gnb.appendNotification(l10n.lookup("csscoverageRunningReply"),
+                               "csscoverage-running",
                                "", // i.e. no image
                                gnb.PRIORITY_INFO_HIGH,
                                null, // i.e. no buttons

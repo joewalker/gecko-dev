@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <!--
-  First page of the coverage test.
+  First page of the css coverage test.
   * Contains page2 in an iframe
   * Forwards to page2 on a timeout
   -->
   <title>Page 1</title>
   <style>
-    @import url(browser_cmd_coverage_sheetD.css);
+    @import url(browser_cmd_csscoverage_sheetD.css);
     /* This should match below */
     .page1-test1 {
       color: #011;
@@ -36,8 +36,8 @@
 
     /* We're not testing unparable CSS right now */
   </style>
-  <link rel="stylesheet" type="text/css" href="browser_cmd_coverage_sheetA.css">
-  <link rel="stylesheet" type="text/css" href="browser_cmd_coverage_sheetB.css">
+  <link rel="stylesheet" type="text/css" href="browser_cmd_csscoverage_sheetA.css">
+  <link rel="stylesheet" type="text/css" href="browser_cmd_csscoverage_sheetB.css">
   <script type="application/javascript;version=1.8">
   /* How quickly do we rush through this? */
   let delay = 500;
@@ -50,7 +50,7 @@
       parent.appendChild(child);
 
       /* Then navigate to the next step */
-      window.location.href = "browser_cmd_coverage_page3.html"
+      window.location.href = "browser_cmd_csscoverage_page3.html"
     }, delay);
   });
   </script>
@@ -73,10 +73,10 @@
 <div class=sheetD-test1>.sheetD-test1</div>
 <div class=sheetD-test3>.sheetD-test3</div>
 
-<iframe src=browser_cmd_coverage_page2.html></iframe>
+<iframe src=browser_cmd_csscoverage_page2.html></iframe>
 
 <p>
-  <a href="browser_cmd_coverage_page3.html">Page 3</a>
+  <a href="browser_cmd_csscoverage_page3.html">Page 3</a>
 </p>
 
 </body>
