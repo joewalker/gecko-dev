@@ -302,7 +302,7 @@ StyleEditorUI.prototype = {
       }
       NetUtil.asyncFetch(file, (stream, status) => {
         if (!Components.isSuccessCode(status)) {
-          this.emit("error", LOAD_ERROR);
+          this.emit("error", { key: LOAD_ERROR });
           return;
         }
         let source = NetUtil.readInputStreamToString(stream, stream.available());
@@ -332,13 +332,11 @@ StyleEditorUI.prototype = {
    *
    * @param  {string} event
    *         Event name
-   * @param  {string} errorCode
-   *         Code represeting type of error
-   * @param  {string} message
-   *         The full error message
+   * @param  {data} data
+   *         The event data
    */
-  _onError: function(event, errorCode, message) {
-    this.emit("error", errorCode, message);
+  _onError: function(event, data) {
+    this.emit("error", data);
   },
 
   /**
