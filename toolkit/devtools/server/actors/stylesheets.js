@@ -805,11 +805,11 @@ const getRuleLocation = exports.getRuleLocation = function(rule) {
      let absoluteStartLine;
      let i = 0;
      while (absoluteStartLine == null) {
-       let r = sheet.cssRules[i];
-       if (r instanceof Ci.nsIDOMCSSStyleRule) {
-         absoluteStartLine = DOMUtils.getRuleLine(r);
+       let irule = sheet.cssRules[i];
+       if (irule instanceof Ci.nsIDOMCSSStyleRule) {
+         absoluteStartLine = DOMUtils.getRuleLine(irule);
        }
-       else if (r == null) {
+       else if (irule == null) {
          break;
        }
 
