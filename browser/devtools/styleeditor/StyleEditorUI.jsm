@@ -468,24 +468,29 @@ StyleEditorUI.prototype = {
 
           editor.onShow();
 
-          // CSS Coverage: If the CSS text contains a '}' with some
-          // non-whitespace after then we assume this is compressed CSS and
-          // stop marking-up.
-          let text = editor.sourceEditor.getText();
-          if (!/}\s*\S+\s*\n/.test(text)) {
-            csscoverage.getUsage(this._target).then(usage => {
-              let href = editor.styleSheet.href || editor.styleSheet.nodeHref;
-              usage.createEditorReport(href).then(data => {
-                editor.removeAllUnusedRegions();
-                editor.addUnusedRegions(data.reports);
-              });
-            }, console.error);
-          }
-          else {
-            console.log("Compressed: " + (editor.styleSheet.href || editor.styleSheet.nodeHref));
-          }
-
           this.emit("editor-selected", editor);
+
+          // Is there any CSS coverage markup to include?
+          csscoverage.getUsage(this._target).then(usage => {
+            let href = editor.styleSheet.href || editor.styleSheet.nodeHref;
+            usage.createEditorReport(href).then(data => {
+              editor.removeAllUnusedRegions();
+
+              if (data.reports.length > 0) {
+                // So there is some coverage markup, but can we apply it?
+                let text = editor.sourceEditor.getText();
+                // If the CSS text contains a '}' with some non-whitespace
+                // after then we assume this is compressed CSS and stop
+                // marking-up.
+                if (!/}\s*\S+\s*\n/.test(text)) {
+                  editor.addUnusedRegions(data.reports);
+                }
+                else {
+                  this.emit("error", { key: "error-compressed", level: "info" });
+                }
+              }
+            });
+          }, console.error);
         }.bind(this)).then(null, Cu.reportError);
       }.bind(this)
     });
