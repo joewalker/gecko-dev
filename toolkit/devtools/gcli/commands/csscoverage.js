@@ -119,7 +119,7 @@ exports.items = [
       };
 
       data.pages.forEach(page => {
-        page.preloadRules.forEach(addOnClick);
+        page.rules.forEach(addOnClick);
       });
 
       data.unusedRules.forEach(addOnClick);

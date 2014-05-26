@@ -162,7 +162,7 @@
               <div foreach="page in ${pages}">
                 <h3>${page.url}</h3>
                 <textarea>&lt;style>
-<loop foreach="rule in ${page.preloadRules}"
+<loop foreach="rule in ${page.rules}"
                       onclick="${rule.onclick}">${rule.formattedCssText}</loop>&lt;/style></textarea>
               </div>
             </div>

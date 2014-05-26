@@ -325,7 +325,7 @@ let UsageReportActor = protocol.ActorClass({
    *       {
    *         url: "http://example.org/page1.html",
    *         shortUrl: "page1.html",
-   *         preloadRules: [
+   *         rules: [
    *           {
    *             url: "http://example.org/style1.css",
    *             shortUrl: "style1.css",
@@ -379,17 +379,17 @@ let UsageReportActor = protocol.ActorClass({
       let page = {
         url: url,
         shortHref: url.split("/").slice(-1),
-        preloadRules: []
+        rules: []
       };
 
       for (let [ruleId, ruleData] of this._knownRules) {
         if (ruleData.preLoadOn.has(url)) {
           let ruleReport = ruleToRuleReport(ruleId, ruleData);
-          page.preloadRules.push(ruleReport);
+          page.rules.push(ruleReport);
         }
       }
 
-      if (page.preloadRules.length > 0) {
+      if (page.rules.length > 0) {
         pages.push(page);
       }
     }
