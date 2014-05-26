@@ -322,21 +322,22 @@ let UsageReportActor = protocol.ActorClass({
    * Example:
    *   {
    *     pages: [
-   *      {
-   *        url: http://example.org/page1.html,
-   *        preloadRules: [
-   *          {
-   *            url: "http://example.org/style1.css",
-   *            start: { line: 3, column: 4 },
-   *            selectorText: "p#content",
-   *            formattedCssText: "p#content {\n  color: red;\n }\n",
-   *            onclick: function() { // open in style editor }
+   *       {
+   *         url: "http://example.org/page1.html",
+   *         shortUrl: "page1.html",
+   *         preloadRules: [
+   *           {
+   *             url: "http://example.org/style1.css",
+   *             shortUrl: "style1.css",
+   *             start: { line: 3, column: 4 },
+   *             selectorText: "p#content",
+   *             formattedCssText: "p#content {\n  color: red;\n }\n"
    *          },
    *          ...
-   *        ],
-   *        unusedRules: [
-   *          ...
-   *        ]
+   *         ],
+   *         unusedRules: [
+   *           ...
+   *         ]
    *       }
    *     ]
    *   }
@@ -350,7 +351,7 @@ let UsageReportActor = protocol.ActorClass({
       throw new Error(l10n.lookup("csscoverageNotRunError"));
     }
 
-    // Create a JSONable data structure representing a rule
+    // Helper function to create a JSONable data structure representing a rule
     const ruleToRuleReport = function(ruleId, ruleData) {
       let { url, line, column } = deconstructRuleId(ruleId);
       return {
@@ -365,7 +366,7 @@ let UsageReportActor = protocol.ActorClass({
     let pages = [];
     let unusedRules = [];
 
-    // Create a set of the unused rules
+    // Create the set of the unused rules
     for (let [ruleId, ruleData] of this._knownRules) {
       if (!ruleData.isUsed) {
         let ruleReport = ruleToRuleReport(ruleId, ruleData);
@@ -658,6 +659,9 @@ const UsageReportFront = protocol.FrontClass(UsageReportActor, {
     this.manage(this);
   },
 
+  /**
+   * Server-side start is above. Client-side start adds a notification box
+   */
   start: custom(function(chromeWindow, target) {
     if (chromeWindow != null) {
       let gnb = chromeWindow.document.getElementById("global-notificationbox");
