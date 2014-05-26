@@ -159,14 +159,13 @@ h3 {
 
 .csscoverage-report-container {
   height: 100vh;
-  padding: 10px;
+  padding: 0 30px;
 }
 
 .csscoverage-report-content {
+  margin: 20px auto;
+  -moz-column-width: 300px;
   font-size: 13px;
-  margin: 0 auto;
-  max-width: 600px;
-  padding: 0 10px;
 }
 
 .csscoverage-report h1,
