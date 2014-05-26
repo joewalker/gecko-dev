@@ -319,6 +319,11 @@ let UsageReportActor = protocol.ActorClass({
   /**
    * Returns a JSONable structure designed for the page report which shows
    * the recommended changes to a page.
+   *
+   * "preload" means that a rule is used before the load event happens, which
+   * means that the page could by optimized by placing it in a <style> element
+   * at the top of the page, moving the <link> elements to the bottom.
+   *
    * Example:
    *   {
    *     preload: [

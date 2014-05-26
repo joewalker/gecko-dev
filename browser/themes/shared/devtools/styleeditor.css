@@ -262,3 +262,7 @@ h3 {
 .csscoverage-report .pie-chart-slice {
   cursor: default;
 }
+
+.csscoverage-report-chart {
+  margin: 0 50px;
+}

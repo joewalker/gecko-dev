@@ -128,7 +128,3 @@ li:hover > hgroup > .stylesheet-more > h3 > .stylesheet-saveButton {
 .csscoverage-report .pie-table-chart-container {
   -moz-box-orient: vertical;
 }
-
-.csscoverage-report-chart {
-  margin: 0 50px;
-}

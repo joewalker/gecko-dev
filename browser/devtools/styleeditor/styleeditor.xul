@@ -159,8 +159,14 @@
             </div>
           </div>
           <div class="csscoverage-report-optimize">
-            <h2>&csscoverage.optimize.header;</h2>
-            <p>&csscoverage.optimize.body;</p>
+            <h2>&csscoverage.optimize;</h2>
+            <p>
+              &csscoverage.preload1;
+              <code>&lt;link ...></code>
+              &csscoverage.preload2;
+              <code>&lt;style>...</code>
+              &csscoverage.preload3;
+            </p>
             <div if="${preload.length == 0}">&csscoverage.noPreload;</div>
             <div if="${preload.length > 0}">
               <div foreach="page in ${preload}">
@@ -170,7 +176,11 @@
                       onclick="${rule.onclick}">${rule.formattedCssText}</loop>&lt;/style></textarea>
               </div>
             </div>
-            <p>&csscoverage.footer;</p>
+            <p>
+              &csscoverage.footer1;
+              <a target="_blank" href="&csscoverage.footer2;">&csscoverage.footer3;</a>
+              &csscoverage.footer4;
+            </p>
           </div>
           <p>&#160;</p>
         </div>
