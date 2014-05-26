@@ -352,12 +352,11 @@ let UsageReportActor = protocol.ActorClass({
     }
 
     // Helper function to create a JSONable data structure representing a rule
-    const ruleToRuleReport = function(ruleId, ruleData) {
-      let { url, line, column } = deconstructRuleId(ruleId);
+    const ruleToRuleReport = function(rule, ruleData) {
       return {
-        url: url,
-        shortHref: url.split("/").slice(-1),
-        start: { line: line, column: column },
+        url: rule.url,
+        shortUrl: rule.url.split("/").slice(-1),
+        start: { line: rule.line, column: rule.column },
         selectorText: ruleData.selectorText,
         formattedCssText: prettifyCSS(ruleData.cssText)
       };
@@ -368,7 +367,8 @@ let UsageReportActor = protocol.ActorClass({
     // Create the set of the unused rules
     for (let [ruleId, ruleData] of this._knownRules) {
       if (!ruleData.isUsed) {
-        let ruleReport = ruleToRuleReport(ruleId, ruleData);
+        let rule = deconstructRuleId(ruleId);
+        let ruleReport = ruleToRuleReport(rule, ruleData);
         unusedRules.push(ruleReport);
       }
     }
@@ -384,7 +384,8 @@ let UsageReportActor = protocol.ActorClass({
 
       for (let [ruleId, ruleData] of this._knownRules) {
         if (ruleData.preLoadOn.has(url)) {
-          let ruleReport = ruleToRuleReport(ruleId, ruleData);
+          let rule = deconstructRuleId(ruleId);
+          let ruleReport = ruleToRuleReport(rule, ruleData);
           page.rules.push(ruleReport);
         }
       }
