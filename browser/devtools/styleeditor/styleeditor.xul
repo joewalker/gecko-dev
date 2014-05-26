@@ -157,9 +157,7 @@
           <div class="csscoverage-report-optimize">
             <h2>&csscoverage.optimize.header;</h2>
             <p>&csscoverage.optimize.body;</p>
-            <div if="${pages.length == 0}">
-              &csscoverage.noPreload;
-            </div>
+            <div if="${pages.length == 0}">&csscoverage.noPreload;</div>
             <div if="${pages.length > 0}">
               <div foreach="page in ${pages}">
                 <h3>${page.url}</h3>
