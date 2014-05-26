@@ -693,9 +693,9 @@ const UsageReportFront = protocol.FrontClass(UsageReportActor, {
   start: custom(function(chromeWindow, target) {
     if (chromeWindow != null) {
       let gnb = chromeWindow.document.getElementById("global-notificationbox");
-      let notification = gnb.getNotificationWithValue("csscoverage-running");
+      this.notification = gnb.getNotificationWithValue("csscoverage-running");
 
-      if (!notification) {
+      if (this.notification == null) {
         let notifyStop = ev => {
           if (ev == "removed") {
             this.stop();
@@ -703,19 +703,34 @@ const UsageReportFront = protocol.FrontClass(UsageReportActor, {
           }
         };
 
-        gnb.appendNotification(l10n.lookup("csscoverageRunningReply"),
-                               "csscoverage-running",
-                               "", // i.e. no image
-                               gnb.PRIORITY_INFO_HIGH,
-                               null, // i.e. no buttons
-                               notifyStop);
+        let msg = l10n.lookup("csscoverageRunningReply");
+        this.notification = gnb.appendNotification(msg,
+                                                   "csscoverage-running",
+                                                   "", // i.e. no image
+                                                   gnb.PRIORITY_INFO_HIGH,
+                                                   null, // i.e. no buttons
+                                                   notifyStop);
       }
     }
 
     return this._start();
   }, {
     impl: "_start"
-  })
+  }),
+
+  /**
+   * Client-side stop also removes the notification box
+   */
+  stop: custom(function() {
+    if (this.notification != null) {
+      this.notification.remove();
+      this.notification = undefined;
+    }
+
+    return this._stop();
+  }, {
+    impl: "_stop"
+  }),
 });
 
 exports.UsageReportFront = UsageReportFront;
