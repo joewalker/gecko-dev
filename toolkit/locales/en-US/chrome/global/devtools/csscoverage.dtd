@@ -21,26 +21,16 @@
 <!ENTITY csscoverage.unused "Unused Rules">
 <!ENTITY csscoverage.noMatch "The following selectors did not match any elements that we saw during the test so it's possible they can be safely removed.">
 
-<!-- LOCALIZATION NOTE (csscoverage.optimize):
+<!-- LOCALIZATION NOTE (csscoverage.optimize.header, csscoverage.optimize.body):
   -  This is the heading for the CSS optimization part of the report -->
-<!ENTITY csscoverage.optimize "Opimizable Pages">
-
-<!-- LOCALIZATION NOTE (csscoverage.preload1, csscoverage.preload2,
-  -  csscoverage.preload3): These 3 are part of a paragraph with 1 and 2
-  -  separated by a styled <link> tag and 2 and 3 separated by a styled
-  -  <style> tag -->
-<!ENTITY csscoverage.preload1 "You can sometimes speed up loading by moving all">
-<!ENTITY csscoverage.preload2 "tags to the bottom of the page (where they don't stop the page loading) and creating a new inline">
-<!ENTITY csscoverage.preload3 "element containing the following rules at the top of the page:">
+<!ENTITY csscoverage.optimize.header "Optimizable Pages">
+<!ENTITY csscoverage.optimize.body "Speed up loading by putting all <code>&lt;link ...></code> tags to the bottom of the page (to load asynchronously) with required style in an inline <code>&lt;style>...</code> element at the top:">
 
 <!-- LOCALIZATION NOTE (csscoverage.noPreload):
   -  This is what we say when we have no optimization suggestions -->
 <!ENTITY csscoverage.noPreload "All rules are inlined. We don't have suggestions about how to improve performance on this page right now.">
 
-<!-- LOCALIZATION NOTE (csscoverage.footer1, csscoverage.footer2, csscoverage.footer3):
-  -  The text displayed at the bottom of the page, with 2 being the URL opened
-  -  when the link text in 3 is clicked -->
-<!ENTITY csscoverage.footer1 "See">
-<!ENTITY csscoverage.footer2 "https://developer.mozilla.org/en-US/docs/Tools/CSS_Coverage">
-<!ENTITY csscoverage.footer3 "the MDN article on the CSS Coverage Tool">
-<!ENTITY csscoverage.footer4 "for caveats in the generation of this report.">
+<!-- LOCALIZATION NOTE (csscoverage.footer): The text displayed at the bottom
+  -  of the page, with 2 being the URL opened when the link text in 3 is
+  -  clicked -->
+<!ENTITY csscoverage.footer "See the MDN article on the <a target='_blank' href='https://developer.mozilla.org/en-US/docs/Tools/CSS_Coverage'>CSS Coverage Tool</a> for caveats in the generation of this report.">
