@@ -334,10 +334,14 @@ let UsageReportActor = protocol.ActorClass({
    *             formattedCssText: "p#content {\n  color: red;\n }\n"
    *          },
    *          ...
-   *         ],
-   *         unusedRules: [
-   *           ...
    *         ]
+   *       }
+   *     ],
+   *     unused: [
+   *       {
+   *         url: "http://example.org/style1.css",
+   *         shortUrl: "style1.css",
+   *         rules: [ ... ]
    *       }
    *     ]
    *   }
@@ -362,15 +366,27 @@ let UsageReportActor = protocol.ActorClass({
       };
     }
 
-    let unusedRules = [];
-
     // Create the set of the unused rules
+    let unusedMap = new Map();
     for (let [ruleId, ruleData] of this._knownRules) {
-      if (!ruleData.isUsed) {
-        let rule = deconstructRuleId(ruleId);
-        let ruleReport = ruleToRuleReport(rule, ruleData);
-        unusedRules.push(ruleReport);
+      let rule = deconstructRuleId(ruleId);
+      let rules = unusedMap.get(rule.url)
+      if (rules == null) {
+        rules = [];
+        unusedMap.set(rule.url, rules);
       }
+      if (!ruleData.isUsed) {
+        let ruleReport = ruleToRuleReport(rule, ruleData);
+        rules.push(ruleReport);
+      }
+    }
+    let unused = [];
+    for (let [url, rules] of unusedMap) {
+      unused.push({
+        url: url,
+        shortUrl: url.split("/").slice(-1),
+        rules: rules
+      });
     }
 
     // Create the set of rules that could be pre-loaded
@@ -397,7 +413,7 @@ let UsageReportActor = protocol.ActorClass({
 
     return {
       preload: preload,
-      unusedRules: unusedRules
+      unused: unused
     };
   }, {
     response: RetVal("json")

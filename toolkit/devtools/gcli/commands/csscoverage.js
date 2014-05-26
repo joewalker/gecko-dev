@@ -102,7 +102,7 @@ exports.items = [
 
       let data = {
         preload: csscoveragePageReport.preload,
-        unusedRules: csscoveragePageReport.unusedRules,
+        unused: csscoveragePageReport.unused,
         onback: () => {
           // The back button clears and hides .csscoverage-report
           while (host.hasChildNodes()) {
@@ -121,8 +121,9 @@ exports.items = [
       data.preload.forEach(page => {
         page.rules.forEach(addOnClick);
       });
-
-      data.unusedRules.forEach(addOnClick);
+      data.unused.forEach(page => {
+        page.rules.forEach(addOnClick);
+      });
 
       let options = { allowEval: true, stack: "styleeditor.xul" };
       domtemplate.template(templ, data, options);

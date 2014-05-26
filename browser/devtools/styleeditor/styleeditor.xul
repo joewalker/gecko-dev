@@ -146,13 +146,12 @@
           <div class="csscoverage-report-unused">
             <h2>&csscoverage.unused;</h2>
             <p>&csscoverage.noMatch;</p>
-            <ul>
-              <li foreach="rule in ${unusedRules}">
-                <code>${rule.selectorText}</code>
-                <span class="link"
-                    title="${rule.url}">(${rule.shortHref} : ${rule.start.line})</span>
-              </li>
-            </ul>
+            <div foreach="page in ${unused}">
+              <h3>${page.url}</h3>
+              <code foreach="rule in ${page.rules}"
+                    href="${rule.url}"
+                    class="csscoverage-list">${rule.selectorText}</code>
+            </div>
           </div>
           <div class="csscoverage-report-optimize">
             <h2>&csscoverage.optimize.header;</h2>
