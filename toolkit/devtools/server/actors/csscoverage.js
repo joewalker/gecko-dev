@@ -394,7 +394,7 @@ let UsageReportActor = protocol.ActorClass({
     for (let url of this._visitedPages) {
       let page = {
         url: url,
-        shortHref: url.split("/").slice(-1),
+        shortUrl: url.split("/").slice(-1),
         rules: []
       };
 
