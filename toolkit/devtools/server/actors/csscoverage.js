@@ -366,6 +366,9 @@ let UsageReportActor = protocol.ActorClass({
       };
     }
 
+    // A count of each type of rule for the bar chart
+    let summary = { used: 0, unused: 0, preload: 0 };
+
     // Create the set of the unused rules
     let unusedMap = new Map();
     for (let [ruleId, ruleData] of this._knownRules) {
@@ -378,6 +381,9 @@ let UsageReportActor = protocol.ActorClass({
       if (!ruleData.isUsed) {
         let ruleReport = ruleToRuleReport(rule, ruleData);
         rules.push(ruleReport);
+      }
+      else {
+        summary.unused++;
       }
     }
     let unused = [];
@@ -403,6 +409,10 @@ let UsageReportActor = protocol.ActorClass({
           let rule = deconstructRuleId(ruleId);
           let ruleReport = ruleToRuleReport(rule, ruleData);
           page.rules.push(ruleReport);
+          summary.preload++;
+        }
+        else {
+          summary.used++;
         }
       }
 
@@ -412,6 +422,7 @@ let UsageReportActor = protocol.ActorClass({
     }
 
     return {
+      summary: summary,
       preload: preload,
       unused: unused
     };

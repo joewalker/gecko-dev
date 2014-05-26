@@ -13,6 +13,10 @@ const domtemplate = require("gcli/util/domtemplate");
 const csscoverage = require("devtools/server/actors/csscoverage");
 const l10n = csscoverage.l10n;
 
+const { XPCOMUtils } = require("resource://gre/modules/XPCOMUtils.jsm");
+
+XPCOMUtils.defineLazyModuleGetter(this, "Chart", "resource:///modules/devtools/Chart.jsm");
+
 /**
  * The commands/converters for GCLI
  */
@@ -103,6 +107,7 @@ exports.items = [
       let data = {
         preload: csscoveragePageReport.preload,
         unused: csscoveragePageReport.unused,
+        summary: csscoveragePageReport.summary,
         onback: () => {
           // The back button clears and hides .csscoverage-report
           while (host.hasChildNodes()) {
@@ -131,6 +136,20 @@ exports.items = [
       while (templ.hasChildNodes()) {
         host.appendChild(templ.firstChild);
       }
+
+      // Create a new chart.
+      let container = host.querySelector(".csscoverage-report-chart");
+      let chart = Chart.PieTable(panel._panelDoc, {
+        diameter: 200, // px
+        title: "CSS Usage",
+        data: [
+          { size: data.summary.preload, label: "Used Preload" },
+          { size: data.summary.used, label: "Used" },
+          { size: data.summary.unused, label: "Unused" }
+        ]
+      });
+      container.appendChild(chart.node);
+
       host.hidden = false;
     }
   }

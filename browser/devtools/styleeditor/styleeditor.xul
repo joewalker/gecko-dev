@@ -14,8 +14,10 @@
 ]>
 
 <?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
+<?xml-stylesheet href="chrome://browser/content/devtools/widgets.css" type="text/css"?>
 <?xml-stylesheet href="chrome://browser/content/devtools/splitview.css" type="text/css"?>
 <?xml-stylesheet href="chrome://browser/skin/devtools/common.css" type="text/css"?>
+<?xml-stylesheet href="chrome://browser/skin/devtools/widgets.css" type="text/css"?>
 <?xml-stylesheet href="chrome://browser/skin/devtools/splitview.css" type="text/css"?>
 <?xml-stylesheet href="chrome://browser/content/devtools/styleeditor.css" type="text/css"?>
 <?xml-stylesheet href="chrome://browser/skin/devtools/styleeditor.css" type="text/css"?>
@@ -143,6 +145,9 @@
       <!-- The data for this comes from UsageReportActor.createPageReport -->
       <div class="csscoverage-report-container">
         <div class="csscoverage-report-content">
+          <div class="csscoverage-report-summary">
+            <div class="csscoverage-report-chart"/>
+          </div>
           <div class="csscoverage-report-unused">
             <h2>&csscoverage.unused;</h2>
             <p>&csscoverage.noMatch;</p>

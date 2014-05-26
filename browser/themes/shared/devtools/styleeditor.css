@@ -217,3 +217,48 @@ h3 {
   border-bottom: none;
   -moz-border-start: none;
 }
+
+.theme-dark .chart-colored-blob[name="Used Preload"] {
+  fill: #df80ff; /* Pink highlight */
+  background: #df80ff;
+}
+
+.theme-light .chart-colored-blob[name="Used Preload"] {
+  fill: #b82ee5; /* Pink highlight */
+  background: #b82ee5;
+}
+
+.theme-dark .chart-colored-blob[name=Used] {
+  fill: #70bf53; /* Green highlight */
+  background: #70bf53;
+}
+
+.theme-light .chart-colored-blob[name=Used] {
+  fill: #2cbb0f; /* Green highlight */
+  background: #2cbb0f;
+}
+
+.theme-dark .chart-colored-blob[name=Unused] {
+  fill: #d99b28; /* Light Orange highlight */
+  background: #d99b28;
+}
+
+.theme-light .chart-colored-blob[name=Unused] {
+  fill: #d97e00; /* Light Orange highlight */
+  background: #d97e00;
+}
+
+/* Undo 'largest' customization */
+.theme-dark .pie-chart-slice[largest] {
+  stroke-width: 1px;
+  stroke: rgba(0,0,0,0.2);
+}
+
+.theme-light .pie-chart-slice[largest] {
+  stroke-width: 1px;
+  stroke: rgba(255,255,255,0.8);
+}
+
+.csscoverage-report .pie-chart-slice {
+  cursor: default;
+}
