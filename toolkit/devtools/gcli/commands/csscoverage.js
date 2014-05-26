@@ -101,7 +101,7 @@ exports.items = [
       templ.hidden = false;
 
       let data = {
-        pages: csscoveragePageReport.pages,
+        preload: csscoveragePageReport.preload,
         unusedRules: csscoveragePageReport.unusedRules,
         onback: () => {
           // The back button clears and hides .csscoverage-report
@@ -118,7 +118,7 @@ exports.items = [
         };
       };
 
-      data.pages.forEach(page => {
+      data.preload.forEach(page => {
         page.rules.forEach(addOnClick);
       });
 

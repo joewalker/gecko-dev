@@ -321,7 +321,7 @@ let UsageReportActor = protocol.ActorClass({
    * the recommended changes to a page.
    * Example:
    *   {
-   *     pages: [
+   *     preload: [
    *       {
    *         url: "http://example.org/page1.html",
    *         shortUrl: "page1.html",
@@ -363,7 +363,6 @@ let UsageReportActor = protocol.ActorClass({
       };
     }
 
-    let pages = [];
     let unusedRules = [];
 
     // Create the set of the unused rules
@@ -375,6 +374,7 @@ let UsageReportActor = protocol.ActorClass({
     }
 
     // Create the set of rules that could be pre-loaded
+    let preload = [];
     for (let url of this._visitedPages) {
       let page = {
         url: url,
@@ -390,12 +390,12 @@ let UsageReportActor = protocol.ActorClass({
       }
 
       if (page.rules.length > 0) {
-        pages.push(page);
+        preload.push(page);
       }
     }
 
     return {
-      pages: pages,
+      preload: preload,
       unusedRules: unusedRules
     };
   }, {
