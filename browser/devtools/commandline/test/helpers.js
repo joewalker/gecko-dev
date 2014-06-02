@@ -18,9 +18,9 @@
 
 // A copy of this code exists in firefox mochitests. They should be kept
 // in sync. Hence the exports synonym for non AMD contexts.
-this.EXPORTED_SYMBOLS = [ 'helpers' ];
+var helpers = (function() {
+
 var helpers = {};
-this.helpers = helpers;
 
 var TargetFactory = Cu.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.TargetFactory;
 var require = Cu.import("resource://gre/modules/devtools/Loader.jsm", {}).devtools.require;
@@ -1269,3 +1269,6 @@ function log(message) {
     console.log(message);
   }
 }
+
+return helpers;
+})();
