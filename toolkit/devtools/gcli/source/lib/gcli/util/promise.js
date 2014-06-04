@@ -16,10 +16,4 @@
 
 'use strict';
 
-var Cu = require('chrome').Cu;
-module.exports = exports =
-    Cu.import('resource://gre/modules/devtools/deprecated-sync-thenables.js', {}).Promise;
-
-// When we've solved the debugger/sdk/promise/gcli/helpers/overlap problem then
-// we should use this instead:
-// module.exports = exports = require('resource://gre/modules/Promise.jsm').Promise;
+module.exports = exports = require('resource://gre/modules/Promise.jsm');

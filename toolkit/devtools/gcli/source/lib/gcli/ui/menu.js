@@ -67,6 +67,10 @@ function Menu(options) {
     menuHtmlPromise = host.staticRequire(module, './menu.html');
   }
   menuHtmlPromise.then(function(menuHtml) {
+    if (this.document == null) {
+      return; // destroy() has been called
+    }
+
     this.template = util.toDom(this.document, menuHtml);
   }.bind(this), console.error);
 
