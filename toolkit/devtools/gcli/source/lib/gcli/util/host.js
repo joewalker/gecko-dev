@@ -72,6 +72,16 @@ exports.exec = function(task) {
 };
 
 /**
+ * Load some HTML into the given document and return a DOM element.
+ * This utility assumes that the html has a single root (other than whitespace)
+ */
+exports.toDom = function(document, html) {
+  var div = util.createElement(document, 'div');
+  util.setContents(div, html);
+  return div.children[0];
+};
+
+/**
  * When dealing with module paths on windows we want to use the unix
  * directory separator rather than the windows one, so we avoid using
  * OS.Path.dirname, and use unix version on all platforms.

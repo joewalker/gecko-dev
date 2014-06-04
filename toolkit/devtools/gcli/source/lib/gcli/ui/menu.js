@@ -71,7 +71,7 @@ function Menu(options) {
       return; // destroy() has been called
     }
 
-    this.template = util.toDom(this.document, menuHtml);
+    this.template = host.toDom(this.document, menuHtml);
   }.bind(this), console.error);
 
   // Contains the items that should be displayed
