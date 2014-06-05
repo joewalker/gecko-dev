@@ -53,5 +53,5 @@ registerCleanupFunction(function tearDown() {
 });
 
 function asyncTest(generator) {
-  return () => Task.spawn(generator).then(null, ok.bind(null, false)).then(finish);
+  return () => Task.spawn(generator).catch(ok.bind(null, false)).then(finish);
 }
