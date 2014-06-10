@@ -363,7 +363,7 @@ let UsageReportActor = protocol.ActorClass({
     const ruleToRuleReport = function(rule, ruleData) {
       return {
         url: rule.url,
-        shortUrl: rule.url.split("/").slice(-1),
+        shortUrl: rule.url.split("/").slice(-1)[0],
         start: { line: rule.line, column: rule.column },
         selectorText: ruleData.selectorText,
         formattedCssText: CssLogic.prettifyCSS(ruleData.cssText)
