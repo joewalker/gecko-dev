@@ -79,13 +79,8 @@ function* checkEditorReport(usage) {
       {
         selectorText: ".page1-test4:broken",
         start: { line: 16, column: 5 },
-      },
-      */
-      // TODO: pseudo-classes don't work. This should not be here
-      {
-        selectorText: ".page1-test3:hover",
-        start: { line: 12, column: 5 },
       }
+      */
     ]
   };
   let actualPage1 = yield usage.createEditorReport(PAGE_1 + " \u2192 <style> index 0");
@@ -189,7 +184,7 @@ function* checkPageReport(usage) {
 
   // Check the summary
   // TODO: Check these numbers
-  let expectedSummary = { "used": 92, "unused": 21, "preload": 28 };
+  let expectedSummary = { "used": 91, "unused": 22, "preload": 29 };
   isEqualJson(actualReport.summary, expectedSummary, 'summary');
 
   checkPageReportPreload(actualReport);
@@ -308,14 +303,11 @@ function checkPageReportPreload(actualReport) {
       start: { line: 4, column: 5 },
       selectorText: ".page1-test1"
     },
-    // TODO: pseudo-classes don't work. This should be here
-    /*
     {
       url: PAGE_1 + " \u2192 <style> index 0",
       start: { line: 12, column: 5 },
       selectorText: ".page1-test3:hover"
     }
-    */
   ];
   isEqualJson(actualReport.preload[1].rules, expectedPreloadRules1, 'preload rules 1');
 
@@ -442,12 +434,6 @@ function checkPageReportUnused(actualReport) {
       url: PAGE_1 + " \u2192 <style> index 0",
       start: { line: 8, column: 5 },
       selectorText: ".page1-test2"
-    },
-    // TODO: pseudo-classes don't work. This should not be here
-    {
-      url: PAGE_1 + " \u2192 <style> index 0",
-      start: { line: 12, column: 5 },
-      selectorText: ".page1-test3:hover"
     }
   ];
   isEqualJson(actualReport.unused[5].rules, expectedUnusedRules5, 'unused rules 5');

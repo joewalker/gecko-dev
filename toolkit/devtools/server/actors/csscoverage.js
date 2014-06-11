@@ -659,10 +659,11 @@ const SEL_MEDIA = [ "blank", "first", "left", "right" ];
  * we think should not have to match in order for the selector to be relevant.
  */
 function getTestSelector(selector) {
+  let replacement = selector;
   let replaceSelector = pseudo => {
-    selector = selector.replace(" :" + selector, " *")
-                       .replace("(:" + selector, "(*")
-                       .replace(":" + selector, "");
+    replacement = replacement.replace(" :" + pseudo, " *")
+                             .replace("(:" + pseudo, "(*")
+                             .replace(":" + pseudo, "");
   };
 
   SEL_EXTERNAL.forEach(replaceSelector);
@@ -671,10 +672,10 @@ function getTestSelector(selector) {
 
   // Pseudo elements work in : and :: forms
   SEL_ELEMENT.forEach(pseudo => {
-    selector = selector.replace("::" + selector, "");
+    replacement = replacement.replace("::" + pseudo, "");
   });
 
-  return selector;
+  return replacement;
 }
 
 /**
