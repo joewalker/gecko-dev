@@ -85,11 +85,6 @@ function* checkEditorReport(usage) {
       {
         selectorText: ".page1-test3:hover",
         start: { line: 12, column: 5 },
-      },
-      // TODO: mutation events are broken. This should not be here
-      {
-        selectorText: ".page1-test5",
-        start: { line: 20, column: 5 },
       }
     ]
   };
@@ -194,7 +189,7 @@ function* checkPageReport(usage) {
 
   // Check the summary
   // TODO: Check these numbers
-  let expectedSummary = { "used": 92, "unused": 20, "preload": 28 };
+  let expectedSummary = { "used": 92, "unused": 21, "preload": 28 };
   isEqualJson(actualReport.summary, expectedSummary, 'summary');
 
   checkPageReportPreload(actualReport);
@@ -453,12 +448,6 @@ function checkPageReportUnused(actualReport) {
       url: PAGE_1 + " \u2192 <style> index 0",
       start: { line: 12, column: 5 },
       selectorText: ".page1-test3:hover"
-    },
-    // TODO: mutation events are broken. This should not be here
-    {
-      url: PAGE_1 + " \u2192 <style> index 0",
-      start: { line: 20, column: 5 },
-      selectorText: ".page1-test5"
     }
   ];
   isEqualJson(actualReport.unused[5].rules, expectedUnusedRules5, 'unused rules 5');

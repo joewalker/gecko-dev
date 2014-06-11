@@ -179,7 +179,8 @@ let UsageReportActor = protocol.ActorClass({
     observer.observe(document, {
       attributes: true,
       childList: true,
-      characterData: false
+      characterData: false,
+      subtree: true
     });
   },
 
