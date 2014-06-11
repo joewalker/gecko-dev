@@ -73,14 +73,7 @@ function* checkEditorReport(usage) {
       {
         selectorText: ".page1-test2",
         start: { line: 8, column: 5 },
-      },
-      // TODO: When we can get as-authored styles, we can include this
-      /*
-      {
-        selectorText: ".page1-test4:broken",
-        start: { line: 16, column: 5 },
       }
-      */
     ]
   };
   let actualPage1 = yield usage.createEditorReport(PAGE_1 + " \u2192 <style> index 0");
@@ -93,7 +86,6 @@ function* checkEditorReport(usage) {
         selectorText: ".page2-test2",
         start: { line: 9, column: 5 },
       },
-      // TODO: I thought mutation events were broken, but .page2-test3
     ]
   };
   let actualPage2 = yield usage.createEditorReport(PAGE_2 + " \u2192 <style> index 0");
@@ -183,8 +175,7 @@ function* checkPageReport(usage) {
   actualReport.unused.forEach(page => page.rules.forEach(checkRuleProperties));
 
   // Check the summary
-  // TODO: Check these numbers
-  let expectedSummary = { "used": 91, "unused": 22, "preload": 29 };
+  let expectedSummary = { "used": 92, "unused": 22, "preload": 28 };
   isEqualJson(actualReport.summary, expectedSummary, 'summary');
 
   checkPageReportPreload(actualReport);
@@ -206,12 +197,6 @@ function checkPageReportPreload(actualReport) {
       url: PAGE_2 + " \u2192 <style> index 0",
       start: { line: 5, column: 5 },
       selectorText: ".page2-test1"
-    },
-    // TODO: This should only match when the event fires so not preload
-    {
-      url: PAGE_2 + " \u2192 <style> index 0",
-      start: { line:13, column:5 },
-      selectorText:".page2-test3"
     },
     {
       url: SHEET_A,
@@ -358,14 +343,6 @@ function checkPageReportPreload(actualReport) {
       start: { line: 5, column: 5 },
       selectorText: ".page3-test1"
     },
-    // TODO: this should be here
-    /*
-    {
-      url: PAGE_3 + " \u2192 <style> index 1",
-      start: { line: 5, column: 5 },
-      selectorText: ".page3-test3"
-    }
-    */
   ];
   isEqualJson(actualReport.preload[2].rules, expectedPreloadRules2, 'preload rules 2');
 }
