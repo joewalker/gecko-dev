@@ -5,7 +5,7 @@
 "use strict";
 
 const {Cc, Ci, Cu} = require("chrome");
-const gcli = require("gcli/index");
+const l10n = require("gcli/l10n");
 require("devtools/server/actors/inspector");
 const {BoxModelHighlighter} = require("devtools/server/actors/highlighter");
 
@@ -35,35 +35,35 @@ function unhighlightAll() {
 exports.items = [
   {
     name: "highlight",
-    description: gcli.lookup("highlightDesc"),
-    manual: gcli.lookup("highlightManual"),
+    description: l10n.lookup("highlightDesc"),
+    manual: l10n.lookup("highlightManual"),
     params: [
       {
         name: "selector",
         type: "nodelist",
-        description: gcli.lookup("highlightSelectorDesc"),
-        manual: gcli.lookup("highlightSelectorManual")
+        description: l10n.lookup("highlightSelectorDesc"),
+        manual: l10n.lookup("highlightSelectorManual")
       },
       {
-        group: gcli.lookup("highlightOptionsDesc"),
+        group: l10n.lookup("highlightOptionsDesc"),
         params: [
           {
             name: "hideguides",
             type: "boolean",
-            description: gcli.lookup("highlightHideGuidesDesc"),
-            manual: gcli.lookup("highlightHideGuidesManual")
+            description: l10n.lookup("highlightHideGuidesDesc"),
+            manual: l10n.lookup("highlightHideGuidesManual")
           },
           {
             name: "showinfobar",
             type: "boolean",
-            description: gcli.lookup("highlightShowInfoBarDesc"),
-            manual: gcli.lookup("highlightShowInfoBarManual")
+            description: l10n.lookup("highlightShowInfoBarDesc"),
+            manual: l10n.lookup("highlightShowInfoBarManual")
           },
           {
             name: "showall",
             type: "boolean",
-            description: gcli.lookup("highlightShowAllDesc"),
-            manual: gcli.lookup("highlightShowAllManual")
+            description: l10n.lookup("highlightShowAllDesc"),
+            manual: l10n.lookup("highlightShowAllManual")
           },
           {
             name: "region",
@@ -71,22 +71,22 @@ exports.items = [
               name: "selection",
               data: ["content", "padding", "border", "margin"]
             },
-            description: gcli.lookup("highlightRegionDesc"),
-            manual: gcli.lookup("highlightRegionManual"),
+            description: l10n.lookup("highlightRegionDesc"),
+            manual: l10n.lookup("highlightRegionManual"),
             defaultValue: "border"
           },
           {
             name: "fill",
             type: "string",
-            description: gcli.lookup("highlightFillDesc"),
-            manual: gcli.lookup("highlightFillManual"),
+            description: l10n.lookup("highlightFillDesc"),
+            manual: l10n.lookup("highlightFillManual"),
             defaultValue: null
           },
           {
             name: "keep",
             type: "boolean",
-            description: gcli.lookup("highlightKeepDesc"),
-            manual: gcli.lookup("highlightKeepManual"),
+            description: l10n.lookup("highlightKeepDesc"),
+            manual: l10n.lookup("highlightKeepManual"),
           }
         ]
       }
@@ -133,7 +133,7 @@ exports.items = [
       let output = PluralForm.get(args.selector.length, highlightText)
                              .replace("%1$S", args.selector.length);
       if (args.selector.length > i) {
-        output = gcli.lookupFormat("highlightOutputMaxReached",
+        output = l10n.lookupFormat("highlightOutputMaxReached",
           ["" + args.selector.length, "" + i]);
       }
 
@@ -142,8 +142,8 @@ exports.items = [
   },
   {
     name: "unhighlight",
-    description: gcli.lookup("unhighlightDesc"),
-    manual: gcli.lookup("unhighlightManual"),
+    description: l10n.lookup("unhighlightDesc"),
+    manual: l10n.lookup("unhighlightManual"),
     exec: unhighlightAll
   }
 ];

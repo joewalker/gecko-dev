@@ -11,32 +11,32 @@ const BRAND_SHORT_NAME = Cc["@mozilla.org/intl/stringbundle;1"].
                          createBundle("chrome://branding/locale/brand.properties").
                          GetStringFromName("brandShortName");
 
-const gcli = require("gcli/index");
+const l10n = require("gcli/l10n");
 
 exports.items = [
   {
     name: 'resize',
-    description: gcli.lookup('resizeModeDesc')
+    description: l10n.lookup('resizeModeDesc')
   },
   {
     name: 'resize on',
-    description: gcli.lookup('resizeModeOnDesc'),
-    manual: gcli.lookupFormat('resizeModeManual2', [BRAND_SHORT_NAME]),
+    description: l10n.lookup('resizeModeOnDesc'),
+    manual: l10n.lookupFormat('resizeModeManual2', [BRAND_SHORT_NAME]),
     exec: gcli_cmd_resize
   },
   {
     name: 'resize off',
-    description: gcli.lookup('resizeModeOffDesc'),
-    manual: gcli.lookupFormat('resizeModeManual2', [BRAND_SHORT_NAME]),
+    description: l10n.lookup('resizeModeOffDesc'),
+    manual: l10n.lookupFormat('resizeModeManual2', [BRAND_SHORT_NAME]),
     exec: gcli_cmd_resize
   },
   {
     name: 'resize toggle',
     buttonId: "command-button-responsive",
     buttonClass: "command-button command-button-invertable",
-    tooltipText: gcli.lookup("resizeModeToggleTooltip"),
-    description: gcli.lookup('resizeModeToggleDesc'),
-    manual: gcli.lookupFormat('resizeModeManual2', [BRAND_SHORT_NAME]),
+    tooltipText: l10n.lookup("resizeModeToggleTooltip"),
+    description: l10n.lookup('resizeModeToggleDesc'),
+    manual: l10n.lookupFormat('resizeModeManual2', [BRAND_SHORT_NAME]),
     state: {
       isChecked: function(aTarget) {
         let browserWindow = aTarget.tab.ownerDocument.defaultView;
@@ -62,17 +62,17 @@ exports.items = [
   },
   {
     name: 'resize to',
-    description: gcli.lookup('resizeModeToDesc'),
+    description: l10n.lookup('resizeModeToDesc'),
     params: [
       {
         name: 'width',
         type: 'number',
-        description: gcli.lookup("resizePageArgWidthDesc"),
+        description: l10n.lookup("resizePageArgWidthDesc"),
       },
       {
         name: 'height',
         type: 'number',
-        description: gcli.lookup("resizePageArgHeightDesc"),
+        description: l10n.lookup("resizePageArgHeightDesc"),
       },
     ],
     exec: gcli_cmd_resize

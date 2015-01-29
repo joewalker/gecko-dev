@@ -5,7 +5,7 @@
 "use strict";
 
 const { Cc, Ci, Cu } = require("chrome");
-const gcli = require("gcli/index");
+const l10n = require("gcli/l10n");
 const XMLHttpRequest = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"];
 const { devtools } = Cu.import("resource://gre/modules/devtools/Loader.jsm", {});
 
@@ -16,22 +16,22 @@ devtools.lazyRequireGetter(this, "beautify", "devtools/jsbeautify");
 exports.items = [
   {
     name: "jsb",
-    description: gcli.lookup("jsbDesc"),
+    description: l10n.lookup("jsbDesc"),
     returnValue:"string",
     params: [
       {
         name: "url",
         type: "string",
-        description: gcli.lookup("jsbUrlDesc")
+        description: l10n.lookup("jsbUrlDesc")
       },
       {
-        group: gcli.lookup("jsbOptionsDesc"),
+        group: l10n.lookup("jsbOptionsDesc"),
         params: [
           {
             name: "indentSize",
             type: "number",
-            description: gcli.lookup("jsbIndentSizeDesc"),
-            manual: gcli.lookup("jsbIndentSizeManual"),
+            description: l10n.lookup("jsbIndentSizeDesc"),
+            manual: l10n.lookup("jsbIndentSizeManual"),
             defaultValue: Preferences.get("devtools.editor.tabsize", 2),
           },
           {
@@ -43,27 +43,27 @@ exports.items = [
                 { name: "tab", value: "\t" }
               ]
             },
-            description: gcli.lookup("jsbIndentCharDesc"),
-            manual: gcli.lookup("jsbIndentCharManual"),
+            description: l10n.lookup("jsbIndentCharDesc"),
+            manual: l10n.lookup("jsbIndentCharManual"),
             defaultValue: " ",
           },
           {
             name: "doNotPreserveNewlines",
             type: "boolean",
-            description: gcli.lookup("jsbDoNotPreserveNewlinesDesc")
+            description: l10n.lookup("jsbDoNotPreserveNewlinesDesc")
           },
           {
             name: "preserveMaxNewlines",
             type: "number",
-            description: gcli.lookup("jsbPreserveMaxNewlinesDesc"),
-            manual: gcli.lookup("jsbPreserveMaxNewlinesManual"),
+            description: l10n.lookup("jsbPreserveMaxNewlinesDesc"),
+            manual: l10n.lookup("jsbPreserveMaxNewlinesManual"),
             defaultValue: -1
           },
           {
             name: "jslintHappy",
             type: "boolean",
-            description: gcli.lookup("jsbJslintHappyDesc"),
-            manual: gcli.lookup("jsbJslintHappyManual")
+            description: l10n.lookup("jsbJslintHappyDesc"),
+            manual: l10n.lookup("jsbJslintHappyManual")
           },
           {
             name: "braceStyle",
@@ -71,20 +71,20 @@ exports.items = [
               name: "selection",
               data: ["collapse", "expand", "end-expand", "expand-strict"]
             },
-            description: gcli.lookup("jsbBraceStyleDesc2"),
-            manual: gcli.lookup("jsbBraceStyleManual2"),
+            description: l10n.lookup("jsbBraceStyleDesc2"),
+            manual: l10n.lookup("jsbBraceStyleManual2"),
             defaultValue: "collapse"
           },
           {
             name: "noSpaceBeforeConditional",
             type: "boolean",
-            description: gcli.lookup("jsbNoSpaceBeforeConditionalDesc")
+            description: l10n.lookup("jsbNoSpaceBeforeConditionalDesc")
           },
           {
             name: "unescapeStrings",
             type: "boolean",
-            description: gcli.lookup("jsbUnescapeStringsDesc"),
-            manual: gcli.lookup("jsbUnescapeStringsManual")
+            description: l10n.lookup("jsbUnescapeStringsDesc"),
+            manual: l10n.lookup("jsbUnescapeStringsManual")
           }
         ]
       }
@@ -107,7 +107,7 @@ exports.items = [
       try {
         xhr.open("GET", args.url, true);
       } catch(e) {
-        return gcli.lookup("jsbInvalidURL");
+        return l10n.lookup("jsbInvalidURL");
       }
 
       let deferred = context.defer();

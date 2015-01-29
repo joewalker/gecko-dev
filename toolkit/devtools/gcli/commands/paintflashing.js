@@ -14,6 +14,7 @@ const EventEmitter = require("devtools/toolkit/event-emitter");
 const eventEmitter = new EventEmitter();
 
 const gcli = require("gcli/index");
+const l10n = require("gcli/l10n");
 
 function onPaintFlashingChanged(context) {
   let tab = context.environment.chromeWindow.gBrowser.selectedTab;
@@ -40,12 +41,12 @@ function onPaintFlashingChanged(context) {
 exports.items = [
   {
     name: "paintflashing",
-    description: gcli.lookup("paintflashingDesc")
+    description: l10n.lookup("paintflashingDesc")
   },
   {
     name: "paintflashing on",
-    description: gcli.lookup("paintflashingOnDesc"),
-    manual: gcli.lookup("paintflashingManual"),
+    description: l10n.lookup("paintflashingOnDesc"),
+    manual: l10n.lookup("paintflashingManual"),
     params: [{
       group: "options",
       params: [
@@ -53,7 +54,7 @@ exports.items = [
           type: "boolean",
           name: "chrome",
           get hidden() gcli.hiddenByChromePref(),
-          description: gcli.lookup("paintflashingChromeDesc"),
+          description: l10n.lookup("paintflashingChromeDesc"),
         }
       ]
     }],
@@ -70,8 +71,8 @@ exports.items = [
   },
   {
     name: "paintflashing off",
-    description: gcli.lookup("paintflashingOffDesc"),
-    manual: gcli.lookup("paintflashingManual"),
+    description: l10n.lookup("paintflashingOffDesc"),
+    manual: l10n.lookup("paintflashingManual"),
     params: [{
       group: "options",
       params: [
@@ -79,7 +80,7 @@ exports.items = [
           type: "boolean",
           name: "chrome",
           get hidden() gcli.hiddenByChromePref(),
-          description: gcli.lookup("paintflashingChromeDesc"),
+          description: l10n.lookup("paintflashingChromeDesc"),
         }
       ]
     }],
@@ -121,9 +122,9 @@ exports.items = [
         eventEmitter.off("changed", aChangeHandler);
       },
     },
-    tooltipText: gcli.lookup("paintflashingTooltip"),
-    description: gcli.lookup("paintflashingToggleDesc"),
-    manual: gcli.lookup("paintflashingManual"),
+    tooltipText: l10n.lookup("paintflashingTooltip"),
+    description: l10n.lookup("paintflashingToggleDesc"),
+    manual: l10n.lookup("paintflashingManual"),
     exec: function(args, context) {
       let window = context.environment.window;
       let wUtils = window.QueryInterface(Ci.nsIInterfaceRequestor).
