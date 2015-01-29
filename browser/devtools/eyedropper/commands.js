@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const gcli = require("gcli/index");
+const l10n = require("gcli/l10n");
 const EventEmitter = require("devtools/toolkit/event-emitter");
 const eventEmitter = new EventEmitter();
 
@@ -13,11 +13,11 @@ let { Eyedropper, EyedropperManager } = require("devtools/eyedropper/eyedropper"
  */
 exports.items = [{
   name: "eyedropper",
-  description: gcli.lookup("eyedropperDesc"),
-  manual: gcli.lookup("eyedropperManual"),
+  description: l10n.lookup("eyedropperDesc"),
+  manual: l10n.lookup("eyedropperManual"),
   buttonId: "command-button-eyedropper",
   buttonClass: "command-button command-button-invertable",
-  tooltipText: gcli.lookup("eyedropperTooltip"),
+  tooltipText: l10n.lookup("eyedropperTooltip"),
   state: {
     isChecked: function(target) {
       let chromeWindow = target.tab.ownerDocument.defaultView;

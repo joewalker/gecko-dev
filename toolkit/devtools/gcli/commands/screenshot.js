@@ -5,7 +5,7 @@
 "use strict";
 
 const { Cc, Ci, Cu } = require("chrome");
-const gcli = require("gcli/index");
+const l10n = require("gcli/l10n");
 
 loader.lazyImporter(this, "Downloads", "resource://gre/modules/Downloads.jsm");
 loader.lazyImporter(this, "LayoutHelpers", "resource://gre/modules/devtools/LayoutHelpers.jsm");
@@ -24,54 +24,54 @@ const FILENAME_DEFAULT_VALUE = " ";
 exports.items = [
   {
     name: "screenshot",
-    description: gcli.lookup("screenshotDesc"),
-    manual: gcli.lookup("screenshotManual"),
+    description: l10n.lookup("screenshotDesc"),
+    manual: l10n.lookup("screenshotManual"),
     returnType: "dom",
     buttonId: "command-button-screenshot",
     buttonClass: "command-button command-button-invertable",
-    tooltipText: gcli.lookup("screenshotTooltip"),
+    tooltipText: l10n.lookup("screenshotTooltip"),
     params: [
       {
         name: "filename",
         type: "string",
         defaultValue: FILENAME_DEFAULT_VALUE,
-        description: gcli.lookup("screenshotFilenameDesc"),
-        manual: gcli.lookup("screenshotFilenameManual")
+        description: l10n.lookup("screenshotFilenameDesc"),
+        manual: l10n.lookup("screenshotFilenameManual")
       },
       {
-        group: gcli.lookup("screenshotGroupOptions"),
+        group: l10n.lookup("screenshotGroupOptions"),
         params: [
           {
             name: "clipboard",
             type: "boolean",
-            description: gcli.lookup("screenshotClipboardDesc"),
-            manual: gcli.lookup("screenshotClipboardManual")
+            description: l10n.lookup("screenshotClipboardDesc"),
+            manual: l10n.lookup("screenshotClipboardManual")
           },
           {
             name: "chrome",
             type: "boolean",
-            description: gcli.lookupFormat("screenshotChromeDesc2", [BRAND_SHORT_NAME]),
-            manual: gcli.lookupFormat("screenshotChromeManual2", [BRAND_SHORT_NAME])
+            description: l10n.lookupFormat("screenshotChromeDesc2", [BRAND_SHORT_NAME]),
+            manual: l10n.lookupFormat("screenshotChromeManual2", [BRAND_SHORT_NAME])
           },
           {
             name: "delay",
             type: { name: "number", min: 0 },
             defaultValue: 0,
-            description: gcli.lookup("screenshotDelayDesc"),
-            manual: gcli.lookup("screenshotDelayManual")
+            description: l10n.lookup("screenshotDelayDesc"),
+            manual: l10n.lookup("screenshotDelayManual")
           },
           {
             name: "fullpage",
             type: "boolean",
-            description: gcli.lookup("screenshotFullPageDesc"),
-            manual: gcli.lookup("screenshotFullPageManual")
+            description: l10n.lookup("screenshotFullPageDesc"),
+            manual: l10n.lookup("screenshotFullPageManual")
           },
           {
             name: "selector",
             type: "node",
             defaultValue: null,
-            description: gcli.lookup("inspectNodeDesc"),
-            manual: gcli.lookup("inspectNodeManual")
+            description: l10n.lookup("inspectNodeDesc"),
+            manual: l10n.lookup("inspectNodeManual")
           }
         ]
       }
@@ -81,7 +81,7 @@ exports.items = [
         // Node screenshot with chrome option does not work as intended
         // Refer https://bugzilla.mozilla.org/show_bug.cgi?id=659268#c7
         // throwing for now.
-        throw new Error(gcli.lookup("screenshotSelectorChromeConflict"));
+        throw new Error(l10n.lookup("screenshotSelectorChromeConflict"));
       }
       var document = args.chrome? context.environment.chromeDocument
                                 : context.environment.document;
@@ -184,10 +184,10 @@ exports.items = [
             let clipid = Ci.nsIClipboard;
             let clip = Cc["@mozilla.org/widget/clipboard;1"].getService(clipid);
             clip.setData(trans, null, clipid.kGlobalClipboard);
-            div.textContent = gcli.lookup("screenshotCopied");
+            div.textContent = l10n.lookup("screenshotCopied");
           }
           catch (ex) {
-            div.textContent = gcli.lookup("screenshotErrorCopying");
+            div.textContent = l10n.lookup("screenshotErrorCopying");
           }
           throw new Task.Result(div);
         }
@@ -206,7 +206,7 @@ exports.items = [
             return part;
           }).join("-");
           let timeString = date.toTimeString().replace(/:/g, ".").split(" ")[0];
-          filename = gcli.lookupFormat("screenshotGeneratedFilename",
+          filename = l10n.lookupFormat("screenshotGeneratedFilename",
                                       [dateString, timeString]) + ".png";
         }
         // Check there is a .png extension to filename
@@ -222,7 +222,7 @@ exports.items = [
         try {
           file.initWithPath(filename);
         } catch (ex) {
-          div.textContent = gcli.lookup("screenshotErrorSavingToFile") + " " + filename;
+          div.textContent = l10n.lookup("screenshotErrorSavingToFile") + " " + filename;
           throw new Task.Result(div);
         }
 
@@ -238,7 +238,7 @@ exports.items = [
         let source = ioService.newURI(data, "UTF8", null);
         persist.saveURI(source, null, null, 0, null, null, file, loadContext);
 
-        div.textContent = gcli.lookup("screenshotSavedToFile") + " \"" + filename +
+        div.textContent = l10n.lookup("screenshotSavedToFile") + " \"" + filename +
                           "\"";
         div.addEventListener("click", function openFile() {
           div.removeEventListener("click", openFile);

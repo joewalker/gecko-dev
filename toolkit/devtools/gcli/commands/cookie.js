@@ -5,7 +5,7 @@
 "use strict";
 
 const { Cc, Ci, Cu } = require("chrome");
-const gcli = require("gcli/index");
+const l10n = require("gcli/l10n");
 const cookieMgr = Cc["@mozilla.org/cookiemanager;1"].getService(Ci.nsICookieManager2);
 
 /**
@@ -13,7 +13,7 @@ const cookieMgr = Cc["@mozilla.org/cookiemanager;1"].getService(Ci.nsICookieMana
  */
 function translateExpires(expires) {
   if (expires == 0) {
-    return gcli.lookup("cookieListOutSession");
+    return l10n.lookup("cookieListOutSession");
   }
   return new Date(expires).toLocaleString();
 }
@@ -36,18 +36,18 @@ function isCookieAtHost(cookie, host) {
 exports.items = [
   {
     name: "cookie",
-    description: gcli.lookup("cookieDesc"),
-    manual: gcli.lookup("cookieManual")
+    description: l10n.lookup("cookieDesc"),
+    manual: l10n.lookup("cookieManual")
   },
   {
     name: "cookie list",
-    description: gcli.lookup("cookieListDesc"),
-    manual: gcli.lookup("cookieListManual"),
+    description: l10n.lookup("cookieListDesc"),
+    manual: l10n.lookup("cookieListManual"),
     returnType: "cookies",
     exec: function(args, context) {
       let host = context.environment.document.location.host;
       if (host == null || host == "") {
-        throw new Error(gcli.lookup("cookieListOutNonePage"));
+        throw new Error(l10n.lookup("cookieListOutNonePage"));
       }
 
       let enm = cookieMgr.getCookiesFromHost(host);
@@ -74,13 +74,13 @@ exports.items = [
   },
   {
     name: "cookie remove",
-    description: gcli.lookup("cookieRemoveDesc"),
-    manual: gcli.lookup("cookieRemoveManual"),
+    description: l10n.lookup("cookieRemoveDesc"),
+    manual: l10n.lookup("cookieRemoveManual"),
     params: [
       {
         name: "name",
         type: "string",
-        description: gcli.lookup("cookieRemoveKeyDesc"),
+        description: l10n.lookup("cookieRemoveKeyDesc"),
       }
     ],
     exec: function(args, context) {
@@ -105,7 +105,7 @@ exports.items = [
     exec: function(cookies, context) {
       if (cookies.length == 0) {
         let host = context.environment.document.location.host;
-        let msg = gcli.lookupFormat("cookieListOutNoneHost", [ host ]);
+        let msg = l10n.lookupFormat("cookieListOutNoneHost", [ host ]);
         return context.createView({ html: "<span>" + msg + "</span>" });
       }
 
@@ -116,7 +116,7 @@ exports.items = [
         cookie.attrs = (cookie.secure ? "secure" : " ") +
                        (cookie.httpOnly ? "httpOnly" : " ") +
                        (cookie.sameDomain ? "sameDomain" : " ") +
-                       (noAttrs ? gcli.lookup("cookieListOutNone") : " ");
+                       (noAttrs ? l10n.lookup("cookieListOutNone") : " ");
       }
 
       return context.createView({
@@ -126,29 +126,29 @@ exports.items = [
           "    <div>${cookie.name}=${cookie.value}</div>" +
           "    <table class='gcli-cookielist-detail'>" +
           "      <tr>" +
-          "        <td>" + gcli.lookup("cookieListOutHost") + "</td>" +
+          "        <td>" + l10n.lookup("cookieListOutHost") + "</td>" +
           "        <td>${cookie.host}</td>" +
           "      </tr>" +
           "      <tr>" +
-          "        <td>" + gcli.lookup("cookieListOutPath") + "</td>" +
+          "        <td>" + l10n.lookup("cookieListOutPath") + "</td>" +
           "        <td>${cookie.path}</td>" +
           "      </tr>" +
           "      <tr>" +
-          "        <td>" + gcli.lookup("cookieListOutExpires") + "</td>" +
+          "        <td>" + l10n.lookup("cookieListOutExpires") + "</td>" +
           "        <td>${cookie.expires}</td>" +
           "      </tr>" +
           "      <tr>" +
-          "        <td>" + gcli.lookup("cookieListOutAttributes") + "</td>" +
+          "        <td>" + l10n.lookup("cookieListOutAttributes") + "</td>" +
           "        <td>${cookie.attrs}</td>" +
           "      </tr>" +
           "      <tr><td colspan='2'>" +
           "        <span class='gcli-out-shortcut' onclick='${onclick}'" +
           "            data-command='cookie set ${cookie.name} '" +
-          "            >" + gcli.lookup("cookieListOutEdit") + "</span>" +
+          "            >" + l10n.lookup("cookieListOutEdit") + "</span>" +
           "        <span class='gcli-out-shortcut'" +
           "            onclick='${onclick}' ondblclick='${ondblclick}'" +
           "            data-command='cookie remove ${cookie.name}'" +
-          "            >" + gcli.lookup("cookieListOutRemove") + "</span>" +
+          "            >" + l10n.lookup("cookieListOutRemove") + "</span>" +
           "      </td></tr>" +
           "    </table>" +
           "  </li>" +
@@ -164,54 +164,54 @@ exports.items = [
   },
   {
     name: "cookie set",
-    description: gcli.lookup("cookieSetDesc"),
-    manual: gcli.lookup("cookieSetManual"),
+    description: l10n.lookup("cookieSetDesc"),
+    manual: l10n.lookup("cookieSetManual"),
     params: [
       {
         name: "name",
         type: "string",
-        description: gcli.lookup("cookieSetKeyDesc")
+        description: l10n.lookup("cookieSetKeyDesc")
       },
       {
         name: "value",
         type: "string",
-        description: gcli.lookup("cookieSetValueDesc")
+        description: l10n.lookup("cookieSetValueDesc")
       },
       {
-        group: gcli.lookup("cookieSetOptionsDesc"),
+        group: l10n.lookup("cookieSetOptionsDesc"),
         params: [
           {
             name: "path",
             type: { name: "string", allowBlank: true },
             defaultValue: "/",
-            description: gcli.lookup("cookieSetPathDesc")
+            description: l10n.lookup("cookieSetPathDesc")
           },
           {
             name: "domain",
             type: "string",
             defaultValue: null,
-            description: gcli.lookup("cookieSetDomainDesc")
+            description: l10n.lookup("cookieSetDomainDesc")
           },
           {
             name: "secure",
             type: "boolean",
-            description: gcli.lookup("cookieSetSecureDesc")
+            description: l10n.lookup("cookieSetSecureDesc")
           },
           {
             name: "httpOnly",
             type: "boolean",
-            description: gcli.lookup("cookieSetHttpOnlyDesc")
+            description: l10n.lookup("cookieSetHttpOnlyDesc")
           },
           {
             name: "session",
             type: "boolean",
-            description: gcli.lookup("cookieSetSessionDesc")
+            description: l10n.lookup("cookieSetSessionDesc")
           },
           {
             name: "expires",
             type: "string",
             defaultValue: "Jan 17, 2038",
-            description: gcli.lookup("cookieSetExpiresDesc")
+            description: l10n.lookup("cookieSetExpiresDesc")
           },
         ]
       }
