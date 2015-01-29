@@ -27,11 +27,11 @@ function test() {
   return Task.spawn(function*() {
     let options = yield helpers.openTab(TEST_URI);
     yield helpers.openToolbar(options);
-    gcli.addItems(mockCommands.items);
+    options.requisition.system.addItems(mockCommands.items);
 
     yield helpers.runTests(options, exports);
 
-    gcli.removeItems(mockCommands.items);
+    options.requisition.system.removeItems(mockCommands.items);
     yield helpers.closeToolbar(options);
     yield helpers.closeTab(options);
   }).then(finish, helpers.handleError);

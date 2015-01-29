@@ -18,7 +18,7 @@
 
 // A copy of this code exists in firefox mochitests. They should be kept
 // in sync. Hence the exports synonym for non AMD contexts.
-var { helpers, gcli, assert } = (function() {
+var { helpers, assert } = (function() {
 
 var helpers = {};
 
@@ -30,7 +30,6 @@ var util = require('gcli/util/util');
 var Promise = require('gcli/util/promise').Promise;
 var cli = require('gcli/cli');
 var KeyEvent = require('gcli/util/util').KeyEvent;
-var gcli = require('gcli/index');
 
 /**
  * See notes in helpers.checkOptions()
@@ -1270,5 +1269,5 @@ function log(message) {
   }
 }
 
-return { helpers: helpers, gcli: gcli, assert: assert };
+return { helpers: helpers, assert: assert };
 })();
