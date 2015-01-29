@@ -39,11 +39,11 @@ XPCOMUtils.defineLazyGetter(this, "toolboxStrings", function () {
 
 const Telemetry = require("devtools/shared/telemetry");
 
+// TODO: Use XPCOMUtils.defineLazyModuleGetter
 // This lazy getter is needed to prevent a require loop
-XPCOMUtils.defineLazyGetter(this, "gcli", () => {
+XPCOMUtils.defineLazyGetter(this, "gcliInit", () => {
   try {
-    require("devtools/commandline/commands-index");
-    return require("gcli/index");
+    return require("devtools/commandline/commands-index");
   }
   catch (ex) {
     console.error(ex);
@@ -72,8 +72,9 @@ let CommandUtils = {
    * Utility to ensure that things are loaded in the correct order
    */
   createRequisition: function(environment) {
-    return gcli.load().then(() => {
-      return gcli.createRequisition({ environment: environment });
+    return gcliInit.load().then(system => {
+      var Requisition = require('gcli/cli').Requisition;
+      return new Requisition(system, { environment: environment });
     });
   },
 
@@ -408,8 +409,9 @@ DeveloperToolbar.prototype.show = function(focus) {
 
       this._doc.getElementById("Tools:DevToolbar").setAttribute("checked", "true");
 
-      return gcli.load().then(() => {
-        this.display = gcli.createDisplay({
+      return gcliInit.load().then(system => {
+        var FFDisplay = require('gcli/mozui/ffdisplay').FFDisplay;
+        this.display = new FFDisplay(system, {
           contentDocument: this._chromeWindow.gBrowser.contentDocument,
           chromeDocument: this._doc,
           chromeWindow: this._chromeWindow,
