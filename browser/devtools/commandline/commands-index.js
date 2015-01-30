@@ -5,11 +5,12 @@
 "use strict";
 
 const defaultTools = require("main").defaultTools;
-const api = require('gcli/api');
+const createSystem = require('gcli/system').createSystem;
+const connectSystems = require('gcli/system').connectSystems;
 
 /**
  * This is the basic list of modules that should be loaded into each
- * requisition instance
+ * requisition instance whether server side or client side
  */
 exports.baseModules = [
   'gcli/types/delegate',
@@ -38,26 +39,27 @@ exports.baseModules = [
 
   'gcli/converters/converters',
   'gcli/converters/basic',
-  // 'gcli/converters/html',      // Prevent use of innerHTML
   'gcli/converters/terminal',
 
   'gcli/languages/command',
   'gcli/languages/javascript',
 
-  // 'gcli/connectors/direct',    // No need for loopback testing
-  // 'gcli/connectors/rdp',       // Needs fixing
-  // 'gcli/connectors/websocket', // Not from chrome
-  // 'gcli/connectors/xhr',       // Not from chrome
+  'gcli/commands/context',
+];
 
+/**
+ * TODO: Are they really client only modules, we should really filter with
+ * runAt=client or something
+ */
+exports.clientModules = [
   // 'gcli/cli',                  // No need for '{' with web console
   'gcli/commands/clear',
   // 'gcli/commands/connect',     // We need to fix our RDP connector
-  'gcli/commands/context',
   // 'gcli/commands/exec',        // No exec in Firefox yet
-  'gcli/commands/global',
+  // 'gcli/commands/global',
   'gcli/commands/help',
   // 'gcli/commands/intro',       // No need for intro command
-  'gcli/commands/lang',
+  // 'gcli/commands/lang',
   // 'gcli/commands/mocks',       // Only for testing
   'gcli/commands/pref',
   // 'gcli/commands/preflist',    // Too slow in Firefox
@@ -101,33 +103,62 @@ exports.getToolModules = function() {
 };
 
 /**
- * Builds on #getModuleNames() by registering the items with GCLI including
- * the items that come from the mozcmd directory
+ * Cache of the system we created
  */
-exports.addAllItems = function(system) {
+var systemForServer;
+
+/**
+ * Setup a system for use in a content process and make sure all the
+ * `runAt=server` modules are registered.
+ */
+exports.loadForServer = function() {
+  if (systemForServer == null) {
+    console.log('Creating GCLI system for server');
+    systemForServer = createSystem({ location: 'server' });
+
+    systemForServer.addItemsByModule(exports.baseModules, { delayedLoad: true });
+    systemForServer.addItemsByModule(exports.clientModules, { delayedLoad: true });
+    systemForServer.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
+    systemForServer.addItemsByModule(exports.getToolModules(), { delayedLoad: true });
+
+    let { mozDirLoader } = require("gcli/commands/cmd");
+    systemForServer.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
+  }
+
+  return systemForServer.load().then(() => systemForServer);
+};
+
+/**
+ * WeakMap<Target, Promise<System>>
+ */
+var systemForTarget = new WeakMap();
+
+/**
+ * Create a system which connects to a GCLI in a remote target
+ */
+exports.loadForTarget = function(target) {
+  let promise = systemForTarget.get(target);
+  if (promise != null) {
+    return promise;
+  }
+
+  console.log('Creating GCLI system for ' + target.url);
+  let system = createSystem({ location: 'client' });
+
   system.addItemsByModule(exports.baseModules, { delayedLoad: true });
+  system.addItemsByModule(exports.clientModules, { delayedLoad: true });
   system.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
   system.addItemsByModule(exports.getToolModules(), { delayedLoad: true });
 
   let { mozDirLoader } = require("gcli/commands/cmd");
   system.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
-};
 
-/**
- * Cache of the system we created
- */
-var system;
+  // Load the client system
+  promise = system.load().then(() => {
+    let connector = system.connectors.get('direct');
+    return connectSystems(system, connector).then(() => system);
+  });
 
-/**
- * Setup a system if we need to and make sure all the registered modules are
- * loaded.
- */
-exports.load = function() {
-  if (system == null) {
-    console.log('Creating GCLI system');
-    system = api.createSystem();
-    exports.addAllItems(system);
-  }
-
-  return system.load().then(() => system);
+  systemForTarget.set(target, promise);
+  return promise;
 };

@@ -21,7 +21,7 @@ function* spawnTest() {
   let options = yield helpers.openTab(TEST_URI);
 
   let gcliInit = require("devtools/commandline/commands-index");
-  let system = yield gcliInit.load();
+  let system = yield gcliInit.loadForServer();
 
   let settings = system.settings;
 

@@ -7,26 +7,14 @@
 var Cu = require('chrome').Cu;
 var XPCOMUtils = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {}).XPCOMUtils;
 
-XPCOMUtils.defineLazyModuleGetter(this, "console",
-                                  "resource://gre/modules/devtools/Console.jsm");
-XPCOMUtils.defineLazyModuleGetter(this, "CommandUtils",
-                                  "resource:///modules/devtools/DeveloperToolbar.jsm");
-
 XPCOMUtils.defineLazyGetter(this, "Requisition", function() {
   return require("gcli/cli").Requisition;
-});
-
-XPCOMUtils.defineLazyGetter(this, "centralCanon", function() {
-  return require("gcli/commands/commands").centralCanon;
 });
 
 var util = require('gcli/util/util');
 
 var protocol = require("devtools/server/protocol");
-var method = protocol.method;
-var Arg = protocol.Arg;
-var Option = protocol.Option;
-var RetVal = protocol.RetVal;
+var { method, Arg, Option, RetVal } = protocol;
 
 /**
  * Manage remote connections that want to talk to GCLI
@@ -46,14 +34,17 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
       document: browser.contentDocument
     };
 
-    this.requisition = new Requisition({ environment: env });
+    return gcliInit.loadForServer().then(system => {
+      var Requisition = require('gcli/cli').Requisition;
+      this.requisition = new Requisition(system, { environment: environment });
+    });
   },
 
   /**
    * Retrieve a list of the remotely executable commands
    */
   specs: method(function() {
-    return this.requisition.canon.getCommandSpecs();
+    return this.requisition.system.commands.getCommandSpecs();
   }, {
     request: {},
     response: RetVal("json")
@@ -81,9 +72,9 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
    * Get the state of an input string. i.e. requisition.getStateData()
    */
   state: method(function(typed, start, rank) {
-    return this.requisition.update(typed).then(() => {
+    return this.requisition.update(typed).then(function() {
       return this.requisition.getStateData(start, rank);
-    });
+    }.bind(this));
   }, {
     request: {
       typed: Arg(0, "string"), // The command string
@@ -100,18 +91,18 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
    * - message: The message to display to the user
    * - predictions: An array of suggested values for the given parameter
    */
-  typeparse: method(function(typed, param) {
+  parseType: method(function(typed, param) {
     return this.requisition.update(typed).then(function() {
       var assignment = this.requisition.getAssignment(param);
 
-      return promise.resolve(assignment.predictions).then(function(predictions) {
+      return Promise.resolve(assignment.predictions).then(function(predictions) {
         return {
           status: assignment.getStatus().toString(),
           message: assignment.message,
           predictions: predictions
         };
       });
-    });
+    }.bind(this));
   }, {
     request: {
       typed: Arg(0, "string"), // The command string
@@ -124,13 +115,13 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
    * Get the incremented value of some type
    * @return a promise of a string containing the new argument text
    */
-  typeincrement: method(function(typed, param) {
+  incrementType: method(function(typed, param) {
     return this.requisition.update(typed).then(function() {
       var assignment = this.requisition.getAssignment(param);
       return this.requisition.increment(assignment).then(function() {
         return assignment.arg == null ? undefined : assignment.arg.text;
       });
-    });
+    }.bind(this));
   }, {
     request: {
       typed: Arg(0, "string"), // The command string
@@ -140,15 +131,15 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
   }),
 
   /**
-   * See typeincrement
+   * See incrementType
    */
-  typedecrement: method(function(typed, param) {
+  decrementType: method(function(typed, param) {
     return this.requisition.update(typed).then(function() {
       var assignment = this.requisition.getAssignment(param);
       return this.requisition.decrement(assignment).then(function() {
         return assignment.arg == null ? undefined : assignment.arg.text;
       });
-    });
+    }.bind(this));
   }, {
     request: {
       typed: Arg(0, "string"), // The command string
@@ -160,40 +151,64 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
   /**
    * Perform a lookup on a selection type to get the allowed values
    */
-  selectioninfo: method(function(commandName, paramName, action) {
-    var command = this.requisition.canon.getCommand(commandName);
-    if (command == null) {
-      throw new Error('No command called \'' + commandName + '\'');
-    }
+  getSelectionLookup: method(function(commandName, paramName) {
+    var type = getType(this.requisition, commandName, paramName);
 
-    var type;
-    command.params.forEach(function(param) {
-      if (param.name === paramName) {
-        type = param.type;
-      }
+    var context = this.requisition.executionContext;
+    return type.lookup(context).map(function(info) {
+      // lookup returns an array of objects with name/value properties and
+      // the values might not be JSONable, so remove them
+      return { name: info.name };
     });
-    if (type == null) {
-      throw new Error('No parameter called \'' + paramName + '\' in \'' +
-                      commandName + '\'');
-    }
-
-    switch (action) {
-      case 'lookup':
-        return type.lookup(context);
-      case 'data':
-        return type.data(context);
-      default:
-        throw new Error('Action must be either \'lookup\' or \'data\'');
-    }
   }, {
     request: {
-      typed: Arg(0, "string"), // The command containing the parameter in question
-      param: Arg(1, "string"), // The name of the parameter
-      action: Arg(1, "string") // 'lookup' or 'data' depending on the function to call
+      commandName: Arg(0, "string"), // The command containing the parameter in question
+      paramName: Arg(1, "string"),   // The name of the parameter
     },
     response: RetVal("json")
-  })
+  }),
+
+  /**
+   * Perform a lookup on a selection type to get the allowed values
+   */
+  getSelectionData: method(function(commandName, paramName) {
+    var type = getType(this.requisition, commandName, paramName);
+
+    var context = this.requisition.executionContext;
+    return type.data(context);
+  }, {
+    request: {
+      commandName: Arg(0, "string"), // The command containing the parameter in question
+      paramName: Arg(1, "string"),   // The name of the parameter
+    },
+    response: RetVal("json")
+  }),
 });
+
+/**
+ * Helper for #getSelectionLookup and #getSelectionData that finds a type
+ * instance given a commandName and paramName
+ */
+function getType(requisition, commandName, paramName) {
+  var command = requisition.system.commands.get(commandName);
+  if (command == null) {
+    throw new Error('No command called \'' + commandName + '\'');
+  }
+
+  var type;
+  command.params.forEach(function(param) {
+    if (param.name === paramName) {
+      type = param.type;
+    }
+  });
+
+  if (type == null) {
+    throw new Error('No parameter called \'' + paramName + '\' in \'' +
+                    commandName + '\'');
+  }
+
+  return type;
+}
 
 exports.GcliFront = protocol.FrontClass(GcliActor, {
   initialize: function(client, tabForm) {

@@ -39,14 +39,15 @@ XPCOMUtils.defineLazyGetter(this, "toolboxStrings", function () {
 
 const Telemetry = require("devtools/shared/telemetry");
 
-// TODO: Use XPCOMUtils.defineLazyModuleGetter
-// This lazy getter is needed to prevent a require loop
-XPCOMUtils.defineLazyGetter(this, "gcliInit", () => {
+//XPCOMUtils.defineLazyModuleGetter(this, "gcliInit",
+//                                  "devtools/commandline/commands-index");
+
+XPCOMUtils.defineLazyGetter(this, "gcliInit", function () {
   try {
     return require("devtools/commandline/commands-index");
   }
   catch (ex) {
-    console.error(ex);
+    console.log(ex);
   }
 });
 
@@ -71,8 +72,8 @@ let CommandUtils = {
   /**
    * Utility to ensure that things are loaded in the correct order
    */
-  createRequisition: function(environment) {
-    return gcliInit.load().then(system => {
+  createRequisition: function(environment, target) {
+    return gcliInit.loadForTarget(target).then(system => {
       var Requisition = require('gcli/cli').Requisition;
       return new Requisition(system, { environment: environment });
     });
@@ -256,6 +257,9 @@ this.DeveloperToolbar = function DeveloperToolbar(aChromeWindow, aToolbarElement
 {
   this._chromeWindow = aChromeWindow;
 
+  // target is dynamic because the selectedTab changes
+  this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
+
   this._element = aToolbarElement;
   this._element.hidden = true;
   this._doc = this._element.ownerDocument;
@@ -291,16 +295,6 @@ const NOTIFICATIONS = {
  * use them without needing to import anything
  */
 DeveloperToolbar.prototype.NOTIFICATIONS = NOTIFICATIONS;
-
-/**
- * target is dynamic because the selectedTab changes
- */
-Object.defineProperty(DeveloperToolbar.prototype, "target", {
-  get: function() {
-    return TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
-  },
-  enumerable: true
-});
 
 /**
  * Is the toolbar open?
@@ -409,7 +403,8 @@ DeveloperToolbar.prototype.show = function(focus) {
 
       this._doc.getElementById("Tools:DevToolbar").setAttribute("checked", "true");
 
-      return gcliInit.load().then(system => {
+      this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
+      return gcliInit.loadForTarget(this.target).then(system => {
         var FFDisplay = require('gcli/mozui/ffdisplay').FFDisplay;
         this.display = new FFDisplay(system, {
           contentDocument: this._chromeWindow.gBrowser.contentDocument,
@@ -625,6 +620,8 @@ DeveloperToolbar.prototype._notify = function(topic) {
 DeveloperToolbar.prototype.handleEvent = function(ev) {
   if (ev.type == "TabSelect" || ev.type == "load") {
     if (this.visible) {
+      this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
+
       this.display.reattach({
         contentDocument: this._chromeWindow.gBrowser.contentDocument
       });

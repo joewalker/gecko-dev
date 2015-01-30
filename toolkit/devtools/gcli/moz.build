@@ -119,11 +119,11 @@ EXTRA_JS_MODULES.devtools.gcli.util += [
 ]
 
 EXTRA_JS_MODULES.devtools.gcli += [
-    'source/lib/gcli/api.js',
     'source/lib/gcli/cli.js',
     'source/lib/gcli/index.js',
     'source/lib/gcli/l10n.js',
     'source/lib/gcli/settings.js',
+    'source/lib/gcli/system.js',
 ]
 
 EXTRA_JS_MODULES.devtools += [
