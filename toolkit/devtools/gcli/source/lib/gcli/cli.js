@@ -308,7 +308,7 @@ var evalCmd = {
     var reply = customEval(args.javascript);
     return context.typedData(typeof reply, reply);
   },
-  isCommandRegexp: /^\s*{\s*/
+  isCommandRegexp: /^\s*\{\s*/
 };
 
 exports.items = [ evalCmd ];
@@ -694,7 +694,8 @@ Object.defineProperty(Requisition.prototype, 'status', {
  */
 Requisition.prototype.getStatusMessage = function() {
   if (this.commandAssignment.getStatus() !== Status.VALID) {
-    return l10n.lookup('cliUnknownCommand');
+    return l10n.lookupFormat('cliUnknownCommand2',
+                             [ this.commandAssignment.arg.text ]);
   }
 
   var assignments = this.getAssignments();
@@ -1776,8 +1777,8 @@ Requisition.prototype._split = function(args) {
   if (args[0].type === 'ScriptArgument') {
     // Special case: if the user enters { console.log('foo'); } then we need to
     // use the hidden 'eval' command
-    var evalCmd = this.system.commands.get(evalCmd.name)
-    conversion = new Conversion(evalCmd, new ScriptArgument());
+    var command = this.system.commands.get(evalCmd.name);
+    conversion = new Conversion(command, new ScriptArgument());
     this._setAssignmentInternal(this.commandAssignment, conversion);
     return;
   }

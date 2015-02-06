@@ -38,19 +38,15 @@ exports.method = function(func, spec) {
   };
 };
 
-var Arg = exports.Arg = function(index, type) {
-  if (this == null) {
-    return new Arg(index, type);
-  }
-
-  this.index = index;
-  this.type = type;
+exports.Arg = function(index, type) {
+  return {
+    index: index,
+    type: type
+  };
 };
 
-var RetVal = exports.RetVal = function(type) {
-  if (this == null) {
-    return new RetVal(type);
-  }
-
-  this.type = type;
+exports.RetVal = function(type) {
+  return {
+    type: type
+  };
 };
