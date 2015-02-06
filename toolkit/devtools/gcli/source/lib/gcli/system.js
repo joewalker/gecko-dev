@@ -24,21 +24,36 @@ var Fields = require('./fields/fields').Fields;
 var Languages = require('./languages/languages').Languages;
 var Settings = require('./settings').Settings;
 var Types = require('./types/types').Types;
+var GcliFront = require('./connectors/remoted').GcliFront;
 
 /**
- * This is the heart of the API that we expose to the outside
+ * This is the heart of the API that we expose to the outside.
+ * @param options Object that customizes how the system acts. Valid properties:
+ * - commands, connectors, converters, fields, languages, settings, types:
+ *   Custom configured manager objects for these item types
+ * - location: a system with a location will ignore commands that don't have a
+ *   matching runAt property. This is principly for client/server setups where
+ *   we import commands from the server to the client, so a system with
+ *   `{ location: 'client' }` will silently ignore commands with
+ *   `{ runAt: 'server' }`. Any system without a location will accept commands
+ *   with any runAt property (including none).
  */
-exports.createSystem = function() {
+exports.createSystem = function(options) {
+  options = options || {};
+  var location = options.location;
 
+  // The plural/singular thing may make you want to scream, but it allows us
+  // to say components[getItemType(item)], so a lookup here (and below) saves
+  // multiple lookups in the middle of the code
   var components = {
-    connector: new Connectors(),
-    converter: new Converters(),
-    field: new Fields(),
-    language: new Languages(),
-    type: new Types()
+    connector: options.connectors || new Connectors(),
+    converter: options.converters || new Converters(),
+    field: options.fields || new Fields(),
+    language: options.languages || new Languages(),
+    type: options.types || new Types()
   };
   components.setting = new Settings(components.type);
-  components.command = new Commands(components.type);
+  components.command = new Commands(components.type, location);
 
   var getItemType = function(item) {
     if (item.item) {
@@ -51,7 +66,13 @@ exports.createSystem = function() {
   };
 
   var addItem = function(item) {
-    components[getItemType(item)].add(item);
+    try {
+      components[getItemType(item)].add(item);
+    }
+    catch (ex) {
+      console.error('While adding: ' + item.name);
+      throw ex;
+    }
   };
 
   var removeItem = function(item) {
@@ -114,7 +135,7 @@ exports.createSystem = function() {
 
   var pendingChanges = false;
 
-  var api = {
+  var system = {
     addItems: function(items) {
       items.forEach(addItem);
     },
@@ -169,49 +190,127 @@ exports.createSystem = function() {
       pendingChanges = false;
 
       return Promise.all(promises);
+    },
+
+    toString: function() {
+      return 'System [' +
+             'commands:' + components.command.getAll().length + ', ' +
+             'connectors:' + components.connector.getAll().length + ', ' +
+             'converters:' + components.converter.getAll().length + ', ' +
+             'fields:' + components.field.getAll().length + ', ' +
+             'settings:' + components.setting.getAll().length + ', ' +
+             'types:' + components.type.getTypeNames().length + ']';
     }
   };
 
-  Object.defineProperty(api, 'commands', {
+  Object.defineProperty(system, 'commands', {
     get: function() { return components.command; },
-    set: function(commands) { components.command = commands; },
     enumerable: true
   });
 
-  Object.defineProperty(api, 'connectors', {
+  Object.defineProperty(system, 'connectors', {
     get: function() { return components.connector; },
     enumerable: true
   });
 
-  Object.defineProperty(api, 'converters', {
+  Object.defineProperty(system, 'converters', {
     get: function() { return components.converter; },
     enumerable: true
   });
 
-  Object.defineProperty(api, 'fields', {
+  Object.defineProperty(system, 'fields', {
     get: function() { return components.field; },
     enumerable: true
   });
 
-  Object.defineProperty(api, 'languages', {
+  Object.defineProperty(system, 'languages', {
     get: function() { return components.language; },
     enumerable: true
   });
 
-  Object.defineProperty(api, 'settings', {
+  Object.defineProperty(system, 'settings', {
     get: function() { return components.setting; },
     enumerable: true
   });
 
-  Object.defineProperty(api, 'types', {
+  Object.defineProperty(system, 'types', {
     get: function() { return components.type; },
-    set: function(types) {
-      components.type = types;
-      components.command.types = types;
-      components.setting.types = types;
-    },
     enumerable: true
   });
 
-  return api;
+  return system;
 };
+
+/**
+ * Connect a local system with another at the other end of a connector
+ */
+exports.connectSystems = function(system, connector, url) {
+  return GcliFront.create(connector, url).then(function(front) {
+    front.on('commandsChanged', function(specs) {
+      syncItems(system, specs, front);
+    });
+
+    return front.specs().then(function(specs) {
+      syncItems(system, specs, front);
+      return system;
+    });
+  });
+};
+
+/**
+ * Remove the items in this system that came from a previous sync action, and
+ * re-add them
+ */
+function syncItems(system, specs, front) {
+  // Go through all the commands removing any that are associated with the given
+  // front. The method of association is the hack in addLocalFunctions.
+  system.commands.getAll().forEach(function(command) {
+    if (command.front === front) {
+      system.commands.remove(command);
+    }
+  });
+
+  var remoteItems = addLocalFunctions(specs, front);
+  system.addItems(remoteItems);
+}
+
+/**
+ * Take the data from the 'specs' command (or the 'commandsChanged' event) and
+ * add function to proxy the execution back over the front
+ */
+function addLocalFunctions(specs, front) {
+  // Inject an 'exec' function into the commands, and the front into
+  // all the remote types
+  specs.forEach(function(commandSpec) {
+    // HACK: Tack the front to the command so we know how to remove it
+    // in syncItems() below
+    commandSpec.front = front;
+
+    // TODO: syncItems() doesn't remove types, so do we need this?
+    commandSpec.params.forEach(function(param) {
+      if (typeof param.type !== 'string') {
+        param.type.front = front;
+      }
+    });
+
+    if (!commandSpec.isParent) {
+      commandSpec.exec = function(args, context) {
+        var typed = (context.prefix ? context.prefix + ' ' : '') + context.typed;
+
+        return front.execute(typed).then(function(reply) {
+          var typedData = context.typedData(reply.type, reply.data);
+          if (!reply.error) {
+            return typedData;
+          }
+          else {
+            throw typedData;
+          }
+        });
+      };
+    }
+
+    commandSpec.isProxy = true;
+  });
+
+  return specs;
+}
