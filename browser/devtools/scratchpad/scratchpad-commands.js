@@ -7,6 +7,8 @@
 const l10n = require("gcli/l10n");
 
 exports.items = [{
+  item: "command",
+  runAt: "server",
   name: "scratchpad",
   buttonId: "command-button-scratchpad",
   buttonClass: "command-button command-button-invertable",

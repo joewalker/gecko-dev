@@ -9,6 +9,8 @@ const { gDevTools } = require("resource:///modules/devtools/gDevTools.jsm");
 
 exports.items = [
   {
+    item: "command",
+    runAt: "client",
     name: 'splitconsole',
     hidden: true,
     buttonId: "command-button-splitconsole",
@@ -55,6 +57,8 @@ exports.items = [
     manual: l10n.lookup("consoleManual")
   },
   {
+    item: "command",
+    runAt: "client",
     name: "console clear",
     description: l10n.lookup("consoleclearDesc"),
     exec: function(args, context) {
@@ -72,6 +76,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "console close",
     description: l10n.lookup("consolecloseDesc"),
     exec: function(args, context) {
@@ -79,6 +85,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "console open",
     description: l10n.lookup("consoleopenDesc"),
     exec: function(args, context) {

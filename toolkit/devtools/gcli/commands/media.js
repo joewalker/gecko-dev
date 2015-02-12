@@ -12,6 +12,8 @@ exports.items = [
     description: l10n.lookup("mediaDesc")
   },
   {
+    item: "command",
+    runAt: "server",
     name: "media emulate",
     description: l10n.lookup("mediaEmulateDesc"),
     manual: l10n.lookup("mediaEmulateManual"),
@@ -35,6 +37,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "server",
     name: "media reset",
     description: l10n.lookup("mediaResetDesc"),
     exec: function(args, context) {

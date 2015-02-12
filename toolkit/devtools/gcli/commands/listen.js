@@ -34,6 +34,8 @@ XPCOMUtils.defineLazyGetter(this, "debuggerServer", () => {
 
 exports.items = [
   {
+    item: "command",
+    runAt: "client",
     name: "listen",
     description: l10n.lookup("listenDesc"),
     manual: l10n.lookupFormat("listenManual2", [ BRAND_SHORT_NAME ]),

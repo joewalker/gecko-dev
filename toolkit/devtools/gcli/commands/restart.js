@@ -27,6 +27,8 @@ const BRAND_SHORT_NAME = Cc["@mozilla.org/intl/stringbundle;1"]
  */
 exports.items = [
   {
+    item: "command",
+    runAt: "client",
     name: "restart",
     description: l10n.lookupFormat("restartBrowserDesc", [ BRAND_SHORT_NAME ]),
     params: [

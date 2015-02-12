@@ -34,6 +34,8 @@ exports.items = [
     description: l10n.lookup("folderDesc")
   },
   {
+    item: "command",
+    runAt: "client",
     name: "folder open",
     description: l10n.lookup("folderOpenDesc"),
     params: [
@@ -60,6 +62,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "folder openprofile",
     description: l10n.lookup("folderOpenProfileDesc"),
     returnType: "string",

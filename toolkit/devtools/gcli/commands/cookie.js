@@ -40,6 +40,8 @@ exports.items = [
     manual: l10n.lookup("cookieManual")
   },
   {
+    item: "command",
+    runAt: "server",
     name: "cookie list",
     description: l10n.lookup("cookieListDesc"),
     manual: l10n.lookup("cookieListManual"),
@@ -73,6 +75,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "server",
     name: "cookie remove",
     description: l10n.lookup("cookieRemoveDesc"),
     manual: l10n.lookup("cookieRemoveManual"),
@@ -163,6 +167,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "server",
     name: "cookie set",
     description: l10n.lookup("cookieSetDesc"),
     manual: l10n.lookup("cookieSetManual"),

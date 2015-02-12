@@ -15,6 +15,8 @@ devtools.lazyRequireGetter(this, "beautify", "devtools/jsbeautify");
 
 exports.items = [
   {
+    item: "command",
+    runAt: "server",
     name: "jsb",
     description: l10n.lookup("jsbDesc"),
     returnValue:"string",

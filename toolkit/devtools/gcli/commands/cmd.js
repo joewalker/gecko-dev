@@ -131,6 +131,8 @@ exports.items = [
     description: l10n.lookup("cmdDesc")
   },
   {
+    item: "command",
+    runAt: "client",
     name: "cmd refresh",
     description: l10n.lookup("cmdRefreshDesc"),
     get hidden() {
@@ -145,6 +147,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "cmd setdir",
     description: l10n.lookup("cmdSetdirDesc"),
     manual: l10n.lookup("cmdSetdirManual2"),

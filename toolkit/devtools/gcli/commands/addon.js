@@ -210,6 +210,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "addon enable",
     description: l10n.lookup("addonEnableDesc"),
     params: [
@@ -230,6 +232,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "addon disable",
     description: l10n.lookup("addonDisableDesc"),
     params: [

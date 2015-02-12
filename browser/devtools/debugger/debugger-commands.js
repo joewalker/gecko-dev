@@ -76,6 +76,8 @@ exports.items.push({
  */
 exports.items.push({
   name: "break list",
+  item: "command",
+  runAt: "client",
   description: l10n.lookup("breaklistDesc"),
   returnType: "breakpoints",
   exec: function(args, context) {
@@ -149,6 +151,8 @@ exports.items.push({
  * 'break add line' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: "break add line",
   description: l10n.lookup("breakaddlineDesc"),
   params: [
@@ -195,6 +199,8 @@ exports.items.push({
  * 'break del' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: "break del",
   description: l10n.lookup("breakdelDesc"),
   params: [
@@ -255,6 +261,8 @@ exports.items.push({
  * 'dbg open' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: "dbg open",
   description: l10n.lookup("dbgOpen"),
   params: [],
@@ -268,6 +276,8 @@ exports.items.push({
  * 'dbg close' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: "dbg close",
   description: l10n.lookup("dbgClose"),
   params: [],
@@ -284,6 +294,8 @@ exports.items.push({
  * 'dbg interrupt' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: "dbg interrupt",
   description: l10n.lookup("dbgInterrupt"),
   params: [],
@@ -305,6 +317,8 @@ exports.items.push({
  * 'dbg continue' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: "dbg continue",
   description: l10n.lookup("dbgContinue"),
   params: [],
@@ -326,6 +340,8 @@ exports.items.push({
  * 'dbg step' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: "dbg step",
   description: l10n.lookup("dbgStepDesc"),
   manual: l10n.lookup("dbgStepManual")
@@ -335,6 +351,8 @@ exports.items.push({
  * 'dbg step over' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: "dbg step over",
   description: l10n.lookup("dbgStepOverDesc"),
   params: [],
@@ -356,6 +374,8 @@ exports.items.push({
  * 'dbg step in' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: 'dbg step in',
   description: l10n.lookup("dbgStepInDesc"),
   params: [],
@@ -377,6 +397,8 @@ exports.items.push({
  * 'dbg step over' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: 'dbg step out',
   description: l10n.lookup("dbgStepOutDesc"),
   params: [],
@@ -398,6 +420,8 @@ exports.items.push({
  * 'dbg list' command
  */
 exports.items.push({
+  item: "command",
+  runAt: "client",
   name: "dbg list",
   description: l10n.lookup("dbgListSourcesDesc"),
   params: [],
@@ -444,6 +468,8 @@ exports.items.push({
   };
 
   exports.items.push({
+    item: "command",
+    runAt: "client",
     name: "dbg " + cmd.name,
     description: lookup("Desc"),
     params: [
