@@ -23,6 +23,8 @@ const FILENAME_DEFAULT_VALUE = " ";
 
 exports.items = [
   {
+    item: "command",
+    runAt: "server",
     name: "screenshot",
     description: l10n.lookup("screenshotDesc"),
     manual: l10n.lookup("screenshotManual"),

@@ -10,6 +10,8 @@ const l10n = require("gcli/l10n");
 
 exports.items = [
   {
+    item: "command",
+    runAt: "server",
     name: "inject",
     description: l10n.lookup("injectDesc"),
     manual: l10n.lookup("injectManual2"),

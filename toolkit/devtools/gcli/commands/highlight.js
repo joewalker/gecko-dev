@@ -34,6 +34,8 @@ function unhighlightAll() {
 
 exports.items = [
   {
+    item: "command",
+    runAt: "server",
     name: "highlight",
     description: l10n.lookup("highlightDesc"),
     manual: l10n.lookup("highlightManual"),

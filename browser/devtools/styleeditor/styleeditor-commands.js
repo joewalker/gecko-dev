@@ -7,6 +7,8 @@
 const l10n = require("gcli/l10n");
 
 exports.items = [{
+  item: "command",
+  runAt: "client",
   name: "edit",
   description: l10n.lookup("editDesc"),
   manual: l10n.lookup("editManual2"),

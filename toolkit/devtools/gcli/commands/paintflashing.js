@@ -44,6 +44,8 @@ exports.items = [
     description: l10n.lookup("paintflashingDesc")
   },
   {
+    item: "command",
+    runAt: "server",
     name: "paintflashing on",
     description: l10n.lookup("paintflashingOnDesc"),
     manual: l10n.lookup("paintflashingManual"),
@@ -70,6 +72,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "server",
     name: "paintflashing off",
     description: l10n.lookup("paintflashingOffDesc"),
     manual: l10n.lookup("paintflashingManual"),
@@ -96,6 +100,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "server",
     name: "paintflashing toggle",
     hidden: true,
     buttonId: "command-button-paintflashing",

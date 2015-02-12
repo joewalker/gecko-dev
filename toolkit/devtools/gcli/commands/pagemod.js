@@ -13,6 +13,8 @@ exports.items = [
     description: l10n.lookup("pagemodDesc"),
   },
   {
+    item: "command",
+    runAt: "server",
     name: "pagemod replace",
     description: l10n.lookup("pagemodReplaceDesc"),
     params: [
@@ -124,6 +126,8 @@ exports.items = [
     description: l10n.lookup("pagemodRemoveDesc"),
   },
   {
+    item: "command",
+    runAt: "server",
     name: "pagemod remove element",
     description: l10n.lookup("pagemodRemoveElementDesc"),
     params: [
@@ -176,6 +180,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "server",
     name: "pagemod remove attribute",
     description: l10n.lookup("pagemodRemoveAttributeDesc"),
     params: [
@@ -235,6 +241,8 @@ exports.items = [
     description: l10n.lookup("exportDesc"),
   },
   {
+    item: "command",
+    runAt: "server",
     name: "export html",
     description: l10n.lookup("exportHtmlDesc"),
     params: [

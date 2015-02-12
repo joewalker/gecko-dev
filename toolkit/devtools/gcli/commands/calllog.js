@@ -28,6 +28,8 @@ exports.items = [
     description: l10n.lookup("calllogDesc")
   },
   {
+    item: "command",
+    runAt: "client",
     name: "calllog start",
     description: l10n.lookup("calllogStartDesc"),
 
@@ -73,6 +75,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "calllog stop",
     description: l10n.lookup("calllogStopDesc"),
 
@@ -91,6 +95,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "calllog chromestart",
     description: l10n.lookup("calllogChromeStartDesc"),
     get hidden() gcli.hiddenByChromePref(),
@@ -189,6 +195,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "calllog chromestop",
     description: l10n.lookup("calllogChromeStopDesc"),
     get hidden() gcli.hiddenByChromePref(),

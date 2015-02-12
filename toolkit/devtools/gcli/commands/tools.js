@@ -24,6 +24,8 @@ exports.items = [
     get hidden() gcli.hiddenByChromePref(),
   },
   {
+    item: "command",
+    runAt: "client",
     name: "tools srcdir",
     description: l10n.lookup("toolsSrcdirDesc"),
     manual: l10n.lookupFormat("toolsSrcdirManual2", [ BRAND_SHORT_NAME ]),
@@ -60,6 +62,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "tools builtin",
     description: l10n.lookup("toolsBuiltinDesc"),
     manual: l10n.lookup("toolsBuiltinManual"),
@@ -72,6 +76,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "client",
     name: "tools reload",
     description: l10n.lookup("toolsReloadDesc"),
     get hidden() {
