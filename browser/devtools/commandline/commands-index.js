@@ -194,8 +194,9 @@ exports.loadForTarget = function(target) {
 
   // Load the client system
   promise = system.load().then(() => {
-    let connector = system.connectors.get('direct');
-    return connectSystems(system, connector).then(() => system);
+    return GcliFront.create(target).then(front => {
+      return connectFront(system, front).then(() => system);
+    });
   });
 
   systemForTarget.set(target, promise);
