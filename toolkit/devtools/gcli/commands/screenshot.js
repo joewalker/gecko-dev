@@ -98,7 +98,7 @@ exports.items = [
                              args.fullpage, args.selector);
     },
     grabScreen: function(document, filename, clipboard, fullpage, node) {
-      return Task.spawn(function() {
+      return Task.spawn(function*() {
         let window = document.defaultView;
         let canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
         let left = 0;
