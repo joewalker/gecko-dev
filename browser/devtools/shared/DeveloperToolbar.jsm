@@ -39,14 +39,12 @@ XPCOMUtils.defineLazyGetter(this, "toolboxStrings", function () {
 
 const Telemetry = require("devtools/shared/telemetry");
 
-// This lazy getter is needed to prevent a require loop
-XPCOMUtils.defineLazyGetter(this, "gcli", () => {
+XPCOMUtils.defineLazyGetter(this, "gcliInit", function() {
   try {
-    require("devtools/commandline/commands-index");
-    return require("gcli/index");
+    return require("devtools/commandline/commands-index");
   }
   catch (ex) {
-    console.error(ex);
+    console.log(ex);
   }
 });
 
@@ -62,7 +60,7 @@ Object.defineProperty(this, "ConsoleServiceListener", {
   enumerable: true
 });
 
-const promise = Cu.import('resource://gre/modules/Promise.jsm', {}).Promise;
+const promise = Cu.import("resource://gre/modules/Promise.jsm", {}).Promise;
 
 /**
  * A collection of utilities to help working with commands
@@ -71,10 +69,19 @@ let CommandUtils = {
   /**
    * Utility to ensure that things are loaded in the correct order
    */
-  createRequisition: function(environment) {
-    return gcli.load().then(() => {
-      return gcli.createRequisition({ environment: environment });
+  createRequisition: function(environment, target) {
+    return gcliInit.getSystem(target).then(system => {
+      var Requisition = require("gcli/cli").Requisition;
+      return new Requisition(system, { environment: environment });
     });
+  },
+
+  /**
+   * Destroy the remote side of the requisition as well as the local side
+   */
+  destroyRequisition: function(requisition, target) {
+    requisition.destroy();
+    gcliInit.releaseSystem(target);
   },
 
   /**
@@ -103,12 +110,6 @@ let CommandUtils = {
         let command = requisition.commandAssignment.value;
         if (command == null) {
           throw new Error("No command '" + typed + "'");
-        }
-
-        // Do not build a button for a non-remote safe command in a non-local target.
-        if (!target.isLocalTab && !command.isRemoteSafe) {
-          requisition.clear();
-          return;
         }
 
         if (command.buttonId != null) {
@@ -192,17 +193,17 @@ let CommandUtils = {
    * @param targetContainer An object containing a 'target' property which
    * reflects the current debug target
    */
-  createEnvironment: function(container, targetProperty='target') {
+  createEnvironment: function(container, targetProperty="target") {
     if (!container[targetProperty].toString ||
         !/TabTarget/.test(container[targetProperty].toString())) {
-      throw new Error('Missing target');
+      throw new Error("Missing target");
     }
 
     return {
       get target() {
         if (!container[targetProperty].toString ||
             !/TabTarget/.test(container[targetProperty].toString())) {
-          throw new Error('Removed target');
+          throw new Error("Removed target");
         }
 
         return container[targetProperty];
@@ -213,15 +214,15 @@ let CommandUtils = {
       },
 
       get chromeDocument() {
-        return this.chromeWindow.document;
+        return this.target.tab.ownerDocument.defaultView.document;
       },
 
       get window() {
-        return this.chromeWindow.gBrowser.selectedBrowser.contentWindow;
+        throw new Error("environment.window is not available in runAt:client commands");
       },
 
       get document() {
-        return this.window.document;
+        throw new Error("environment.document is not available in runAt:client commands");
       }
     };
   },
@@ -254,6 +255,8 @@ XPCOMUtils.defineLazyGetter(this, "OS", function() {
 this.DeveloperToolbar = function DeveloperToolbar(aChromeWindow, aToolbarElement)
 {
   this._chromeWindow = aChromeWindow;
+
+  this.target = null; // Will be setup when show() is called
 
   this._element = aToolbarElement;
   this._element.hidden = true;
@@ -292,20 +295,10 @@ const NOTIFICATIONS = {
 DeveloperToolbar.prototype.NOTIFICATIONS = NOTIFICATIONS;
 
 /**
- * target is dynamic because the selectedTab changes
- */
-Object.defineProperty(DeveloperToolbar.prototype, "target", {
-  get: function() {
-    return TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
-  },
-  enumerable: true
-});
-
-/**
  * Is the toolbar open?
  */
-Object.defineProperty(DeveloperToolbar.prototype, 'visible', {
-  get: function DT_visible() {
+Object.defineProperty(DeveloperToolbar.prototype, "visible", {
+  get: function() {
     return !this._element.hidden;
   },
   enumerable: true
@@ -316,8 +309,8 @@ let _gSequenceId = 0;
 /**
  * Getter for a unique ID.
  */
-Object.defineProperty(DeveloperToolbar.prototype, 'sequenceId', {
-  get: function DT_visible() {
+Object.defineProperty(DeveloperToolbar.prototype, "sequenceId", {
+  get: function() {
     return _gSequenceId++;
   },
   enumerable: true
@@ -408,20 +401,22 @@ DeveloperToolbar.prototype.show = function(focus) {
 
       this._doc.getElementById("Tools:DevToolbar").setAttribute("checked", "true");
 
-      return gcli.load().then(() => {
-        this.display = gcli.createDisplay({
-          contentDocument: this._chromeWindow.gBrowser.contentDocumentAsCPOW,
+      this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
+      return gcliInit.getSystem(this.target).then(system => {
+        let Requisition = require("gcli/cli").Requisition;
+        this.requisition = new Requisition(system, {
+          environment: CommandUtils.createEnvironment(this, "target"),
+          document: this.outputPanel.document,
+        });
+
+        var FFDisplay = require("gcli/mozui/ffdisplay").FFDisplay;
+        this.display = new FFDisplay(system, {
+          requisition: this.requisition,
           chromeDocument: this._doc,
-          chromeWindow: this._chromeWindow,
           hintElement: this.tooltipPanel.hintElement,
           inputElement: this._input,
           completeElement: this._doc.querySelector(".gclitoolbar-complete-node"),
           backgroundElement: this._doc.querySelector(".gclitoolbar-stack-node"),
-          outputDocument: this.outputPanel.document,
-          environment: CommandUtils.createEnvironment(this, "target"),
-          tooltipClass: "gcliterm-tooltip",
-          eval: null,
-          scratchpad: null
         });
 
         this.display.focusManager.addMonitoredElement(this.outputPanel._frame);
@@ -454,7 +449,9 @@ DeveloperToolbar.prototype.show = function(focus) {
         this._notify(NOTIFICATIONS.SHOW);
 
         if (!DeveloperToolbar.introShownThisSession) {
-          this.display.maybeShowIntro();
+          let intro = require("gcli/ui/intro");
+          intro.maybeShowIntro(this.requisition.commandOutputManager,
+                               this.requisition.conversionContext);
           DeveloperToolbar.introShownThisSession = true;
         }
 
@@ -596,6 +593,9 @@ DeveloperToolbar.prototype.destroy = function() {
   this.tooltipPanel.destroy();
   delete this._input;
 
+  this.requisition.destroy();
+  gcliInit.releaseSystem(this.target);
+
   // We could "delete this.display" etc if we have hard-to-track-down memory
   // leaks as a belt-and-braces approach, however this prevents our DOM node
   // hunter from looking in all the nooks and crannies, so it's better if we
@@ -623,8 +623,9 @@ DeveloperToolbar.prototype._notify = function(topic) {
 DeveloperToolbar.prototype.handleEvent = function(ev) {
   if (ev.type == "TabSelect" || ev.type == "load") {
     if (this.visible) {
-      this.display.reattach({
-        contentDocument: this._chromeWindow.gBrowser.contentDocumentAsCPOW
+      this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
+      gcliInit.getSystem(this.target).then(system => {
+        this.requisition.system = system;
       });
 
       if (ev.type == "TabSelect") {
@@ -751,7 +752,7 @@ DeveloperToolbar.prototype.resetErrorsCount = function(tab) {
  * Creating a OutputPanel is asynchronous
  */
 function OutputPanel() {
-  throw new Error('Use OutputPanel.create()');
+  throw new Error("Use OutputPanel.create()");
 }
 
 /**
@@ -837,8 +838,8 @@ OutputPanel.prototype._init = function(devtoolbar) {
     this.document = this._frame.contentDocument;
 
     this._div = this.document.getElementById("gcli-output-root");
-    this._div.classList.add('gcli-row-out');
-    this._div.setAttribute('aria-live', 'assertive');
+    this._div.classList.add("gcli-row-out");
+    this._div.setAttribute("aria-live", "assertive");
 
     let styles = this._toolbar.ownerDocument.defaultView
                     .getComputedStyle(this._toolbar);
@@ -980,8 +981,8 @@ OutputPanel.prototype._update = function() {
   }
 
   if (this.displayedOutput.data != null) {
-    let context = this._devtoolbar.display.requisition.conversionContext;
-    this.displayedOutput.convert('dom', context).then(node => {
+    let context = this._devtoolbar.requisition.conversionContext;
+    this.displayedOutput.convert("dom", context).then(node => {
       if (node == null) {
         return;
       }
@@ -990,9 +991,9 @@ OutputPanel.prototype._update = function() {
         this._div.removeChild(this._div.firstChild);
       }
 
-      var links = node.querySelectorAll('*[href]');
+      var links = node.querySelectorAll("*[href]");
       for (var i = 0; i < links.length; i++) {
-        links[i].setAttribute('target', '_blank');
+        links[i].setAttribute("target", "_blank");
       }
 
       this._div.appendChild(node);
@@ -1059,7 +1060,7 @@ OutputPanel.prototype._visibilityChanged = function(ev) {
  * Creating a TooltipPanel is asynchronous
  */
 function TooltipPanel() {
-  throw new Error('Use TooltipPanel.create()');
+  throw new Error("Use TooltipPanel.create()");
 }
 
 /**
