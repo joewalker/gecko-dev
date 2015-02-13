@@ -96,13 +96,51 @@ exports.devtoolsModules = [
 ];
 
 /**
- * Find the tools that have 'command: [ "some/module" ]' definitions, and
- * flatten them into a single array of module names.
+ * Some commands belong to a tool (see getToolModules). This is a list of the
+ * modules that are *not* owned by a tool.
  */
-exports.getToolModules = function() {
-  return defaultTools.map(definition => definition.commands || [])
-                     .reduce((prev, curr) => prev.concat(curr), []);
-};
+exports.devtoolsModules = [
+  "devtools/tilt/tilt-commands",
+  "gcli/commands/addon",
+  "gcli/commands/appcache",
+  "gcli/commands/calllog",
+  "gcli/commands/cmd",
+  "gcli/commands/cookie",
+  "gcli/commands/csscoverage",
+  "gcli/commands/folder",
+  "gcli/commands/highlight",
+  "gcli/commands/inject",
+  "gcli/commands/jsb",
+  "gcli/commands/listen",
+  "gcli/commands/media",
+  "gcli/commands/pagemod",
+  "gcli/commands/paintflashing",
+  "gcli/commands/restart",
+  "gcli/commands/screenshot",
+  "gcli/commands/tools",
+];
+
+/**
+ * Register commands from tools with 'command: [ "some/module" ]' definitions.
+ * We'd like to do this:
+ *
+ *     const defaultTools = require("main").defaultTools;
+ *     return defaultTools.map(definition => definition.commands || [])
+ *                        .reduce((prev, curr) => prev.concat(curr), []);
+ *
+ * Except that requiring 'main' from the server causes it to attempt to
+ * re-register a bunch of already registered things.
+ * TODO: Find a way to require("main") without require("main")
+ */
+exports.devtoolsToolModules = [
+  "devtools/webconsole/console-commands",
+  "devtools/resize-commands",
+  "devtools/inspector/inspector-commands",
+  "devtools/eyedropper/commands",
+  "devtools/debugger/debugger-commands",
+  "devtools/styleeditor/styleeditor-commands",
+  "devtools/scratchpad/scratchpad-commands",
+];
 
 /**
  * Cache of the system we created
@@ -120,7 +158,7 @@ exports.loadForServer = function() {
     systemForServer.addItemsByModule(exports.baseModules, { delayedLoad: true });
     systemForServer.addItemsByModule(exports.clientModules, { delayedLoad: true });
     systemForServer.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
-    systemForServer.addItemsByModule(exports.getToolModules(), { delayedLoad: true });
+    systemForServer.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
 
     let { mozDirLoader } = require("gcli/commands/cmd");
     systemForServer.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
@@ -149,7 +187,7 @@ exports.loadForTarget = function(target) {
   system.addItemsByModule(exports.baseModules, { delayedLoad: true });
   system.addItemsByModule(exports.clientModules, { delayedLoad: true });
   system.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
-  system.addItemsByModule(exports.getToolModules(), { delayedLoad: true });
+  system.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
 
   let { mozDirLoader } = require("gcli/commands/cmd");
   system.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
