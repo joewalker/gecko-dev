@@ -11,7 +11,7 @@ function test() {
   return Task.spawn(spawnTest).then(finish, helpers.handleError);
 }
 
-function spawnTest() {
+function* spawnTest() {
   waitForExplicitFinish();
 
   info("RUN TEST: non-private window");
