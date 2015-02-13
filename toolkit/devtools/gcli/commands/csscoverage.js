@@ -6,7 +6,8 @@
 
 const { Cc, Ci } = require("chrome");
 
-const { gDevTools } = require("resource:///modules/devtools/gDevTools.jsm");
+loader.lazyGetter(this, "gDevTools", () => require("resource:///modules/devtools/gDevTools.jsm").gDevTools);
+
 const promise = require("resource://gre/modules/Promise.jsm").Promise;
 
 const domtemplate = require("gcli/util/domtemplate");

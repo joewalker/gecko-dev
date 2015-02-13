@@ -675,7 +675,7 @@ Toolbox.prototype = {
 
     let spec = CommandUtils.getCommandbarSpec("devtools.toolbox.toolbarSpec");
     let environment = CommandUtils.createEnvironment(this, '_target');
-    return CommandUtils.createRequisition(environment).then(requisition => {
+    return CommandUtils.createRequisition(environment, this.target).then(requisition => {
       this._requisition = requisition;
       return CommandUtils.createButtons(spec, this.target, this.doc,
                                         requisition).then(buttons => {
