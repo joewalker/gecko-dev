@@ -42,10 +42,6 @@ EXTRA_JS_MODULES.devtools.gcli.commands += [
 
 EXTRA_JS_MODULES.devtools.gcli.connectors += [
     'source/lib/gcli/connectors/connectors.js',
-    'source/lib/gcli/connectors/index.js',
-    'source/lib/gcli/connectors/protocol.js',
-    'source/lib/gcli/connectors/rdp.js',
-    'source/lib/gcli/connectors/remoted.js',
 ]
 
 EXTRA_JS_MODULES.devtools.gcli.converters += [
@@ -119,11 +115,11 @@ EXTRA_JS_MODULES.devtools.gcli.util += [
 ]
 
 EXTRA_JS_MODULES.devtools.gcli += [
-    'source/lib/gcli/api.js',
     'source/lib/gcli/cli.js',
     'source/lib/gcli/index.js',
     'source/lib/gcli/l10n.js',
     'source/lib/gcli/settings.js',
+    'source/lib/gcli/system.js',
 ]
 
 EXTRA_JS_MODULES.devtools += [

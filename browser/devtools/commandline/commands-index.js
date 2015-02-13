@@ -4,9 +4,56 @@
 
 "use strict";
 
-const gcli = require("gcli/index");
+const { createSystem, connectFront } = require("gcli/system");
+const { GcliFront } = require("devtools/server/actors/gcli");
 
-const commandModules = [
+/**
+ * This is the basic list of modules that should be loaded into each
+ * requisition instance whether server side or client side
+ */
+exports.baseModules = [
+  "gcli/types/delegate",
+  "gcli/types/selection",
+  "gcli/types/array",
+
+  "gcli/types/boolean",
+  "gcli/types/command",
+  "gcli/types/date",
+  "gcli/types/file",
+  "gcli/types/javascript",
+  "gcli/types/node",
+  "gcli/types/number",
+  "gcli/types/resource",
+  "gcli/types/setting",
+  "gcli/types/string",
+  "gcli/types/union",
+  "gcli/types/url",
+
+  "gcli/fields/fields",
+  "gcli/fields/delegate",
+  "gcli/fields/selection",
+
+  "gcli/ui/focus",
+  "gcli/ui/intro",
+
+  "gcli/converters/converters",
+  "gcli/converters/basic",
+  "gcli/converters/terminal",
+
+  "gcli/languages/command",
+  "gcli/languages/javascript",
+
+  "gcli/commands/clear",
+  "gcli/commands/context",
+  "gcli/commands/help",
+  "gcli/commands/pref",
+];
+
+/**
+ * Some commands belong to a tool (see getToolModules). This is a list of the
+ * modules that are *not* owned by a tool.
+ */
+exports.devtoolsModules = [
   "devtools/tilt/tilt-commands",
   "gcli/commands/addon",
   "gcli/commands/appcache",
@@ -27,15 +74,75 @@ const commandModules = [
   "gcli/commands/tools",
 ];
 
-gcli.addItemsByModule(commandModules, { delayedLoad: true });
+/**
+ * Register commands from tools with 'command: [ "some/module" ]' definitions.
+ * The map/reduce incantation squashes the array of arrays to a single array.
+ */
+const defaultTools = require("definitions").defaultTools;
+exports.devtoolsToolModules = defaultTools.map(def => def.commands || [])
+                                 .reduce((prev, curr) => prev.concat(curr), []);
 
-const defaultTools = require("main").defaultTools;
-for (let definition of defaultTools) {
-  if (definition.commands) {
-    gcli.addItemsByModule(definition.commands, { delayedLoad: true });
+/**
+ * Cache of the system we created
+ */
+var systemForServer;
+
+/**
+ * Setup a system for use in a content process and make sure all the
+ * `runAt=server` modules are registered.
+ */
+exports.loadForServer = function() {
+  if (systemForServer == null) {
+    systemForServer = createSystem({ location: "server" });
+
+    systemForServer.addItemsByModule(exports.baseModules, { delayedLoad: true });
+    systemForServer.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
+    systemForServer.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
+
+    const { mozDirLoader } = require("gcli/commands/cmd");
+    systemForServer.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
   }
-}
 
-const { mozDirLoader } = require("gcli/commands/cmd");
+  return systemForServer.load().then(() => systemForServer);
+};
 
-gcli.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
+/**
+ * WeakMap<Target, Promise<System>>
+ */
+var systemForTarget = new WeakMap();
+
+/**
+ * The toolbox uses the following properties on a command to allow it to be
+ * added to the toolbox toolbar
+ */
+var customProperties = [ "buttonId", "buttonClass", "tooltipText" ];
+
+/**
+ * Create a system which connects to a GCLI in a remote target
+ */
+exports.loadForTarget = function(target) {
+  let promise = systemForTarget.get(target);
+  if (promise != null) {
+    return promise;
+  }
+
+  console.log("Creating GCLI system for " + target.url);
+  const system = createSystem({ location: "client" });
+
+  system.addItemsByModule(exports.baseModules, { delayedLoad: true });
+  system.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
+  system.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
+
+  const { mozDirLoader } = require("gcli/commands/cmd");
+  system.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
+
+  // Load the client system
+  promise = system.load().then(() => {
+    return GcliFront.create(target).then(front => {
+      return connectFront(system, front, customProperties).then(() => system);
+    });
+  });
+
+  systemForTarget.set(target, promise);
+  return promise;
+};
