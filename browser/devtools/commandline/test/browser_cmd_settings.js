@@ -16,14 +16,14 @@ function test() {
   return Task.spawn(spawnTest).then(finish, helpers.handleError);
 }
 
-function spawnTest() {
+function* spawnTest() {
   // Setup
   let options = yield helpers.openTab(TEST_URI);
 
-  require("devtools/commandline/commands-index");
-  let gcli = require("gcli/index");
-  yield gcli.load();
-  let settings = gcli.settings;
+  let gcliInit = require("devtools/commandline/commands-index");
+  let system = yield gcliInit.loadServer();
+
+  let settings = system.settings;
 
   let hideIntroEnabled = settings.get("devtools.gcli.hideIntro");
   let tabSize = settings.get("devtools.editor.tabsize");
