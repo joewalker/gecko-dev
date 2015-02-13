@@ -4,47 +4,49 @@
 
 "use strict";
 
-const defaultTools = require("main").defaultTools;
-const createSystem = require('gcli/system').createSystem;
-const connectSystems = require('gcli/system').connectSystems;
+const createSystem = require("gcli/system").createSystem;
+const connectFront = require("gcli/system").connectFront;
+const GcliFront = require("devtools/server/actors/gcli").GcliFront;
+
+console.log('GcliFront', GcliFront);
 
 /**
  * This is the basic list of modules that should be loaded into each
  * requisition instance whether server side or client side
  */
 exports.baseModules = [
-  'gcli/types/delegate',
-  'gcli/types/selection',
-  'gcli/types/array',
+  "gcli/types/delegate",
+  "gcli/types/selection",
+  "gcli/types/array",
 
-  'gcli/types/boolean',
-  'gcli/types/command',
-  'gcli/types/date',
-  'gcli/types/file',
-  'gcli/types/javascript',
-  'gcli/types/node',
-  'gcli/types/number',
-  'gcli/types/resource',
-  'gcli/types/setting',
-  'gcli/types/string',
-  'gcli/types/union',
-  'gcli/types/url',
+  "gcli/types/boolean",
+  "gcli/types/command",
+  "gcli/types/date",
+  "gcli/types/file",
+  "gcli/types/javascript",
+  "gcli/types/node",
+  "gcli/types/number",
+  "gcli/types/resource",
+  "gcli/types/setting",
+  "gcli/types/string",
+  "gcli/types/union",
+  "gcli/types/url",
 
-  'gcli/fields/fields',
-  'gcli/fields/delegate',
-  'gcli/fields/selection',
+  "gcli/fields/fields",
+  "gcli/fields/delegate",
+  "gcli/fields/selection",
 
-  'gcli/ui/focus',
-  'gcli/ui/intro',
+  "gcli/ui/focus",
+  "gcli/ui/intro",
 
-  'gcli/converters/converters',
-  'gcli/converters/basic',
-  'gcli/converters/terminal',
+  "gcli/converters/converters",
+  "gcli/converters/basic",
+  "gcli/converters/terminal",
 
-  'gcli/languages/command',
-  'gcli/languages/javascript',
+  "gcli/languages/command",
+  "gcli/languages/javascript",
 
-  'gcli/commands/context',
+  "gcli/commands/context",
 ];
 
 /**
@@ -52,18 +54,18 @@ exports.baseModules = [
  * runAt=client or something
  */
 exports.clientModules = [
-  // 'gcli/cli',                  // No need for '{' with web console
-  'gcli/commands/clear',
-  // 'gcli/commands/connect',     // We need to fix our RDP connector
-  // 'gcli/commands/exec',        // No exec in Firefox yet
-  // 'gcli/commands/global',
-  'gcli/commands/help',
-  // 'gcli/commands/intro',       // No need for intro command
-  // 'gcli/commands/lang',
-  // 'gcli/commands/mocks',       // Only for testing
-  'gcli/commands/pref',
-  // 'gcli/commands/preflist',    // Too slow in Firefox
-  // 'gcli/commands/test',        // Only for testing
+  // "gcli/cli",                  // No need for "{" with web console
+  "gcli/commands/clear",
+  // "gcli/commands/connect",     // We need to fix our RDP connector
+  // "gcli/commands/exec",        // No exec in Firefox yet
+  // "gcli/commands/global",
+  "gcli/commands/help",
+  // "gcli/commands/intro",       // No need for intro command
+  // "gcli/commands/lang",
+  // "gcli/commands/mocks",       // Only for testing
+  "gcli/commands/pref",
+  // "gcli/commands/preflist",    // Too slow in Firefox
+  // "gcli/commands/test",        // Only for testing
 
   // No demo or node commands
 ];
@@ -113,8 +115,8 @@ var systemForServer;
  */
 exports.loadForServer = function() {
   if (systemForServer == null) {
-    console.log('Creating GCLI system for server');
-    systemForServer = createSystem({ location: 'server' });
+    console.log("Creating GCLI system for server");
+    systemForServer = createSystem({ location: "server" });
 
     systemForServer.addItemsByModule(exports.baseModules, { delayedLoad: true });
     systemForServer.addItemsByModule(exports.clientModules, { delayedLoad: true });
@@ -142,8 +144,8 @@ exports.loadForTarget = function(target) {
     return promise;
   }
 
-  console.log('Creating GCLI system for ' + target.url);
-  let system = createSystem({ location: 'client' });
+  console.log("Creating GCLI system for " + target.url);
+  let system = createSystem({ location: "client" });
 
   system.addItemsByModule(exports.baseModules, { delayedLoad: true });
   system.addItemsByModule(exports.clientModules, { delayedLoad: true });
