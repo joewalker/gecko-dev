@@ -22,17 +22,17 @@
 
 var exports = {};
 
-var TEST_URI = "data:text/html;charset=utf-8,<p id='gcli-input'>gcli-testPref2.js</p>";
+var TEST_URI = "data:text/html;charset=utf-8,<div id='gcli-root'>gcli-testPref2.js</div>";
 
 function test() {
-  return Task.spawn(function() {
+  return Task.spawn(function*() {
     let options = yield helpers.openTab(TEST_URI);
     yield helpers.openToolbar(options);
-    gcli.addItems(mockCommands.items);
+    options.requisition.system.addItems(mockCommands.items);
 
     yield helpers.runTests(options, exports);
 
-    gcli.removeItems(mockCommands.items);
+    options.requisition.system.removeItems(mockCommands.items);
     yield helpers.closeToolbar(options);
     yield helpers.closeTab(options);
   }).then(finish, helpers.handleError);
@@ -55,10 +55,6 @@ exports.testPrefExec = function(options) {
     return;
   }
 
-  var allowSet = settings.getSetting('allowSet');
-  var initialAllowSet = allowSet.value;
-  allowSet.value = false;
-
   assert.is(mockSettings.tempNumber.value, 42, 'set to 42');
 
   return helpers.audit(options, [
@@ -73,7 +69,6 @@ exports.testPrefExec = function(options) {
       }
     },
     {
-      skipRemainingIf: options.isNoDom,
       setup:    'pref set tempNumber 4',
       check: {
         input:  'pref set tempNumber 4',
@@ -99,16 +94,6 @@ exports.testPrefExec = function(options) {
         }
       },
       exec: {
-        output: [ /void your warranty/, /I promise/ ]
-      },
-      post: function() {
-        assert.is(mockSettings.tempNumber.value, 42, 'still set to 42');
-        allowSet.value = true;
-      }
-    },
-    {
-      setup:    'pref set tempNumber 4',
-      exec: {
         output: ''
       },
       post: function() {
@@ -128,8 +113,6 @@ exports.testPrefExec = function(options) {
       },
       post: function() {
         assert.is(mockSettings.tempNumber.value, 42, 'reset to 42');
-
-        allowSet.value = initialAllowSet;
       }
     },
     {

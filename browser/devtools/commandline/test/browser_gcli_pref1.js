@@ -22,17 +22,17 @@
 
 var exports = {};
 
-var TEST_URI = "data:text/html;charset=utf-8,<p id='gcli-input'>gcli-testPref1.js</p>";
+var TEST_URI = "data:text/html;charset=utf-8,<div id='gcli-root'>gcli-testPref1.js</div>";
 
 function test() {
-  return Task.spawn(function() {
+  return Task.spawn(function*() {
     let options = yield helpers.openTab(TEST_URI);
     yield helpers.openToolbar(options);
-    gcli.addItems(mockCommands.items);
+    options.requisition.system.addItems(mockCommands.items);
 
     yield helpers.runTests(options, exports);
 
-    gcli.removeItems(mockCommands.items);
+    options.requisition.system.removeItems(mockCommands.items);
     yield helpers.closeToolbar(options);
     yield helpers.closeTab(options);
   }).then(finish, helpers.handleError);
@@ -67,7 +67,7 @@ exports.testPrefShowStatus = function(options) {
       setup:    'pref show ',
       check: {
         typed:  'pref show ',
-        hints:            'allowSet',
+        hints:            'eagerHelper',
         markup: 'VVVVVVVVVV',
         status: 'ERROR'
       }
@@ -144,7 +144,7 @@ exports.testPrefSetStatus = function(options) {
       setup:    'pref set ',
       check: {
         typed:  'pref set ',
-        hints:           'allowSet <value>',
+        hints:           'eagerHelper <value>',
         markup: 'VVVVVVVVV',
         status: 'ERROR'
       }
@@ -159,6 +159,7 @@ exports.testPrefSetStatus = function(options) {
       }
     },
     {
+      skipIf: options.isRemote,
       setup:    'pref set tempTBool 4',
       check: {
         typed:  'pref set tempTBool 4',
