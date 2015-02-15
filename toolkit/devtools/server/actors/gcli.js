@@ -4,7 +4,7 @@
 
 "use strict";
 
-const { Task } = require('resource://gre/modules/Task.jsm');
+const { Task } = require("resource://gre/modules/Task.jsm");
 const {
   method, Arg, Option, RetVal, Front, FrontClass, Actor, ActorClass
 } = require("devtools/server/protocol");
@@ -236,13 +236,20 @@ const GcliActor = ActorClass({
   },
 
   /**
+   * Pass events from requisition.system.commands.onCommandsChange upwards
+   */
+  _commandsChanged: function() {
+    events.emit(this, "commands-changed");
+  },
+
+  /**
    * Helper for #getSelectionLookup and #getSelectionData that finds a type
    * instance given a commandName and paramName
    */
   _getType: function(requisition, commandName, paramName) {
     let command = requisition.system.commands.get(commandName);
     if (command == null) {
-      throw new Error('No command called \'' + commandName + '\'');
+      throw new Error("No command called '" + commandName + "'");
     }
 
     let type;
@@ -253,8 +260,8 @@ const GcliActor = ActorClass({
     });
 
     if (type == null) {
-      throw new Error('No parameter called \'' + paramName + '\' in \'' +
-                      commandName + '\'');
+      throw new Error("No parameter called '" + paramName + "' in '" +
+                      commandName + "'");
     }
 
     return type;
