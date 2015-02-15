@@ -8,6 +8,7 @@ const { Task } = require('resource://gre/modules/Task.jsm');
 const {
   method, Arg, Option, RetVal, Front, FrontClass, Actor, ActorClass
 } = require("devtools/server/protocol");
+const events = require("sdk/event/core");
 
 /**
  * Manage remote connections that want to talk to GCLI
@@ -25,6 +26,8 @@ const GcliActor = ActorClass({
   initialize: function(conn, tabActor) {
     Actor.prototype.initialize.call(this, conn);
 
+    this._commandsChanged = this._commandsChanged.bind(this);
+
     this._tabActor = tabActor;
     this._requisitionPromise = undefined; // see _getRequisition()
   },
@@ -34,17 +37,28 @@ const GcliActor = ActorClass({
     this._tabActor = undefined;
 
     protocol.Actor.prototype.destroy.call(this);
+
+    return this._getRequisition().then(requisition => {
+      requisition.system.commands.onCommandsChange.remove(this._commandsChanged);
+      this._commandsChanged = undefined;
+    });
   },
 
   /**
    * Retrieve a list of the remotely executable commands
+   * @param customProps Array of strings containing additional properties which,
+   * if specified in the command spec, will be included in the JSON. Normally we
+   * transfer only the properties required for GCLI to function.
    */
-  specs: method(function() {
+  specs: method(function(customProps) {
+    this._lastCustomProps = customProps;
     return this._getRequisition().then(requisition => {
-      return requisition.system.commands.getCommandSpecs();
+      return requisition.system.commands.getCommandSpecs(customProps);
     });
   }, {
-    request: {},
+    request: {
+      customProps: Arg(0, "nullable:array:string")
+    },
     response: RetVal("json")
   }),
 
@@ -196,8 +210,7 @@ const GcliActor = ActorClass({
   }),
 
   /**
-   * Lazy init
-   * @param tabActor
+   * Lazy init for a Requisition
    */
   _getRequisition: function() {
     if (this._requisitionPromise != null) {
@@ -205,29 +218,18 @@ const GcliActor = ActorClass({
     }
 
     let gcliInit = require("devtools/commandline/commands-index");
-    let Requisition = require('gcli/cli').Requisition;
+    let Requisition = require("gcli/cli").Requisition;
 
     this._requisitionPromise = gcliInit.loadForServer().then(system => {
-      let environment = {};
+      let environment = {
+        get window() this._tabActor.window,
+        get document() this._tabActor.window.document
+      };
 
-      /*
-      this._tabActor is "unavailable"
-      Maybe that's a startup sequence thing?
-      */
-      try {
-        console.log('create env');
-        console.log(this._tabActor.docShell);
+      let requisition = new Requisition(system, { environment: environment });
+      requisition.system.commands.onCommandsChange.add(this._commandsChanged);
 
-        environment.chromeWindow = this._tabActor.docShell.topWindow;
-        environment.chromeDocument = this._tabActor.docShell.topWindow.document;
-        environment.window = this._tabActor.window;
-        environment.document = this._tabActor.window.document;
-      }
-      catch (ex) {
-        console.log(ex);
-      }
-
-      return new Requisition(system, { environment: environment });
+      return requisition;
     });
 
     return this._requisitionPromise;

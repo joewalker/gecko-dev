@@ -8,8 +8,6 @@ const createSystem = require("gcli/system").createSystem;
 const connectFront = require("gcli/system").connectFront;
 const GcliFront = require("devtools/server/actors/gcli").GcliFront;
 
-console.log('GcliFront', GcliFront);
-
 /**
  * This is the basic list of modules that should be loaded into each
  * requisition instance whether server side or client side
@@ -173,6 +171,12 @@ exports.loadForServer = function() {
 var systemForTarget = new WeakMap();
 
 /**
+ * The toolbox uses the following properties on a command to allow it to be
+ * added to the toolbox toolbar
+ */
+var customProperties = [ "buttonId", "buttonClass", "tooltipText" ];
+
+/**
  * Create a system which connects to a GCLI in a remote target
  */
 exports.loadForTarget = function(target) {
@@ -195,7 +199,7 @@ exports.loadForTarget = function(target) {
   // Load the client system
   promise = system.load().then(() => {
     return GcliFront.create(target).then(front => {
-      return connectFront(system, front).then(() => system);
+      return connectFront(system, front, customProperties).then(() => system);
     });
   });
 
