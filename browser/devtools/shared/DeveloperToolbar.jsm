@@ -107,12 +107,6 @@ let CommandUtils = {
           throw new Error("No command '" + typed + "'");
         }
 
-        // Do not build a button for a non-remote safe command in a non-local target.
-        if (!target.isLocalTab && !command.isRemoteSafe) {
-          requisition.clear();
-          return;
-        }
-
         if (command.buttonId != null) {
           button.id = command.buttonId;
           if (command.buttonClass != null) {
