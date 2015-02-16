@@ -4,9 +4,13 @@
 
 "use strict";
 
-const { Cc, Ci, Cu } = require("chrome");
 const l10n = require("gcli/l10n");
-const cookieMgr = Cc["@mozilla.org/cookiemanager;1"].getService(Ci.nsICookieManager2);
+const URL = require("sdk/url").URL;
+
+XPCOMUtils.defineLazyGetter(this, "cookieMgr", function() {
+  const { Cc, Ci } = require("chrome");
+  return Cc["@mozilla.org/cookiemanager;1"].getService(Ci.nsICookieManager2);
+});
 
 /**
  * The cookie 'expires' value needs converting into something more readable
@@ -41,13 +45,13 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "server",
+    runAt: "client",
     name: "cookie list",
     description: l10n.lookup("cookieListDesc"),
     manual: l10n.lookup("cookieListManual"),
     returnType: "cookies",
     exec: function(args, context) {
-      let host = context.environment.document.location.host;
+      let host = new URL(context.environment.target.url).host;
       if (host == null || host == "") {
         throw new Error(l10n.lookup("cookieListOutNonePage"));
       }
@@ -88,7 +92,7 @@ exports.items = [
       }
     ],
     exec: function(args, context) {
-      let host = context.environment.document.location.host;
+      let host = new URL(context.environment.target.url).host;
       let enm = cookieMgr.getCookiesFromHost(host);
 
       let cookies = [];
@@ -223,7 +227,7 @@ exports.items = [
       }
     ],
     exec: function(args, context) {
-      let host = context.environment.document.location.host;
+      let host = new URL(context.environment.target.url).host;
       let time = Date.parse(args.expires) / 1000;
 
       cookieMgr.add(args.domain ? "." + args.domain : host,
