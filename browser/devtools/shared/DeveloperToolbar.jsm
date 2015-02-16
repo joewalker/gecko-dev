@@ -403,20 +403,21 @@ DeveloperToolbar.prototype.show = function(focus) {
 
       this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
       return gcliInit.loadForTarget(this.target).then(system => {
+        let Requisition = require('gcli/cli').Requisition;
+        this.requisition = new Requisition(system, {
+          environment: CommandUtils.createEnvironment(this, "target"),
+          document: this.outputPanel.document,
+        });
+
         var FFDisplay = require('gcli/mozui/ffdisplay').FFDisplay;
         this.display = new FFDisplay(system, {
+          requisition: this.requisition,
           contentDocument: this._chromeWindow.gBrowser.contentDocument,
           chromeDocument: this._doc,
-          chromeWindow: this._chromeWindow,
           hintElement: this.tooltipPanel.hintElement,
           inputElement: this._input,
           completeElement: this._doc.querySelector(".gclitoolbar-complete-node"),
           backgroundElement: this._doc.querySelector(".gclitoolbar-stack-node"),
-          outputDocument: this.outputPanel.document,
-          environment: CommandUtils.createEnvironment(this, "target"),
-          tooltipClass: "gcliterm-tooltip",
-          eval: null,
-          scratchpad: null
         });
 
         this.display.focusManager.addMonitoredElement(this.outputPanel._frame);
@@ -449,7 +450,9 @@ DeveloperToolbar.prototype.show = function(focus) {
         this._notify(NOTIFICATIONS.SHOW);
 
         if (!DeveloperToolbar.introShownThisSession) {
-          this.display.maybeShowIntro();
+          let intro = require('gcli/ui/intro');
+          intro.maybeShowIntro(this.requisition.commandOutputManager,
+                               this.requisition.conversionContext);
           DeveloperToolbar.introShownThisSession = true;
         }
 
@@ -587,6 +590,7 @@ DeveloperToolbar.prototype.destroy = function() {
   this.display.onVisibilityChange.remove(this.tooltipPanel._visibilityChanged, this.tooltipPanel);
   this.display.onOutput.remove(this.outputPanel._outputChanged, this.outputPanel);
   this.display.destroy();
+  this.requisition.destroy();
   this.outputPanel.destroy();
   this.tooltipPanel.destroy();
   delete this._input;
@@ -619,10 +623,11 @@ DeveloperToolbar.prototype.handleEvent = function(ev) {
   if (ev.type == "TabSelect" || ev.type == "load") {
     if (this.visible) {
       this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
-
-      this.display.reattach({
-        contentDocument: this._chromeWindow.gBrowser.contentDocument
+      gcliInit.loadForTarget(this.target).then(system => {
+        this.requisition.system = system;
       });
+
+      this.display.setContentDocument(this._chromeWindow.gBrowser.contentDocument);
 
       if (ev.type == "TabSelect") {
         this._initErrorsCount(ev.target);
@@ -977,7 +982,7 @@ OutputPanel.prototype._update = function() {
   }
 
   if (this.displayedOutput.data != null) {
-    let context = this._devtoolbar.display.requisition.conversionContext;
+    let context = this._devtoolbar.requisition.conversionContext;
     this.displayedOutput.convert('dom', context).then(node => {
       if (node == null) {
         return;
