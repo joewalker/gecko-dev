@@ -4,8 +4,32 @@
 
 "use strict";
 
+/**
+ * You can't require the AddonManager in a child process, but GCLI wants to
+ * check for 'items' in all processes, so we return empty array if the
+ * AddonManager is not available
+ */
+function getAddonManager() {
+  try {
+    return {
+      AddonManager: require("resource://gre/modules/AddonManager.jsm").AddonManager,
+      addonManagerActive: true
+    };
+  }
+  catch (ex) {
+    // Fake up an AddonManager just enough to let the file load
+    return {
+      AddonManager: {
+        getAllAddons() {},
+        getAddonsByTypes() {}
+      },
+      addonManagerActive: false
+    };
+  }
+}
+
 const { Cc, Ci, Cu } = require("chrome");
-const { AddonManager } = Cu.import("resource://gre/modules/AddonManager.jsm", {});
+const { AddonManager, addonManagerActive } = getAddonManager();
 const l10n = require("gcli/l10n");
 const { Promise: promise } = require("resource://gre/modules/Promise.jsm");
 
@@ -49,7 +73,7 @@ function pendingOperations(addon) {
   }, []);
 }
 
-exports.items = [
+var items = [
   {
     item: "type",
     name: "addon",
@@ -258,3 +282,5 @@ exports.items = [
     }
   }
 ];
+
+exports.items = addonManagerActive ? items : [];
