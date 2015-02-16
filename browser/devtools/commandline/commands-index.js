@@ -115,7 +115,6 @@ var systemForServer;
  */
 exports.loadForServer = function() {
   if (systemForServer == null) {
-    console.log("Creating GCLI system for server");
     systemForServer = createSystem({ location: "server" });
 
     systemForServer.addItemsByModule(exports.baseModules, { delayedLoad: true });
