@@ -217,11 +217,12 @@ const GcliActor = ActorClass({
 
     let gcliInit = require("devtools/commandline/commands-index");
     let Requisition = require("gcli/cli").Requisition;
+    let tabActor = this._tabActor;
 
     this._requisitionPromise = gcliInit.loadForServer().then(system => {
       let environment = {
-        get window() this._tabActor.window,
-        get document() this._tabActor.window.document
+        get window() tabActor.window,
+        get document() tabActor.window.document,
       };
 
       let requisition = new Requisition(system, { environment: environment });
