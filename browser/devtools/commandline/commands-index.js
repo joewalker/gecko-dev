@@ -44,28 +44,10 @@ exports.baseModules = [
   "gcli/languages/command",
   "gcli/languages/javascript",
 
-  "gcli/commands/context",
-];
-
-/**
- * TODO: Are they really client only modules, we should really filter with
- * runAt=client or something
- */
-exports.clientModules = [
-  // "gcli/cli",                  // No need for "{" with web console
   "gcli/commands/clear",
-  // "gcli/commands/connect",     // We need to fix our RDP connector
-  // "gcli/commands/exec",        // No exec in Firefox yet
-  // "gcli/commands/global",
+  "gcli/commands/context",
   "gcli/commands/help",
-  // "gcli/commands/intro",       // No need for intro command
-  // "gcli/commands/lang",
-  // "gcli/commands/mocks",       // Only for testing
   "gcli/commands/pref",
-  // "gcli/commands/preflist",    // Too slow in Firefox
-  // "gcli/commands/test",        // Only for testing
-
-  // No demo or node commands
 ];
 
 /**
@@ -129,7 +111,6 @@ exports.loadForServer = function() {
     systemForServer = createSystem({ location: "server" });
 
     systemForServer.addItemsByModule(exports.baseModules, { delayedLoad: true });
-    systemForServer.addItemsByModule(exports.clientModules, { delayedLoad: true });
     systemForServer.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
     systemForServer.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
 
@@ -164,7 +145,6 @@ exports.loadForTarget = function(target) {
   let system = createSystem({ location: "client" });
 
   system.addItemsByModule(exports.baseModules, { delayedLoad: true });
-  system.addItemsByModule(exports.clientModules, { delayedLoad: true });
   system.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
   system.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
 
