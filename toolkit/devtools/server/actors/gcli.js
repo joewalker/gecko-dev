@@ -219,6 +219,11 @@ const GcliActor = ActorClass({
     let Requisition = require("gcli/cli").Requisition;
     let tabActor = this._tabActor;
 
+    let nodetype = require('gcli/types/node');
+    nodetype.setDocument(tabActor.window.document);
+    let resource = require('gcli/types/resource');
+    resource.setDocument(tabActor.window.document);
+
     this._requisitionPromise = gcliInit.loadForServer().then(system => {
       let environment = {
         get window() tabActor.window,
