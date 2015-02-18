@@ -94,31 +94,6 @@ exports.devtoolsModules = [
 ];
 
 /**
- * Some commands belong to a tool (see getToolModules). This is a list of the
- * modules that are *not* owned by a tool.
- */
-exports.devtoolsModules = [
-  "devtools/tilt/tilt-commands",
-  "gcli/commands/addon",
-  "gcli/commands/appcache",
-  "gcli/commands/calllog",
-  "gcli/commands/cmd",
-  "gcli/commands/cookie",
-  "gcli/commands/csscoverage",
-  "gcli/commands/folder",
-  "gcli/commands/highlight",
-  "gcli/commands/inject",
-  "gcli/commands/jsb",
-  "gcli/commands/listen",
-  "gcli/commands/media",
-  "gcli/commands/pagemod",
-  "gcli/commands/paintflashing",
-  "gcli/commands/restart",
-  "gcli/commands/screenshot",
-  "gcli/commands/tools",
-];
-
-/**
  * Register commands from tools with 'command: [ "some/module" ]' definitions.
  * We'd like to do this:
  *
