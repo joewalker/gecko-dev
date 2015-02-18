@@ -71,9 +71,7 @@ const GcliActor = ActorClass({
    */
   execute: method(function(typed) {
     return this._getRequisition().then(requisition => {
-      return requisition.updateExec(typed).then(function(output) {
-        return output.toJson();
-      });
+      return requisition.updateExec(typed).then(output => output.toJson());
     });
   }, {
     request: {
@@ -111,7 +109,7 @@ const GcliActor = ActorClass({
     return this._getRequisition().then(requisition => {
       return requisition.update(typed).then(() => {
         let assignment = requisition.getAssignment(param);
-        return Promise.resolve(assignment.predictions).then(function(predictions) {
+        return Promise.resolve(assignment.predictions).then(predictions => {
           return {
             status: assignment.getStatus().toString(),
             message: assignment.message,
@@ -136,7 +134,7 @@ const GcliActor = ActorClass({
     return this._getRequisition().then(requisition => {
       return requisition.update(typed).then(() => {
         let assignment = requisition.getAssignment(param);
-        return requisition.increment(assignment).then(function() {
+        return requisition.increment(assignment).then(() => {
           return assignment.arg == null ? undefined : assignment.arg.text;
         });
       });
@@ -156,7 +154,7 @@ const GcliActor = ActorClass({
     return this._getRequisition().then(requisition => {
       return requisition.update(typed).then(() => {
         let assignment = requisition.getAssignment(param);
-        return requisition.decrement(assignment).then(function() {
+        return requisition.decrement(assignment).then(() => {
           return assignment.arg == null ? undefined : assignment.arg.text;
         });
       });
@@ -177,7 +175,7 @@ const GcliActor = ActorClass({
       let type = this._getType(requisition, commandName, paramName);
 
       let context = requisition.executionContext;
-      return type.lookup(context).map(function(info) {
+      return type.lookup(context).map(info => {
         // lookup returns an array of objects with name/value properties and
         // the values might not be JSONable, so remove them
         return { name: info.name };
@@ -253,7 +251,7 @@ const GcliActor = ActorClass({
     }
 
     let type;
-    command.params.forEach(function(param) {
+    command.params.forEach(param => {
       if (param.name === paramName) {
         type = param.type;
       }
