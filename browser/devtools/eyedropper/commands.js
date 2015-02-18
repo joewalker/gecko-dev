@@ -13,7 +13,7 @@ let { Eyedropper, EyedropperManager } = require("devtools/eyedropper/eyedropper"
  */
 exports.items = [{
   item: "command",
-  runAt: "server",
+  runAt: "client",
   name: "eyedropper",
   description: l10n.lookup("eyedropperDesc"),
   manual: l10n.lookup("eyedropperManual"),
