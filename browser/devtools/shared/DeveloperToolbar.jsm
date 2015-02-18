@@ -39,10 +39,7 @@ XPCOMUtils.defineLazyGetter(this, "toolboxStrings", function () {
 
 const Telemetry = require("devtools/shared/telemetry");
 
-//XPCOMUtils.defineLazyModuleGetter(this, "gcliInit",
-//                                  "devtools/commandline/commands-index");
-
-XPCOMUtils.defineLazyGetter(this, "gcliInit", function () {
+XPCOMUtils.defineLazyGetter(this, "gcliInit", function() {
   try {
     return require("devtools/commandline/commands-index");
   }
