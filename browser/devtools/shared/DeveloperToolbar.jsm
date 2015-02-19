@@ -252,8 +252,7 @@ this.DeveloperToolbar = function DeveloperToolbar(aChromeWindow, aToolbarElement
 {
   this._chromeWindow = aChromeWindow;
 
-  // target is dynamic because the selectedTab changes
-  this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
+  this.target = null; // Will be setup when show() is called
 
   this._element = aToolbarElement;
   this._element.hidden = true;
