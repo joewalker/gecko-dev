@@ -6,6 +6,7 @@
 
 const { Cc, Ci, Cu } = require("chrome");
 const l10n = require("gcli/l10n");
+const { Services } = require("resource://gre/modules/Services.jsm");
 
 loader.lazyImporter(this, "Downloads", "resource://gre/modules/Downloads.jsm");
 loader.lazyImporter(this, "LayoutHelpers", "resource://gre/modules/devtools/LayoutHelpers.jsm");
@@ -28,22 +29,33 @@ exports.items = [
      * An 'imageSummary' is a simple JSON object that looks like this:
      *
      * {
-     *   title: "...",     // Required description of the location of the image
-     *   data: "...",      // Optional Base64 encoded image data
-     *   height: 768,      // The height and width of the image data, required
-     *   width: 1024,      //     if data != null
-     *   action: "reveal", // Optional action when the thumbnail is clicked
-     *                     //     Currently "reveal" is the only option
-     *   filename: "...",  // The path for use with `action:"reveal"`
+     *   destinations: [ "..." ], // Required array of descriptions of the
+     *                            // locations of the result image (the command
+     *                            // can have multiple outputs)
+     *   data: "...",             // Optional Base64 encoded image data
+     *   width:1024, height:768,  // Dimensions of the image data, required
+     *                            // if data != null
+     *   filename: "...",         // If set, clicking the image will open the
+     *                            // folder containing the given file
+     *   href: "...",             // If set, clicking the image will open the
+     *                            // link in a new tab
      * }
      */
     item: "converter",
     from: "imageSummary",
     to: "dom",
     exec: function(imageSummary, context) {
-      const div = context.document.createElementNS("http://www.w3.org/1999/xhtml", "div");
-      div.textContent = imageSummary.title;
+      const document = context.document;
+      const root = document.createElement("div");
 
+      // Add a line to the result for each destination
+      imageSummary.destinations.forEach(destination => {
+        const title = document.createElement("div");
+        title.textContent = destination;
+        root.appendChild(title);
+      });
+
+      // Add the thumbnail image
       if (imageSummary.data != null) {
         const image = context.document.createElement("div");
         const previewHeight = parseInt(256 * imageSummary.height / imageSummary.width);
@@ -56,19 +68,22 @@ exports.items = [
             "margin: 4px;" +
             "display: block;";
         image.setAttribute("style", style);
-        div.appendChild(image);
+        root.appendChild(image);
       }
 
-      if (imageSummary.action === "reveal") {
-        div.style.cursor = "pointer";
-        div.addEventListener("click", () => {
-          const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsILocalFile);
-          file.initWithPath(imageSummary.filename);
-          file.reveal();
+      // Click handler
+      if (imageSummary.filename) {
+        root.style.cursor = "pointer";
+        root.addEventListener("click", () => {
+          if (imageSummary.filename) {
+            const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsILocalFile);
+            file.initWithPath(imageSummary.filename);
+            file.reveal();
+          }
         });
       }
 
-      return div;
+      return root;
     }
   },
   {
@@ -97,6 +112,12 @@ exports.items = [
             type: "boolean",
             description: l10n.lookup("screenshotClipboardDesc"),
             manual: l10n.lookup("screenshotClipboardManual")
+          },
+          {
+            name: "imgur",
+            type: "boolean",
+            description: gcli.lookup("screenshotImgurDesc"),
+            manual: gcli.lookup("screenshotImgurManual")
           },
           {
             name: "chrome",
@@ -146,10 +167,13 @@ exports.items = [
       }
 
       return this.grabScreen(document, args.filename, args.clipboard,
-                             args.fullpage, args.selector);
+                             args.fullpage, args.selector, args.imgur, context);
     },
-    grabScreen: function(document, filename, clipboard, fullpage, node) {
+    grabScreen: function(document, filename, clipboard, fullpage, node, imgur, context) {
       return Task.spawn(function*() {
+        // Check for default save to file functionality
+        const saveToFile = (!imgur && !clipboard);
+
         let window = document.defaultView;
         let canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
         let left = 0;
@@ -193,9 +217,18 @@ exports.items = [
         ctx.drawWindow(window, left, top, width, height, "#fff");
         let data = canvas.toDataURL("image/png", "");
 
-        if(fullpage) {
+        // See comment above on bug 961832
+        if (fullpage) {
           window.scrollTo(currentX, currentY);
         }
+
+        const reply = {
+          destinations: [],
+          data: data,
+          height: height,
+          width: width,
+          filename: filename
+        };
 
         let loadContext = document.defaultView
                                   .QueryInterface(Ci.nsIInterfaceRequestor)
@@ -235,16 +268,11 @@ exports.items = [
             let clip = Cc["@mozilla.org/widget/clipboard;1"].getService(clipid);
             clip.setData(trans, null, clipid.kGlobalClipboard);
 
-            return {
-              height: height,
-              width: width,
-              data: data,
-              title: l10n.lookup("screenshotCopied")
-            };
+            reply.destinations.push(l10n.lookup("screenshotCopied"));
           }
           catch (ex) {
             console.error(ex);
-            throw new Error(l10n.lookup("screenshotErrorCopying"));
+            reply.destinations.push(l10n.lookup("screenshotErrorCopying"));
           }
         }
 
@@ -265,44 +293,74 @@ exports.items = [
           filename = l10n.lookupFormat("screenshotGeneratedFilename",
                                       [dateString, timeString]) + ".png";
         }
-        // Check there is a .png extension to filename
-        else if (!filename.match(/.png$/i)) {
-          filename += ".png";
+
+        // Upload to imgur if desired
+        if (imgur) {
+          try {
+            var xhr = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance(Ci.nsIXMLHttpRequest);
+            var fd = Cc["@mozilla.org/files/formdata;1"].createInstance(Ci.nsIDOMFormData);
+            fd.append("image", data.split(',')[1]);
+            fd.append("type", "base64");
+            fd.append("title", filename);
+
+            var postURL = Services.prefs.getCharPref("devtools.gcli.imgurUploadURL");
+            var clientID = 'Client-ID ' + Services.prefs.getCharPref("devtools.gcli.imgurClientID");
+            xhr.open("POST", postURL);
+            xhr.setRequestHeader('Authorization', clientID);
+            xhr.send(fd);
+            xhr.responseType = "json";
+
+            div.textContent = gcli.lookup("screenshotImgurUploading");
+
+            xhr.onreadystatechange = function() {
+              if (xhr.readyState==4 && xhr.status==200) {
+                reply.destinations.push(xhr.response.data.link);
+              }
+            }
+          }
+          catch(ex) {
+            if (ex) {
+              div.textContent = gcli.lookup("screenshotImgurError");
+            }
+          }
         }
-        // If the filename is relative, tack it onto the download directory
-        if (!filename.match(/[\\\/]/)) {
-          let preferredDir = yield Downloads.getPreferredDownloadsDirectory();
-          filename = OS.Path.join(preferredDir, filename);
+
+        // If not imgur and not clipboard: save to file
+        if (saveToFile) {
+          // Check there is a .png extension to filename
+          if (!filename.match(/.png$/i)) {
+            filename += ".png";
+          }
+          // If the filename is relative, tack it onto the download directory
+          if (!filename.match(/[\\\/]/)) {
+            let preferredDir = yield Downloads.getPreferredDownloadsDirectory();
+            filename = OS.Path.join(preferredDir, filename);
+          }
+
+          try {
+            file.initWithPath(filename);
+          } catch (ex) {
+            console.error(ex);
+            throw new Error(l10n.lookup("screenshotErrorSavingToFile") + " " + filename);
+          }
+
+          let ioService = Cc["@mozilla.org/network/io-service;1"]
+                            .getService(Ci.nsIIOService);
+
+          let Persist = Ci.nsIWebBrowserPersist;
+          let persist = Cc["@mozilla.org/embedding/browser/nsWebBrowserPersist;1"]
+                          .createInstance(Persist);
+          persist.persistFlags = Persist.PERSIST_FLAGS_REPLACE_EXISTING_FILES |
+                                 Persist.PERSIST_FLAGS_AUTODETECT_APPLY_CONVERSION;
+
+          // TODO: UTF8? For an image?
+          let source = ioService.newURI(data, "UTF8", null);
+          persist.saveURI(source, null, null, 0, null, null, file, loadContext);
+
+          reply.destinations.push(l10n.lookup("screenshotSavedToFile") + " \"" + filename + "\"");
         }
 
-        try {
-          file.initWithPath(filename);
-        } catch (ex) {
-          console.error(ex);
-          throw new Error(l10n.lookup("screenshotErrorSavingToFile") + " " + filename);
-        }
-
-        let ioService = Cc["@mozilla.org/network/io-service;1"]
-                          .getService(Ci.nsIIOService);
-
-        let Persist = Ci.nsIWebBrowserPersist;
-        let persist = Cc["@mozilla.org/embedding/browser/nsWebBrowserPersist;1"]
-                        .createInstance(Persist);
-        persist.persistFlags = Persist.PERSIST_FLAGS_REPLACE_EXISTING_FILES |
-                               Persist.PERSIST_FLAGS_AUTODETECT_APPLY_CONVERSION;
-
-        // TODO: UTF8? For an image?
-        let source = ioService.newURI(data, "UTF8", null);
-        persist.saveURI(source, null, null, 0, null, null, file, loadContext);
-
-        return {
-          height: height,
-          width: width,
-          data: data,
-          title: l10n.lookup("screenshotSavedToFile") + " \"" + filename + "\"",
-          action: "reveal",
-          filename: filename
-        };
+        return reply;
       });
     }
   }
