@@ -23,12 +23,61 @@ const FILENAME_DEFAULT_VALUE = " ";
 
 exports.items = [
   {
+    /**
+     * Format an 'imageSummary' (as output by the screenshot command).
+     * An 'imageSummary' is a simple JSON object that looks like this:
+     *
+     * {
+     *   title: "...",     // Required description of the location of the image
+     *   data: "...",      // Optional Base64 encoded image data
+     *   height: 768,      // The height and width of the image data, required
+     *   width: 1024,      //     if data != null
+     *   action: "reveal", // Optional action when the thumbnail is clicked
+     *                     //     Currently "reveal" is the only option
+     *   filename: "...",  // The path for use with `action:"reveal"`
+     * }
+     */
+    item: "converter",
+    from: "imageSummary",
+    to: "dom",
+    exec: function(imageSummary, context) {
+      const div = context.document.createElementNS("http://www.w3.org/1999/xhtml", "div");
+      div.textContent = imageSummary.title;
+
+      if (imageSummary.data != null) {
+        const image = context.document.createElement("div");
+        const previewHeight = parseInt(256 * imageSummary.height / imageSummary.width);
+        const style = "" +
+            "width: 256px;" +
+            "height: " + previewHeight + "px;" +
+            "max-height: 256px;" +
+            "background-image: url('" + imageSummary.data + "');" +
+            "background-size: 256px " + previewHeight + "px;" +
+            "margin: 4px;" +
+            "display: block;";
+        image.setAttribute("style", style);
+        div.appendChild(image);
+      }
+
+      if (imageSummary.action === "reveal") {
+        div.style.cursor = "pointer";
+        div.addEventListener("click", () => {
+          const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsILocalFile);
+          file.initWithPath(imageSummary.filename);
+          file.reveal();
+        });
+      }
+
+      return div;
+    }
+  },
+  {
     item: "command",
     runAt: "server",
     name: "screenshot",
     description: l10n.lookup("screenshotDesc"),
     manual: l10n.lookup("screenshotManual"),
-    returnType: "dom",
+    returnType: "imageSummary",
     buttonId: "command-button-screenshot",
     buttonClass: "command-button command-button-invertable",
     tooltipText: l10n.lookup("screenshotTooltip"),
@@ -107,7 +156,6 @@ exports.items = [
         let top = 0;
         let width;
         let height;
-        let div = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
         let currentX = window.scrollX;
         let currentY = window.scrollY;
 
@@ -186,12 +234,18 @@ exports.items = [
             let clipid = Ci.nsIClipboard;
             let clip = Cc["@mozilla.org/widget/clipboard;1"].getService(clipid);
             clip.setData(trans, null, clipid.kGlobalClipboard);
-            div.textContent = l10n.lookup("screenshotCopied");
+
+            return {
+              height: height,
+              width: width,
+              data: data,
+              title: l10n.lookup("screenshotCopied")
+            };
           }
           catch (ex) {
-            div.textContent = l10n.lookup("screenshotErrorCopying");
+            console.error(ex);
+            throw new Error(l10n.lookup("screenshotErrorCopying"));
           }
-          throw new Task.Result(div);
         }
 
         let file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsILocalFile);
@@ -224,8 +278,8 @@ exports.items = [
         try {
           file.initWithPath(filename);
         } catch (ex) {
-          div.textContent = l10n.lookup("screenshotErrorSavingToFile") + " " + filename;
-          throw new Task.Result(div);
+          console.error(ex);
+          throw new Error(l10n.lookup("screenshotErrorSavingToFile") + " " + filename);
         }
 
         let ioService = Cc["@mozilla.org/network/io-service;1"]
@@ -237,26 +291,18 @@ exports.items = [
         persist.persistFlags = Persist.PERSIST_FLAGS_REPLACE_EXISTING_FILES |
                                Persist.PERSIST_FLAGS_AUTODETECT_APPLY_CONVERSION;
 
+        // TODO: UTF8? For an image?
         let source = ioService.newURI(data, "UTF8", null);
         persist.saveURI(source, null, null, 0, null, null, file, loadContext);
 
-        div.textContent = l10n.lookup("screenshotSavedToFile") + " \"" + filename +
-                          "\"";
-        div.addEventListener("click", function openFile() {
-          div.removeEventListener("click", openFile);
-          file.reveal();
-        });
-        div.style.cursor = "pointer";
-        let image = document.createElement("div");
-        let previewHeight = parseInt(256*height/width);
-        image.setAttribute("style",
-                          "width:256px; height:" + previewHeight + "px;" +
-                          "max-height: 256px;" +
-                          "background-image: url('" + data + "');" +
-                          "background-size: 256px " + previewHeight + "px;" +
-                          "margin: 4px; display: block");
-        div.appendChild(image);
-        throw new Task.Result(div);
+        return {
+          height: height,
+          width: width,
+          data: data,
+          title: l10n.lookup("screenshotSavedToFile") + " \"" + filename + "\"",
+          action: "reveal",
+          filename: filename
+        };
       });
     }
   }
