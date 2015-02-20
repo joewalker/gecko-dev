@@ -109,15 +109,17 @@ exports.items = [
         params: [
           {
             name: "clipboard",
+            hidden: true, // Hidden because it fails with 
             type: "boolean",
             description: l10n.lookup("screenshotClipboardDesc"),
             manual: l10n.lookup("screenshotClipboardManual")
           },
           {
             name: "imgur",
+            hidden: true, // Hidden because it fails with "Could not reach imgur API"
             type: "boolean",
-            description: gcli.lookup("screenshotImgurDesc"),
-            manual: gcli.lookup("screenshotImgurManual")
+            description: l10n.lookup("screenshotImgurDesc"),
+            manual: l10n.lookup("screenshotImgurManual")
           },
           {
             name: "chrome",
@@ -155,213 +157,264 @@ exports.items = [
         // throwing for now.
         throw new Error(l10n.lookup("screenshotSelectorChromeConflict"));
       }
-      var document = args.chrome? context.environment.chromeDocument
-                                : context.environment.document;
+
       if (args.delay > 0) {
-        var deferred = context.defer();
-        document.defaultView.setTimeout(() => {
-          this.grabScreen(document, args.filename, args.clipboard,
-                          args.fullpage).then(deferred.resolve, deferred.reject);
-        }, args.delay * 1000);
-        return deferred.promise;
+        return new Promise((resolve, reject) => {
+          document.defaultView.setTimeout(() => {
+            this.execInternal(args, context).then(resolve, reject);
+          }, args.delay * 1000);
+        });
+      }
+      else {
+        return this.execInternal(args, context);
+      }
+    },
+
+    /**
+     * This is just like exec, except the 'delay' has been handled already so
+     * this is where we do that actual work of process the screenshot
+     */
+    execInternal: function(args, context) {
+      const document = args.chrome ? context.environment.chromeDocument
+                                   : context.environment.document;
+
+      const reply = this.createScreenshotData(args, document);
+
+      const loadContext = document.defaultView
+                                .QueryInterface(Ci.nsIInterfaceRequestor)
+                                .getInterface(Ci.nsIWebNavigation)
+                                .QueryInterface(Ci.nsILoadContext);
+
+      return Promise.all([
+        this.maybeSaveToClipboard(args, loadContext, reply),
+        this.maybeUploadToImgur(args, reply),
+        Task.spawn(() => this.maybeSaveToFile(args, loadContext, reply)),
+      ]).then(() => reply);
+    },
+
+    /**
+     * This does the dirty work of creating a base64 string out of an
+     * area of the browser window
+     */
+    createScreenshotData: function(args, document) {
+      const window = document.defaultView;
+      let left = 0;
+      let top = 0;
+      let width;
+      let height;
+      const currentX = window.scrollX;
+      const currentY = window.scrollY;
+
+      if (args.fullpage) {
+        // Bug 961832: GCLI screenshot shows fixed position element in wrong
+        // position if we don't scroll to top
+        window.scrollTo(0,0);
+        width = window.innerWidth + window.scrollMaxX;
+        height = window.innerHeight + window.scrollMaxY;
+      }
+      else if (args.selector) {
+        const lh = new LayoutHelpers(window);
+        ({ top, left, width, height }) = lh.getRect(args.selector, window);
+      }
+      else {
+        left = window.scrollX;
+        top = window.scrollY;
+        width = window.innerWidth;
+        height = window.innerHeight;
       }
 
-      return this.grabScreen(document, args.filename, args.clipboard,
-                             args.fullpage, args.selector, args.imgur, context);
+      const winUtils = window.QueryInterface(Ci.nsIInterfaceRequestor)
+                           .getInterface(Ci.nsIDOMWindowUtils);
+      const scrollbarHeight = {};
+      const scrollbarWidth = {};
+      winUtils.getScrollbarSize(false, scrollbarWidth, scrollbarHeight);
+      width -= scrollbarWidth.value;
+      height -= scrollbarHeight.value;
+
+      const canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawWindow(window, left, top, width, height, "#fff");
+      const data = canvas.toDataURL("image/png", "");
+
+      // See comment above on bug 961832
+      if (args.fullpage) {
+        window.scrollTo(currentX, currentY);
+      }
+
+      return {
+        destinations: [],
+        data: data,
+        height: height,
+        width: width,
+        filename: this.getFilename(args),
+      };
     },
-    grabScreen: function(document, filename, clipboard, fullpage, node, imgur, context) {
-      return Task.spawn(function*() {
-        // Check for default save to file functionality
-        const saveToFile = (!imgur && !clipboard);
 
-        let window = document.defaultView;
-        let canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
-        let left = 0;
-        let top = 0;
-        let width;
-        let height;
-        let currentX = window.scrollX;
-        let currentY = window.scrollY;
+    /**
+     * We may have a filename specified in args, or we might have to generate
+     * one.
+     */
+    getFilename: function(args) {
+      // Create a name for the file if not present
+      if (args.filename != FILENAME_DEFAULT_VALUE) {
+        return args.filename;
+      }
 
-        if (fullpage) {
-          // Bug 961832: GCLI screenshot shows fixed position element in wrong
-          // position if we don't scroll to top
-          window.scrollTo(0,0);
-          width = window.innerWidth + window.scrollMaxX;
-          height = window.innerHeight + window.scrollMaxY;
-        } else if (node) {
-          let lh = new LayoutHelpers(window);
-          let rect = lh.getRect(node, window);
-          top = rect.top;
-          left = rect.left;
-          width = rect.width;
-          height = rect.height;
-        } else {
-          left = window.scrollX;
-          top = window.scrollY;
-          width = window.innerWidth;
-          height = window.innerHeight;
+      const date = new Date();
+      let dateString = date.getFullYear() + "-" + (date.getMonth() + 1) +
+                      "-" + date.getDate();
+      dateString = dateString.split("-").map(function(part) {
+        if (part.length == 1) {
+          part = "0" + part;
         }
+        return part;
+      }).join("-");
 
-        let winUtils = window.QueryInterface(Ci.nsIInterfaceRequestor)
-                             .getInterface(Ci.nsIDOMWindowUtils);
-        let scrollbarHeight = {};
-        let scrollbarWidth = {};
-        winUtils.getScrollbarSize(false, scrollbarWidth, scrollbarHeight);
-        width -= scrollbarWidth.value;
-        height -= scrollbarHeight.value;
+      const timeString = date.toTimeString().replace(/:/g, ".").split(" ")[0];
+      return l10n.lookupFormat("screenshotGeneratedFilename",
+                               [ dateString, timeString ]) + ".png";
+    },
 
-        canvas.width = width;
-        canvas.height = height;
-        let ctx = canvas.getContext("2d");
-        ctx.drawWindow(window, left, top, width, height, "#fff");
-        let data = canvas.toDataURL("image/png", "");
+    /**
+     * Save the image data to the clipboard. This returns a promise, so it can
+     * be treated exactly like imgur / file processing, but it's really sync
+     * for now.
+     */
+    maybeSaveToClipboard: function(args, loadContext, reply) {
+      if (!args.clipboard) {
+        return Promise.resolve();
+      }
 
-        // See comment above on bug 961832
-        if (fullpage) {
-          window.scrollTo(currentX, currentY);
-        }
-
-        const reply = {
-          destinations: [],
-          data: data,
-          height: height,
-          width: width,
-          filename: filename
-        };
-
-        let loadContext = document.defaultView
-                                  .QueryInterface(Ci.nsIInterfaceRequestor)
-                                  .getInterface(Ci.nsIWebNavigation)
-                                  .QueryInterface(Ci.nsILoadContext);
-
-        if (clipboard) {
-          try {
-            let io = Cc["@mozilla.org/network/io-service;1"]
+      try {
+        const io = Cc["@mozilla.org/network/io-service;1"]
                       .getService(Ci.nsIIOService);
-            let channel = io.newChannel2(data,
-                                         null,
-                                         null,
-                                         null,      // aLoadingNode
-                                         Services.scriptSecurityManager.getSystemPrincipal(),
-                                         null,      // aTriggeringPrincipal
-                                         Ci.nsILoadInfo.SEC_NORMAL,
-                                         Ci.nsIContentPolicy.TYPE_IMAGE);
-            let input = channel.open();
-            let imgTools = Cc["@mozilla.org/image/tools;1"]
+        const channel = io.newChannel2(reply.data, null, null,
+                                       null,      // aLoadingNode
+                                       Services.scriptSecurityManager.getSystemPrincipal(),
+                                       null,      // aTriggeringPrincipal
+                                       Ci.nsILoadInfo.SEC_NORMAL,
+                                       Ci.nsIContentPolicy.TYPE_IMAGE);
+        const input = channel.open();
+        const imgTools = Cc["@mozilla.org/image/tools;1"]
                             .getService(Ci.imgITools);
 
-            let container = {};
-            imgTools.decodeImageData(input, channel.contentType, container);
+        const container = {};
+        imgTools.decodeImageData(input, channel.contentType, container);
 
-            let wrapped = Cc["@mozilla.org/supports-interface-pointer;1"]
-                            .createInstance(Ci.nsISupportsInterfacePointer);
-            wrapped.data = container.value;
+        const wrapped = Cc["@mozilla.org/supports-interface-pointer;1"]
+                          .createInstance(Ci.nsISupportsInterfacePointer);
+        wrapped.data = container.value;
 
-            let trans = Cc["@mozilla.org/widget/transferable;1"]
-                          .createInstance(Ci.nsITransferable);
-            trans.init(loadContext);
-            trans.addDataFlavor(channel.contentType);
-            trans.setTransferData(channel.contentType, wrapped, -1);
+        const trans = Cc["@mozilla.org/widget/transferable;1"]
+                        .createInstance(Ci.nsITransferable);
+        trans.init(loadContext);
+        trans.addDataFlavor(channel.contentType);
+        trans.setTransferData(channel.contentType, wrapped, -1);
 
-            let clipid = Ci.nsIClipboard;
-            let clip = Cc["@mozilla.org/widget/clipboard;1"].getService(clipid);
-            clip.setData(trans, null, clipid.kGlobalClipboard);
+        const clip = Cc["@mozilla.org/widget/clipboard;1"]
+                        .getService(Ci.nsIClipboard);
+        clip.setData(trans, null, Ci.nsIClipboard.kGlobalClipboard);
 
-            reply.destinations.push(l10n.lookup("screenshotCopied"));
-          }
-          catch (ex) {
-            console.error(ex);
-            reply.destinations.push(l10n.lookup("screenshotErrorCopying"));
-          }
-        }
+        reply.destinations.push(l10n.lookup("screenshotCopied"));
+      }
+      catch (ex) {
+        console.error(ex);
+        reply.destinations.push(l10n.lookup("screenshotErrorCopying"));
+      }
 
-        let file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsILocalFile);
+      return Promise.resolve();
+    },
 
-        // Create a name for the file if not present
-        if (filename == FILENAME_DEFAULT_VALUE) {
-          let date = new Date();
-          let dateString = date.getFullYear() + "-" + (date.getMonth() + 1) +
-                          "-" + date.getDate();
-          dateString = dateString.split("-").map(function(part) {
-            if (part.length == 1) {
-              part = "0" + part;
+    /**
+     * Upload screenshot data to Imgur if requested, returning a promise of a
+     * URL (as a string)
+     */
+    maybeUploadToImgur: function(args, reply) {
+      if (!args.imgur) {
+        return Promise.resolve();
+      }
+
+      return new Promise((resolve, reject) => {
+        const xhr = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"]
+                      .createInstance(Ci.nsIXMLHttpRequest);
+        const fd = Cc["@mozilla.org/files/formdata;1"]
+                      .createInstance(Ci.nsIDOMFormData);
+        fd.append("image", reply.data.split(",")[1]);
+        fd.append("type", "base64");
+        fd.append("title", reply.filename);
+
+        const postURL = Services.prefs.getCharPref("devtools.gcli.imgurUploadURL");
+        const clientID = "Client-ID " + Services.prefs.getCharPref("devtools.gcli.imgurClientID");
+
+        xhr.open("POST", postURL);
+        xhr.setRequestHeader("Authorization", clientID);
+        xhr.send(fd);
+        xhr.responseType = "json";
+
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState == 4) {
+            if (xhr.status == 200) {
+              reply.href = xhr.response.data.link;
+              reply.destinations.push(l10n.lookupFormat("screenshotImgurError",
+                                                        [ reply.href ]));
             }
-            return part;
-          }).join("-");
-          let timeString = date.toTimeString().replace(/:/g, ".").split(" ")[0];
-          filename = l10n.lookupFormat("screenshotGeneratedFilename",
-                                      [dateString, timeString]) + ".png";
-        }
-
-        // Upload to imgur if desired
-        if (imgur) {
-          try {
-            var xhr = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance(Ci.nsIXMLHttpRequest);
-            var fd = Cc["@mozilla.org/files/formdata;1"].createInstance(Ci.nsIDOMFormData);
-            fd.append("image", data.split(',')[1]);
-            fd.append("type", "base64");
-            fd.append("title", filename);
-
-            var postURL = Services.prefs.getCharPref("devtools.gcli.imgurUploadURL");
-            var clientID = 'Client-ID ' + Services.prefs.getCharPref("devtools.gcli.imgurClientID");
-            xhr.open("POST", postURL);
-            xhr.setRequestHeader('Authorization', clientID);
-            xhr.send(fd);
-            xhr.responseType = "json";
-
-            div.textContent = gcli.lookup("screenshotImgurUploading");
-
-            xhr.onreadystatechange = function() {
-              if (xhr.readyState==4 && xhr.status==200) {
-                reply.destinations.push(xhr.response.data.link);
-              }
+            else {
+              reply.destinations.push(l10n.lookup("screenshotImgurError"));
             }
-          }
-          catch(ex) {
-            if (ex) {
-              div.textContent = gcli.lookup("screenshotImgurError");
-            }
+
+            resolve();
           }
         }
-
-        // If not imgur and not clipboard: save to file
-        if (saveToFile) {
-          // Check there is a .png extension to filename
-          if (!filename.match(/.png$/i)) {
-            filename += ".png";
-          }
-          // If the filename is relative, tack it onto the download directory
-          if (!filename.match(/[\\\/]/)) {
-            let preferredDir = yield Downloads.getPreferredDownloadsDirectory();
-            filename = OS.Path.join(preferredDir, filename);
-          }
-
-          try {
-            file.initWithPath(filename);
-          } catch (ex) {
-            console.error(ex);
-            throw new Error(l10n.lookup("screenshotErrorSavingToFile") + " " + filename);
-          }
-
-          let ioService = Cc["@mozilla.org/network/io-service;1"]
-                            .getService(Ci.nsIIOService);
-
-          let Persist = Ci.nsIWebBrowserPersist;
-          let persist = Cc["@mozilla.org/embedding/browser/nsWebBrowserPersist;1"]
-                          .createInstance(Persist);
-          persist.persistFlags = Persist.PERSIST_FLAGS_REPLACE_EXISTING_FILES |
-                                 Persist.PERSIST_FLAGS_AUTODETECT_APPLY_CONVERSION;
-
-          // TODO: UTF8? For an image?
-          let source = ioService.newURI(data, "UTF8", null);
-          persist.saveURI(source, null, null, 0, null, null, file, loadContext);
-
-          reply.destinations.push(l10n.lookup("screenshotSavedToFile") + " \"" + filename + "\"");
-        }
-
-        return reply;
       });
+    },
+
+    /**
+     * Save the screenshot data to disk if needed, returning a promise which
+     * is resolved on completion
+     */
+    maybeSaveToFile: function*(args, loadContext, reply) {
+      if (args.filename == FILENAME_DEFAULT_VALUE &&
+          (args.imgur || args.clipboard)) {
+        return Promise.resolve();
+      }
+
+      try {
+        let filename = reply.filename;
+        // Check there is a .png extension to filename
+        if (!filename.match(/.png$/i)) {
+          filename += ".png";
+        }
+
+        // If the filename is relative, tack it onto the download directory
+        if (!filename.match(/[\\\/]/)) {
+          const preferredDir = yield Downloads.getPreferredDownloadsDirectory();
+          filename = OS.Path.join(preferredDir, filename);
+        }
+
+        const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsILocalFile);
+        file.initWithPath(filename);
+
+        const ioService = Cc["@mozilla.org/network/io-service;1"]
+                          .getService(Ci.nsIIOService);
+
+        const Persist = Ci.nsIWebBrowserPersist;
+        const persist = Cc["@mozilla.org/embedding/browser/nsWebBrowserPersist;1"]
+                        .createInstance(Persist);
+        persist.persistFlags = Persist.PERSIST_FLAGS_REPLACE_EXISTING_FILES |
+                               Persist.PERSIST_FLAGS_AUTODETECT_APPLY_CONVERSION;
+
+        // TODO: UTF8? For an image?
+        const source = ioService.newURI(reply.data, "UTF8", null);
+        persist.saveURI(source, null, null, 0, null, null, file, loadContext);
+
+        reply.destinations.push(l10n.lookup("screenshotSavedToFile") + " \"" + filename + "\"");
+      }
+      catch (ex) {
+        console.error(ex);
+        reply.destinations.push(l10n.lookup("screenshotErrorSavingToFile") + " " + filename);
+      }
     }
   }
 ];
