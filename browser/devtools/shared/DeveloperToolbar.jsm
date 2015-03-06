@@ -60,7 +60,7 @@ Object.defineProperty(this, "ConsoleServiceListener", {
   enumerable: true
 });
 
-const promise = Cu.import('resource://gre/modules/Promise.jsm', {}).Promise;
+const promise = Cu.import("resource://gre/modules/Promise.jsm", {}).Promise;
 
 /**
  * A collection of utilities to help working with commands
@@ -71,7 +71,7 @@ let CommandUtils = {
    */
   createRequisition: function(environment, target) {
     return gcliInit.loadForTarget(target).then(system => {
-      var Requisition = require('gcli/cli').Requisition;
+      var Requisition = require("gcli/cli").Requisition;
       return new Requisition(system, { environment: environment });
     });
   },
@@ -185,39 +185,39 @@ let CommandUtils = {
    * @param targetContainer An object containing a 'target' property which
    * reflects the current debug target
    */
-  createEnvironment: function(container, targetProperty='target') {
+  createEnvironment: function(container, targetProperty="target") {
     if (!container[targetProperty].toString ||
         !/TabTarget/.test(container[targetProperty].toString())) {
-      throw new Error('Missing target');
+      throw new Error("Missing target");
     }
 
     return {
       get target() {
         if (!container[targetProperty].toString ||
             !/TabTarget/.test(container[targetProperty].toString())) {
-          throw new Error('Removed target');
+          throw new Error("Removed target");
         }
 
         return container[targetProperty];
       },
 
       get chromeWindow() {
-        console.error('use of chromeWindow is deprecated from commands');
+        console.error("use of chromeWindow is deprecated from commands");
         return this.target.tab.ownerDocument.defaultView;
       },
 
       get chromeDocument() {
-        console.error('use of chromeDocument is deprecated from commands');
+        console.error("use of chromeDocument is deprecated from commands");
         return this.target.tab.ownerDocument.defaultView.document;
       },
 
       get window() {
-        console.error('use of window is deprecated from commands');
+        console.error("use of window is deprecated from commands");
         return this.target.tab.ownerDocument.defaultView.gBrowser.selectedBrowser.contentWindow;
       },
 
       get document() {
-        console.error('use of document is deprecated from commands');
+        console.error("use of document is deprecated from commands");
         return this.target.tab.ownerDocument.defaultView.gBrowser.selectedBrowser.contentWindow.document;
       }
     };
@@ -293,7 +293,7 @@ DeveloperToolbar.prototype.NOTIFICATIONS = NOTIFICATIONS;
 /**
  * Is the toolbar open?
  */
-Object.defineProperty(DeveloperToolbar.prototype, 'visible', {
+Object.defineProperty(DeveloperToolbar.prototype, "visible", {
   get: function DT_visible() {
     return !this._element.hidden;
   },
@@ -305,7 +305,7 @@ let _gSequenceId = 0;
 /**
  * Getter for a unique ID.
  */
-Object.defineProperty(DeveloperToolbar.prototype, 'sequenceId', {
+Object.defineProperty(DeveloperToolbar.prototype, "sequenceId", {
   get: function DT_visible() {
     return _gSequenceId++;
   },
@@ -399,13 +399,13 @@ DeveloperToolbar.prototype.show = function(focus) {
 
       this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
       return gcliInit.loadForTarget(this.target).then(system => {
-        let Requisition = require('gcli/cli').Requisition;
+        let Requisition = require("gcli/cli").Requisition;
         this.requisition = new Requisition(system, {
           environment: CommandUtils.createEnvironment(this, "target"),
           document: this.outputPanel.document,
         });
 
-        var FFDisplay = require('gcli/mozui/ffdisplay').FFDisplay;
+        var FFDisplay = require("gcli/mozui/ffdisplay").FFDisplay;
         this.display = new FFDisplay(system, {
           requisition: this.requisition,
           contentDocument: this._chromeWindow.gBrowser.contentDocument,
@@ -446,7 +446,7 @@ DeveloperToolbar.prototype.show = function(focus) {
         this._notify(NOTIFICATIONS.SHOW);
 
         if (!DeveloperToolbar.introShownThisSession) {
-          let intro = require('gcli/ui/intro');
+          let intro = require("gcli/ui/intro");
           intro.maybeShowIntro(this.requisition.commandOutputManager,
                                this.requisition.conversionContext);
           DeveloperToolbar.introShownThisSession = true;
@@ -749,7 +749,7 @@ DeveloperToolbar.prototype.resetErrorsCount = function(tab) {
  * Creating a OutputPanel is asynchronous
  */
 function OutputPanel() {
-  throw new Error('Use OutputPanel.create()');
+  throw new Error("Use OutputPanel.create()");
 }
 
 /**
@@ -835,8 +835,8 @@ OutputPanel.prototype._init = function(devtoolbar) {
     this.document = this._frame.contentDocument;
 
     this._div = this.document.getElementById("gcli-output-root");
-    this._div.classList.add('gcli-row-out');
-    this._div.setAttribute('aria-live', 'assertive');
+    this._div.classList.add("gcli-row-out");
+    this._div.setAttribute("aria-live", "assertive");
 
     let styles = this._toolbar.ownerDocument.defaultView
                     .getComputedStyle(this._toolbar);
@@ -979,7 +979,7 @@ OutputPanel.prototype._update = function() {
 
   if (this.displayedOutput.data != null) {
     let context = this._devtoolbar.requisition.conversionContext;
-    this.displayedOutput.convert('dom', context).then(node => {
+    this.displayedOutput.convert("dom", context).then(node => {
       if (node == null) {
         return;
       }
@@ -988,9 +988,9 @@ OutputPanel.prototype._update = function() {
         this._div.removeChild(this._div.firstChild);
       }
 
-      var links = node.querySelectorAll('*[href]');
+      var links = node.querySelectorAll("*[href]");
       for (var i = 0; i < links.length; i++) {
-        links[i].setAttribute('target', '_blank');
+        links[i].setAttribute("target", "_blank");
       }
 
       this._div.appendChild(node);
@@ -1057,7 +1057,7 @@ OutputPanel.prototype._visibilityChanged = function(ev) {
  * Creating a TooltipPanel is asynchronous
  */
 function TooltipPanel() {
-  throw new Error('Use TooltipPanel.create()');
+  throw new Error("Use TooltipPanel.create()");
 }
 
 /**
