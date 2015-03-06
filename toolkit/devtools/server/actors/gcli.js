@@ -288,8 +288,7 @@ const GcliFront = exports.GcliFront = FrontClass(GcliActor, {
   },
 });
 
-// A cache of created fronts: WeakMap<Target, Front>
-// TODO: CSSUsageFront has WeakMap<Target, Client> is there a good reason?
+// A cache of created fronts: WeakMap<Client, Front>
 const knownFronts = new WeakMap();
 
 /**
@@ -299,10 +298,10 @@ const knownFronts = new WeakMap();
  */
 exports.GcliFront.create = function(target) {
   return target.makeRemote().then(() => {
-    let front = knownFronts.get(target);
+    let front = knownFronts.get(target.client);
     if (front == null && target.form.gcliActor != null) {
       front = new GcliFront(target.client, target.form);
-      knownFronts.set(target, front);
+      knownFronts.set(target.client, front);
     }
     return front;
   });
