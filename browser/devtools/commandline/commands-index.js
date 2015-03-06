@@ -77,25 +77,11 @@ exports.devtoolsModules = [
 
 /**
  * Register commands from tools with 'command: [ "some/module" ]' definitions.
- * We'd like to do this:
- *
- *     const defaultTools = require("main").defaultTools;
- *     return defaultTools.map(definition => definition.commands || [])
- *                        .reduce((prev, curr) => prev.concat(curr), []);
- *
- * Except that requiring 'main' from the server causes it to attempt to
- * re-register a bunch of already registered things.
- * TODO: Find a way to require("main") without require("main")
+ * The map/reduce incantation squashes the array of arrays to a single array.
  */
-exports.devtoolsToolModules = [
-  "devtools/webconsole/console-commands",
-  "devtools/resize-commands",
-  "devtools/inspector/inspector-commands",
-  "devtools/eyedropper/commands",
-  "devtools/debugger/debugger-commands",
-  "devtools/styleeditor/styleeditor-commands",
-  "devtools/scratchpad/scratchpad-commands",
-];
+const defaultTools = require("definitions").defaultTools;
+exports.devtoolsToolModules = defaultTools.map(def => def.commands || [])
+                                 .reduce((prev, curr) => prev.concat(curr), []);
 
 /**
  * Cache of the system we created
