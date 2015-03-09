@@ -408,7 +408,6 @@ DeveloperToolbar.prototype.show = function(focus) {
         var FFDisplay = require("gcli/mozui/ffdisplay").FFDisplay;
         this.display = new FFDisplay(system, {
           requisition: this.requisition,
-          contentDocument: this._chromeWindow.gBrowser.contentDocument,
           chromeDocument: this._doc,
           hintElement: this.tooltipPanel.hintElement,
           inputElement: this._input,
@@ -622,8 +621,6 @@ DeveloperToolbar.prototype.handleEvent = function(ev) {
       gcliInit.loadForTarget(this.target).then(system => {
         this.requisition.system = system;
       });
-
-      this.display.setContentDocument(this._chromeWindow.gBrowser.contentDocument);
 
       if (ev.type == "TabSelect") {
         this._initErrorsCount(ev.target);
