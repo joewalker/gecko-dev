@@ -204,13 +204,16 @@ SandboxFilterImplContent::Build() {
   Allow(SYSCALL_LARGEFILE(fstat, fstat64));
   Allow(SYSCALL_LARGEFILE(stat, stat64));
   Allow(SYSCALL_LARGEFILE(lstat, lstat64));
+  Allow(SYSCALL_LARGEFILE(newfstatat, fstatat64));
   Allow(SOCKETCALL(socketpair, SOCKETPAIR));
   Deny(EACCES, SOCKETCALL(socket, SOCKET));
   Allow(SYSCALL(open));
   Allow(SYSCALL(readlink)); /* Workaround for bug 964455 */
+  Allow(SYSCALL(readlinkat)); /* Workaround for bug 964455 */
   Allow(SYSCALL(prctl));
   Allow(SYSCALL(access));
   Allow(SYSCALL(unlink));
+  Allow(SYSCALL(unlinkat));
   Allow(SYSCALL(fsync));
   Allow(SYSCALL(msync));
 

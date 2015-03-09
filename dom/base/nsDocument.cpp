@@ -146,6 +146,7 @@
 #include "nsHtml5TreeOpExecutor.h"
 #include "mozilla/dom/HTMLLinkElement.h"
 #include "mozilla/dom/HTMLMediaElement.h"
+#include "mozilla/dom/HTMLImageElement.h"
 #include "mozilla/dom/MediaSource.h"
 
 #include "mozAutoDocUpdate.h"
@@ -641,7 +642,7 @@ nsIdentifierMapEntry::RemoveIdElement(Element* aElement)
   // This could fire in OOM situations
   // Only assert this in HTML documents for now as XUL does all sorts of weird
   // crap.
-  NS_ASSERTION(!aElement->OwnerDoc()->IsHTML() ||
+  NS_ASSERTION(!aElement->OwnerDoc()->IsHTMLDocument() ||
                mIdContentList.IndexOf(aElement) >= 0,
                "Removing id entry that doesn't exist");
 
@@ -1242,7 +1243,7 @@ nsExternalResourceMap::PendingLoad::SetupViewer(nsIRequest* aRequest,
   nsCOMPtr<nsIContentViewer> viewer;
   nsCOMPtr<nsIStreamListener> listener;
   rv = docLoaderFactory->CreateInstance("external-resource", chan, newLoadGroup,
-                                        type.get(), nullptr, nullptr,
+                                        type, nullptr, nullptr,
                                         getter_AddRefs(listener),
                                         getter_AddRefs(viewer));
   NS_ENSURE_SUCCESS(rv, rv);
@@ -1606,6 +1607,9 @@ nsDocument::nsDocument(const char* aContentType)
   // Start out mLastStyleSheetSet as null, per spec
   SetDOMStringToNull(mLastStyleSheetSet);
 
+  // void state used to differentiate an empty source from an unselected source
+  mPreloadPictureFoundSource.SetIsVoid(true);
+
   if (!sProcessingStack) {
     sProcessingStack.emplace();
     // Add the base queue sentinel to the processing stack.
@@ -1845,6 +1849,10 @@ NS_IMPL_CYCLE_COLLECTION_CAN_SKIP_BEGIN(nsDocument)
     EventListenerManager* elm = tmp->GetExistingListenerManager();
     if (elm) {
       elm->MarkForCC();
+    }
+    if (tmp->mExpandoAndGeneration.expando.isObject()) {
+      JS::ExposeObjectToActiveJS(
+        &(tmp->mExpandoAndGeneration.expando.toObject()));
     }
     return true;
   }
@@ -4786,7 +4794,6 @@ nsDocument::SetScriptGlobalObject(nsIScriptGlobalObject *aScriptGlobalObject)
     nsLoadFlags loadFlags = 0;
     channel->GetLoadFlags(&loadFlags);
     // If we are shift-reloaded, don't associate with a ServiceWorker.
-    // FIXME(nsm): Bug 1041339.
     if (loadFlags & nsIRequest::LOAD_BYPASS_CACHE) {
       NS_WARNING("Page was shift reloaded, skipping ServiceWorker control");
       return;
@@ -5121,7 +5128,7 @@ nsDocument::DispatchContentLoadedEvents()
   // document).
   nsContentUtils::DispatchTrustedEvent(this, static_cast<nsIDocument*>(this),
                                        NS_LITERAL_STRING("DOMContentLoaded"),
-                                       true, true);
+                                       true, false);
 
   if (mTiming) {
     mTiming->NotifyDOMContentLoadedEnd(nsIDocument::GetDocumentURI());
@@ -5492,7 +5499,7 @@ nsIDocument::CreateElement(const nsAString& aTagName, ErrorResult& rv)
     return nullptr;
   }
 
-  bool needsLowercase = IsHTML() && !IsLowercaseASCII(aTagName);
+  bool needsLowercase = IsHTMLDocument() && !IsLowercaseASCII(aTagName);
   nsAutoString lcTagName;
   if (needsLowercase) {
     nsContentUtils::ASCIIToLower(aTagName, lcTagName);
@@ -5516,7 +5523,7 @@ nsDocument::SetupCustomElement(Element* aElement,
     return;
   }
 
-  nsCOMPtr<nsIAtom> tagAtom = aElement->Tag();
+  nsCOMPtr<nsIAtom> tagAtom = aElement->NodeInfo()->NameAtom();
   nsCOMPtr<nsIAtom> typeAtom = aTypeExtension ?
     do_GetAtom(*aTypeExtension) : tagAtom;
 
@@ -5695,7 +5702,7 @@ already_AddRefed<CDATASection>
 nsIDocument::CreateCDATASection(const nsAString& aData,
                                 ErrorResult& rv)
 {
-  if (IsHTML()) {
+  if (IsHTMLDocument()) {
     rv.Throw(NS_ERROR_DOM_NOT_SUPPORTED_ERR);
     return nullptr;
   }
@@ -6153,7 +6160,7 @@ nsDocument::RegisterElement(JSContext* aCx, const nsAString& aType,
   // Only convert NAME to lowercase in HTML documents. Note that NAME is
   // options.extends.
   nsAutoString lcName;
-  if (IsHTML()) {
+  if (IsHTMLDocument()) {
     nsContentUtils::ASCIIToLower(aOptions.mExtends, lcName);
   } else {
     lcName.Assign(aOptions.mExtends);
@@ -6195,7 +6202,7 @@ nsDocument::RegisterElement(JSContext* aCx, const nsAString& aType,
     }
 
     if (!aOptions.mPrototype) {
-      protoObject = JS_NewObjectWithGivenProto(aCx, nullptr, htmlProto, JS::NullPtr());
+      protoObject = JS_NewObjectWithGivenProto(aCx, nullptr, htmlProto);
       if (!protoObject) {
         rv.Throw(NS_ERROR_UNEXPECTED);
         return;
@@ -6344,15 +6351,12 @@ nsDocument::RegisterElement(JSContext* aCx, const nsAString& aType,
       // Make sure that the element name matches the name in the definition.
       // (e.g. a definition for x-button extending button should match
       // <button is="x-button"> but not <x-button>.
-      // Note: we also check the tag name, because if it's not the above
-      // mentioned case, it can be that only the |is| property has been
-      // changed, which we should ignore by the spec.
-      if (elem->NodeInfo()->NameAtom() != nameAtom &&
-          elem->Tag() == nameAtom) {
+      if (elem->NodeInfo()->NameAtom() != nameAtom) {
         //Skip over this element because definition does not apply.
         continue;
       }
 
+      MOZ_ASSERT(elem->IsHTMLElement(nameAtom));
       nsWrapperCache* cache;
       CallQueryInterface(elem, &cache);
       MOZ_ASSERT(cache, "Element doesn't support wrapper cache?");
@@ -7019,7 +7023,7 @@ Element*
 nsIDocument::GetHtmlElement() const
 {
   Element* rootElement = GetRootElement();
-  if (rootElement && rootElement->IsHTML(nsGkAtoms::html))
+  if (rootElement && rootElement->IsHTMLElement(nsGkAtoms::html))
     return rootElement;
   return nullptr;
 }
@@ -7036,7 +7040,7 @@ nsIDocument::GetHtmlChildElement(nsIAtom* aTag)
   for (nsIContent* child = html->GetFirstChild();
        child;
        child = child->GetNextSibling()) {
-    if (child->IsHTML(aTag))
+    if (child->IsHTMLElement(aTag))
       return child->AsElement();
   }
   return nullptr;
@@ -7096,7 +7100,7 @@ nsDocument::GetTitle(nsString& aTitle)
       break;
 #endif
     case kNameSpaceID_SVG:
-      if (rootElement->Tag() == nsGkAtoms::svg) {
+      if (rootElement->IsSVGElement(nsGkAtoms::svg)) {
         GetTitleFromElement(kNameSpaceID_SVG, tmp);
         break;
       } // else fall through
@@ -7223,7 +7227,7 @@ nsDocument::GetBoxObjectFor(Element* aElement, ErrorResult& aRv)
     return nullptr;
   }
 
-  if (!mHasWarnedAboutBoxObjects && !aElement->IsXUL()) {
+  if (!mHasWarnedAboutBoxObjects && !aElement->IsXULElement()) {
     mHasWarnedAboutBoxObjects = true;
     nsContentUtils::ReportToConsole(nsIScriptError::warningFlag,
                                     NS_LITERAL_CSTRING("BoxObjects"), this,
@@ -8174,7 +8178,7 @@ nsDocument::FlushPendingNotifications(mozFlushType aType)
   // make sure that layout is started as needed.  But we can skip that
   // part if we have no presshell or if it's already done an initial
   // reflow.
-  if ((!IsHTML() ||
+  if ((!IsHTMLDocument() ||
        (aType > Flush_ContentAndNotify && mPresShell &&
         !mPresShell->DidInitialize())) &&
       (mParser || mWeakSink)) {
@@ -8347,7 +8351,7 @@ nsRadioGroupStruct*
 nsDocument::GetRadioGroupInternal(const nsAString& aName) const
 {
 #ifdef DEBUG
-  if (IsHTML()) {
+  if (IsHTMLDocument()) {
     nsAutoString lcName;
     ToLowerCase(aName, lcName);
     MOZ_ASSERT(aName == lcName);
@@ -8366,7 +8370,7 @@ nsRadioGroupStruct*
 nsDocument::GetRadioGroup(const nsAString& aName) const
 {
   nsAutoString tmKey(aName);
-  if (IsHTML()) {
+  if (IsHTMLDocument()) {
     ToLowerCase(tmKey); //should case-insensitive.
   }
 
@@ -8377,7 +8381,7 @@ nsRadioGroupStruct*
 nsDocument::GetOrCreateRadioGroup(const nsAString& aName)
 {
   nsAutoString tmKey(aName);
-  if (IsHTML()) {
+  if (IsHTMLDocument()) {
     ToLowerCase(tmKey); //should case-insensitive.
   }
 
@@ -8447,7 +8451,7 @@ nsDocument::GetNextRadioButton(const nsAString& aName,
     else if (++index >= numRadios) {
       index = 0;
     }
-    NS_ASSERTION(static_cast<nsGenericHTMLFormElement*>(radioGroup->mRadioButtons[index])->IsHTML(nsGkAtoms::input),
+    NS_ASSERTION(static_cast<nsGenericHTMLFormElement*>(radioGroup->mRadioButtons[index])->IsHTMLElement(nsGkAtoms::input),
                  "mRadioButtons holding a non-radio button");
     radio = static_cast<HTMLInputElement*>(radioGroup->mRadioButtons[index]);
   } while (radio->Disabled() && radio != currentRadio);
@@ -9667,6 +9671,87 @@ FireOrClearDelayedEvents(nsTArray<nsCOMPtr<nsIDocument> >& aDocuments,
       }
     }
   }
+}
+
+void
+nsDocument::PreloadPictureOpened()
+{
+  mPreloadPictureDepth++;
+}
+
+void
+nsDocument::PreloadPictureClosed()
+{
+  mPreloadPictureDepth--;
+  if (mPreloadPictureDepth == 0) {
+    mPreloadPictureFoundSource.SetIsVoid(true);
+  } else {
+    MOZ_ASSERT(mPreloadPictureDepth >= 0);
+  }
+}
+
+void
+nsDocument::PreloadPictureImageSource(const nsAString& aSrcsetAttr,
+                                      const nsAString& aSizesAttr,
+                                      const nsAString& aTypeAttr,
+                                      const nsAString& aMediaAttr)
+{
+  // Nested pictures are not valid syntax, so while we'll eventually load them,
+  // it's not worth tracking sources mixed between nesting levels to preload
+  // them effectively.
+  if (mPreloadPictureDepth == 1 && mPreloadPictureFoundSource.IsVoid()) {
+    // <picture> selects the first matching source, so if this returns a URI we
+    // needn't consider new sources until a new <picture> is encountered.
+    bool found =
+      HTMLImageElement::SelectSourceForTagWithAttrs(this, true, NullString(),
+                                                    aSrcsetAttr, aSizesAttr,
+                                                    aTypeAttr, aMediaAttr,
+                                                    mPreloadPictureFoundSource);
+    if (found && mPreloadPictureFoundSource.IsVoid()) {
+      // Found an empty source, which counts
+      mPreloadPictureFoundSource.SetIsVoid(false);
+    }
+  }
+}
+
+already_AddRefed<nsIURI>
+nsDocument::ResolvePreloadImage(nsIURI *aBaseURI,
+                                const nsAString& aSrcAttr,
+                                const nsAString& aSrcsetAttr,
+                                const nsAString& aSizesAttr)
+{
+  nsString sourceURL;
+  if (mPreloadPictureDepth == 1 && !mPreloadPictureFoundSource.IsVoid()) {
+    // We're in a <picture> element and found a URI from a source previous to
+    // this image, use it.
+    sourceURL = mPreloadPictureFoundSource;
+  } else {
+    // Otherwise try to use this <img> as a source
+    HTMLImageElement::SelectSourceForTagWithAttrs(this, false, aSrcAttr,
+                                                  aSrcsetAttr, aSizesAttr,
+                                                  NullString(), NullString(),
+                                                  sourceURL);
+  }
+
+  // Empty sources are not loaded by <img> (i.e. not resolved to the baseURI)
+  if (sourceURL.IsEmpty()) {
+    return nullptr;
+  }
+
+  // Construct into URI using passed baseURI (the parser may know of base URI
+  // changes that have not reached us)
+  nsresult rv;
+  nsCOMPtr<nsIURI> uri;
+  rv = nsContentUtils::NewURIWithDocumentCharset(getter_AddRefs(uri), sourceURL,
+                                                 this, aBaseURI);
+  if (NS_FAILED(rv)) {
+    return nullptr;
+  }
+
+  // We don't clear mPreloadPictureFoundSource because subsequent <img> tags in
+  // this this <picture> share the same <sources> (though this is not valid per
+  // spec)
+  return uri.forget();
 }
 
 void

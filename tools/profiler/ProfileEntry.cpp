@@ -89,55 +89,6 @@ void* ProfileEntry::get_tagPtr() {
   return mTagPtr;
 }
 
-void ProfileEntry::log()
-{
-  // There is no compiler enforced mapping between tag chars
-  // and union variant fields, so the following was derived
-  // by looking through all the use points of TableTicker.cpp.
-  //   mTagMarker (ProfilerMarker*) m
-  //   mTagData   (const char*)  c,s
-  //   mTagPtr    (void*)        d,l,L,B (immediate backtrace), S(start-of-stack),
-  //                             J (JIT code addr)
-  //   mTagInt    (int)          n,f,y, T (thread id)
-  //   mTagChar   (char)         h
-  //   mTagFloat  (double)       r,t,p,R (resident memory), U (unshared memory)
-  switch (mTagName) {
-    case 'm':
-      LOGF("%c \"%s\"", mTagName, mTagMarker->GetMarkerName()); break;
-    case 'c': case 's':
-      LOGF("%c \"%s\"", mTagName, mTagData); break;
-    case 'd': case 'l': case 'L': case 'J': case 'B': case 'S':
-      LOGF("%c %p", mTagName, mTagPtr); break;
-    case 'n': case 'f': case 'y': case 'T':
-      LOGF("%c %d", mTagName, mTagInt); break;
-    case 'h':
-      LOGF("%c \'%c\'", mTagName, mTagChar); break;
-    case 'r': case 't': case 'p': case 'R': case 'U':
-      LOGF("%c %f", mTagName, mTagFloat); break;
-    default:
-      LOGF("'%c' unknown_tag", mTagName); break;
-  }
-}
-
-std::ostream& operator<<(std::ostream& stream, const ProfileEntry& entry)
-{
-  if (entry.mTagName == 'r' || entry.mTagName == 't') {
-    stream << entry.mTagName << "-" << std::fixed << entry.mTagFloat << "\n";
-  } else if (entry.mTagName == 'l' || entry.mTagName == 'L') {
-    // Bug 739800 - Force l-tag addresses to have a "0x" prefix on all platforms
-    // Additionally, stringstream seemed to be ignoring formatter flags.
-    char tagBuff[1024];
-    unsigned long long pc = (unsigned long long)(uintptr_t)entry.mTagPtr;
-    snprintf(tagBuff, 1024, "%c-%#llx\n", entry.mTagName, pc);
-    stream << tagBuff;
-  } else if (entry.mTagName == 'd') {
-    // TODO implement 'd' tag for text profile
-  } else {
-    stream << entry.mTagName << "-" << entry.mTagData << "\n";
-  }
-  return stream;
-}
-
 // END ProfileEntry
 ////////////////////////////////////////////////////////////////////////
 
@@ -152,6 +103,12 @@ ProfileBuffer::ProfileBuffer(int aEntrySize)
   , mEntrySize(aEntrySize)
   , mGeneration(0)
 {
+}
+
+ProfileBuffer::~ProfileBuffer()
+{
+  mGeneration = INT_MAX;
+  deleteExpiredStoredMarkers();
 }
 
 // Called from signal, call only reentrant functions
@@ -271,9 +228,13 @@ public:
 
     mWriter.BeginObject();
       mWriter.NameValue("keyedBy", keyedBy);
-      mWriter.NameValue("name", name);
+      if (name) {
+        mWriter.NameValue("name", name);
+      }
       if (location) {
         mWriter.NameValue("location", location);
+      }
+      if (lineno != UINT32_MAX) {
         mWriter.NameValue("line", lineno);
       }
     mWriter.EndObject();
@@ -445,13 +406,17 @@ void ProfileBuffer::StreamSamplesToJSObject(JSStreamWriter& b, int aThreadId, JS
                         // TODOshu: cannot stream tracked optimization info if
                         // the JS engine has already shut down when streaming.
                         if (rt) {
+                          JSScript *optsScript;
+                          jsbytecode *optsPC;
                           b.Name("opts");
                           b.BeginArray();
                             StreamOptimizationTypeInfoOp typeInfoOp(b);
                             JS::ForEachTrackedOptimizationTypeInfo(rt, pc, typeInfoOp);
                             StreamOptimizationAttemptsOp attemptOp(b);
-                            JS::ForEachTrackedOptimizationAttempt(rt, pc, attemptOp);
+                            JS::ForEachTrackedOptimizationAttempt(rt, pc, attemptOp,
+                                                                  &optsScript, &optsPC);
                           b.EndArray();
+                          b.NameValue("optsLine", JS_PCToLineNumber(optsScript, optsPC));
                         }
                       }
                     b.EndObject();
@@ -537,23 +502,6 @@ void ProfileBuffer::DuplicateLastSample(int aThreadId)
         break;
     }
   }
-}
-
-std::ostream&
-ProfileBuffer::StreamToOStream(std::ostream& stream, int aThreadId) const
-{
-  int readPos = mReadPos;
-  int currentThreadID = -1;
-  while (readPos != mWritePos) {
-    ProfileEntry entry = mEntries[readPos];
-    if (entry.mTagName == 'T') {
-      currentThreadID = entry.mTagInt;
-    } else if (currentThreadID == aThreadId) {
-      stream << mEntries[readPos];
-    }
-    readPos = (readPos + 1) % mEntrySize;
-  }
-  return stream;
 }
 
 // END ProfileBuffer
@@ -674,11 +622,6 @@ mozilla::Mutex* ThreadProfile::GetMutex()
 void ThreadProfile::DuplicateLastSample()
 {
   mBuffer->DuplicateLastSample(mThreadId);
-}
-
-std::ostream& operator<<(std::ostream& stream, const ThreadProfile& profile)
-{
-  return profile.mBuffer->StreamToOStream(stream, profile.mThreadId);
 }
 
 // END ThreadProfile

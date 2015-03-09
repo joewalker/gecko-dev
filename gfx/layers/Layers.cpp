@@ -762,6 +762,17 @@ Layer::GetLocalTransform()
   return transform;
 }
 
+bool
+Layer::HasTransformAnimation() const
+{
+  for (uint32_t i = 0; i < mAnimations.Length(); i++) {
+    if (mAnimations[i].property() == eCSSProperty_transform) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void
 Layer::ApplyPendingUpdatesForThisTransaction()
 {
@@ -925,7 +936,7 @@ ContainerLayer::ContainerLayer(LayerManager* aManager, void* aImplData)
     mSupportsComponentAlphaChildren(false),
     mMayHaveReadbackChild(false),
     mChildrenChanged(false),
-    mForceDispatchToContentRegion(false)
+    mEventRegionsOverride(EventRegionsOverride::NoOverride)
 {
   mContentFlags = 0; // Clear NO_TEXT, NO_TEXT_OVER_TRANSPARENT
 }
@@ -1082,7 +1093,7 @@ ContainerLayer::FillSpecificAttributes(SpecificLayerAttributes& aAttrs)
   aAttrs = ContainerLayerAttributes(mPreXScale, mPreYScale,
                                     mInheritedXScale, mInheritedYScale,
                                     mPresShellResolution, mScaleToResolution,
-                                    mForceDispatchToContentRegion,
+                                    mEventRegionsOverride,
                                     reinterpret_cast<uint64_t>(mHMDInfo.get()));
 }
 
@@ -1274,7 +1285,7 @@ ContainerLayer::DidInsertChild(Layer* aLayer)
 void
 RefLayer::FillSpecificAttributes(SpecificLayerAttributes& aAttrs)
 {
-  aAttrs = RefLayerAttributes(GetReferentId());
+  aAttrs = RefLayerAttributes(GetReferentId(), mEventRegionsOverride);
 }
 
 /** 
@@ -1750,8 +1761,11 @@ ContainerLayer::PrintInfo(std::stringstream& aStream, const char* aPrefix)
   if (mScaleToResolution) {
     aStream << nsPrintfCString(" [presShellResolution=%g]", mPresShellResolution).get();
   }
-  if (mForceDispatchToContentRegion) {
+  if (mEventRegionsOverride & EventRegionsOverride::ForceDispatchToContent) {
     aStream << " [force-dtc]";
+  }
+  if (mEventRegionsOverride & EventRegionsOverride::ForceEmptyHitRegion) {
+    aStream << " [force-ehr]";
   }
   if (mHMDInfo) {
     aStream << nsPrintfCString(" [hmd=%p]", mHMDInfo.get()).get();

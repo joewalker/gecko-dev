@@ -31,6 +31,7 @@
 #include "mozilla/dom/DOMStorageIPC.h"
 #include "mozilla/dom/ExternalHelperAppChild.h"
 #include "mozilla/dom/PCrashReporterChild.h"
+#include "mozilla/dom/ProcessGlobal.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/asmjscache/AsmJSCache.h"
 #include "mozilla/dom/asmjscache/PAsmJSCacheEntryChild.h"
@@ -92,6 +93,8 @@
 #include "nsISpellChecker.h"
 #include "nsClipboardProxy.h"
 #include "nsISystemMessageCache.h"
+#include "nsDirectoryServiceUtils.h"
+#include "nsDirectoryServiceDefs.h"
 
 #include "IHistory.h"
 #include "nsNetUtil.h"
@@ -172,7 +175,6 @@
 #include "mozilla/net/NeckoMessageUtils.h"
 #include "mozilla/RemoteSpellCheckEngineChild.h"
 
-using namespace base;
 using namespace mozilla;
 using namespace mozilla::docshell;
 using namespace mozilla::dom::bluetooth;
@@ -612,6 +614,14 @@ ContentChild::Init(MessageLoop* aIOLoop,
     // Make sure there's an nsAutoScriptBlocker on the stack when dispatching
     // urgent messages.
     GetIPCChannel()->BlockScripts();
+
+    // If communications with the parent have broken down, take the process
+    // down so it's not hanging around.
+    bool abortOnError = true;
+#ifdef MOZ_NUWA_PROCESS
+    abortOnError &= !IsNuwaProcess();
+#endif
+    GetIPCChannel()->SetAbortOnError(abortOnError);
 
 #ifdef MOZ_X11
     // Send the parent our X socket to act as a proxy reference for our X
@@ -1081,8 +1091,11 @@ ContentChild::CleanUpSandboxEnvironment()
 #endif
 
 #if defined(XP_MACOSX) && defined(MOZ_CONTENT_SANDBOX)
+
+#include <stdlib.h>
+
 static bool
-GetAppPaths(nsCString &aAppPath, nsCString &aAppBinaryPath)
+GetAppPaths(nsCString &aAppPath, nsCString &aAppBinaryPath, nsCString &aAppDir)
 {
   nsAutoCString appPath;
   nsAutoCString appBinaryPath(
@@ -1112,6 +1125,23 @@ GetAppPaths(nsCString &aAppPath, nsCString &aAppBinaryPath)
     return false;
   }
 
+  nsCOMPtr<nsIFile> appDir;
+  nsCOMPtr<nsIProperties> dirSvc =
+    do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID);
+  if (!dirSvc) {
+    return false;
+  }
+  rv = dirSvc->Get(NS_XPCOM_CURRENT_PROCESS_DIR,
+                   NS_GET_IID(nsIFile), getter_AddRefs(appDir));
+  if (NS_FAILED(rv)) {
+    return false;
+  }
+  bool exists;
+  rv = appDir->Exists(&exists);
+  if (NS_FAILED(rv) || !exists) {
+    return false;
+  }
+
   bool isLink;
   app->IsSymlink(&isLink);
   if (isLink) {
@@ -1125,6 +1155,12 @@ GetAppPaths(nsCString &aAppPath, nsCString &aAppBinaryPath)
   } else {
     appBinary->GetNativePath(aAppBinaryPath);
   }
+  appDir->IsSymlink(&isLink);
+  if (isLink) {
+    appDir->GetNativeTarget(aAppDir);
+  } else {
+    appDir->GetNativePath(aAppDir);
+  }
 
   return true;
 }
@@ -1132,8 +1168,8 @@ GetAppPaths(nsCString &aAppPath, nsCString &aAppBinaryPath)
 static void
 StartMacOSContentSandbox()
 {
-  nsAutoCString appPath, appBinaryPath;
-  if (!GetAppPaths(appPath, appBinaryPath)) {
+  nsAutoCString appPath, appBinaryPath, appDir;
+  if (!GetAppPaths(appPath, appBinaryPath, appDir)) {
     MOZ_CRASH("Error resolving child process path");
   }
 
@@ -1141,6 +1177,7 @@ StartMacOSContentSandbox()
   info.type = MacSandboxType_Content;
   info.appPath.Assign(appPath);
   info.appBinaryPath.Assign(appBinaryPath);
+  info.appDir.Assign(appDir);
 
   nsAutoCString err;
   if (!mozilla::StartMacSandbox(info, err)) {
@@ -1507,11 +1544,10 @@ ContentChild::DeallocPNeckoChild(PNeckoChild* necko)
 PPrintingChild*
 ContentChild::AllocPPrintingChild()
 {
-    // The ContentParent should never attempt to allocate the
-    // nsPrintingPromptServiceProxy, which implements PPrintingChild. Instead,
-    // the nsPrintingPromptServiceProxy service is requested and instantiated
-    // via XPCOM, and the constructor of nsPrintingPromptServiceProxy sets up
-    // the IPC connection.
+    // The ContentParent should never attempt to allocate the nsPrintingProxy,
+    // which implements PPrintingChild. Instead, the nsPrintingProxy service is
+    // requested and instantiated via XPCOM, and the constructor of
+    // nsPrintingProxy sets up the IPC connection.
     NS_NOTREACHED("Should never get here!");
     return nullptr;
 }
@@ -1915,12 +1951,20 @@ ContentChild::RecvNotifyVisited(const URIParams& aURI)
 }
 
 bool
+ContentChild::RecvLoadProcessScript(const nsString& aURL)
+{
+    ProcessGlobal* global = ProcessGlobal::Get();
+    global->LoadScript(aURL);
+    return true;
+}
+
+bool
 ContentChild::RecvAsyncMessage(const nsString& aMsg,
                                const ClonedMessageData& aData,
                                InfallibleTArray<CpowEntry>&& aCpows,
                                const IPC::Principal& aPrincipal)
 {
-    nsRefPtr<nsFrameMessageManager> cpm = nsFrameMessageManager::sChildProcessManager;
+    nsRefPtr<nsFrameMessageManager> cpm = nsFrameMessageManager::GetChildProcessManager();
     if (cpm) {
         StructuredCloneData cloneData = ipc::UnpackClonedMessageDataForChild(aData);
         CrossProcessCpowHolder cpows(this, aCpows);
@@ -2533,6 +2577,8 @@ ContentChild::RecvShutdown()
     if (os) {
         os->NotifyObservers(this, "content-child-shutdown", nullptr);
     }
+
+    GetIPCChannel()->SetAbortOnError(false);
 
     // Ignore errors here. If this fails, the parent will kill us after a
     // timeout.

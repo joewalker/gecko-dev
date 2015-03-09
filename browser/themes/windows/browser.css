@@ -2526,6 +2526,12 @@ notification[value="translation"] {
   -moz-image-region: auto;
 }
 
+#menu_readingList,
+#BMB_readingList {
+  list-style-image: url("chrome://browser/skin/readinglist/readinglist-icon.svg");
+  -moz-image-region: auto;
+}
+
 /* ::::: Keyboard UI Panel ::::: */
 
 .KUI-panel {
@@ -2826,6 +2832,17 @@ chatbox {
 
 #eme-notification-icon:hover:active {
   list-style-image: url("chrome://browser/skin/drm-icon.svg#chains-pressed");
+}
+
+#eme-notification-icon[firstplay=true] {
+  animation: emeTeachingMoment 0.2s linear 0s 5 normal;
+}
+
+@keyframes emeTeachingMoment {
+  0% {transform: translateX(0); }
+  25% {transform: translateX(3px) }
+  75% {transform: translateX(-3px) }
+  100% { transform: translateX(0); }
 }
 
 /* Customization mode */

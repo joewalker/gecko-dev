@@ -978,7 +978,10 @@ Sync11Service.prototype = {
 
       // Ask the identity manager to explicitly login now.
       let cb = Async.makeSpinningCallback();
-      this.identity.ensureLoggedIn().then(cb, cb);
+      this.identity.ensureLoggedIn().then(
+        () => cb(null),
+        err => cb(err || "ensureLoggedIn failed")
+      );
 
       // Just let any errors bubble up - they've more context than we do!
       cb.wait();
@@ -1589,7 +1592,9 @@ Sync11Service.prototype = {
 
       // Only wipe the engines provided.
       if (engines) {
-        engines.forEach(function(e) this.clientsEngine.sendCommand("wipeEngine", [e]), this);
+        engines.forEach(function(e) {
+            this.clientsEngine.sendCommand("wipeEngine", [e]);
+          }, this);
       }
       // Tell the remote machines to wipe themselves.
       else {

@@ -114,28 +114,6 @@ APZCTreeManager::MakeAPZCInstance(uint64_t aLayersId,
 }
 
 void
-APZCTreeManager::GetAllowedTouchBehavior(WidgetInputEvent* aEvent,
-                                         nsTArray<TouchBehaviorFlags>& aOutValues)
-{
-  WidgetTouchEvent *touchEvent = aEvent->AsTouchEvent();
-
-  aOutValues.Clear();
-
-  for (size_t i = 0; i < touchEvent->touches.Length(); i++) {
-    // If aEvent wasn't transformed previously we might need to
-    // add transforming of the spt here.
-    mozilla::ScreenIntPoint spt;
-    spt.x = touchEvent->touches[i]->mRefPoint.x;
-    spt.y = touchEvent->touches[i]->mRefPoint.y;
-
-    nsRefPtr<AsyncPanZoomController> apzc = GetTargetAPZC(spt, nullptr);
-    aOutValues.AppendElement(apzc
-      ? apzc->GetAllowedTouchBehavior(spt)
-      : AllowedTouchBehavior::UNKNOWN);
-  }
-}
-
-void
 APZCTreeManager::SetAllowedTouchBehavior(uint64_t aInputBlockId,
                                          const nsTArray<TouchBehaviorFlags> &aValues)
 {
@@ -320,18 +298,19 @@ APZCTreeManager::RecycleOrCreateNode(TreeBuildingState& aState,
   return node.forget();
 }
 
-static bool
-ShouldForceDispatchToContent(HitTestingTreeNode* aParent,
-                             const LayerMetricsWrapper& aLayer)
+static EventRegionsOverride
+GetEventRegionsOverride(HitTestingTreeNode* aParent,
+                       const LayerMetricsWrapper& aLayer)
 {
   // Make it so that if the flag is set on the layer tree, it automatically
   // propagates to all the nodes in the corresponding subtree rooted at that
   // layer in the hit-test tree. This saves having to walk up the tree every
   // we want to see if a hit-test node is affected by this flag.
-  if (aParent && aParent->GetForceDispatchToContent()) {
-    return true;
+  EventRegionsOverride result = aLayer.GetEventRegionsOverride();
+  if (aParent) {
+    result |= aParent->GetEventRegionsOverride();
   }
-  return aLayer.GetForceDispatchToContentRegion();
+  return result;
 }
 
 HitTestingTreeNode*
@@ -359,7 +338,7 @@ APZCTreeManager::PrepareNodeForLayer(const LayerMetricsWrapper& aLayer,
     AttachNodeToTree(node, aParent, aNextSibling);
     node->SetHitTestData(GetEventRegions(aLayer), aLayer.GetTransform(),
         aLayer.GetClipRect() ? Some(nsIntRegion(*aLayer.GetClipRect())) : Nothing(),
-        ShouldForceDispatchToContent(aParent, aLayer));
+        GetEventRegionsOverride(aParent, aLayer));
     return node;
   }
 
@@ -456,7 +435,7 @@ APZCTreeManager::PrepareNodeForLayer(const LayerMetricsWrapper& aLayer,
 
     nsIntRegion clipRegion = ComputeClipRegion(state->mController, aLayer);
     node->SetHitTestData(GetEventRegions(aLayer), aLayer.GetTransform(), Some(clipRegion),
-        ShouldForceDispatchToContent(aParent, aLayer));
+        GetEventRegionsOverride(aParent, aLayer));
     apzc->SetAncestorTransform(aAncestorTransform);
 
     PrintAPZCInfo(aLayer, apzc);
@@ -511,7 +490,7 @@ APZCTreeManager::PrepareNodeForLayer(const LayerMetricsWrapper& aLayer,
 
     nsIntRegion clipRegion = ComputeClipRegion(state->mController, aLayer);
     node->SetHitTestData(GetEventRegions(aLayer), aLayer.GetTransform(), Some(clipRegion),
-        ShouldForceDispatchToContent(aParent, aLayer));
+        GetEventRegionsOverride(aParent, aLayer));
   }
 
   return node;
@@ -875,6 +854,13 @@ APZCTreeManager::ProcessWheelEvent(WidgetWheelEvent& aEvent,
   return status;
 }
 
+bool
+APZCTreeManager::WillHandleWheelEvent(WidgetWheelEvent* aEvent)
+{
+  return EventStateManager::WheelEventIsScrollAction(aEvent) &&
+         aEvent->deltaMode == nsIDOMWheelEvent::DOM_DELTA_LINE;
+}
+
 nsEventStatus
 APZCTreeManager::ReceiveInputEvent(WidgetInputEvent& aEvent,
                                    ScrollableLayerGuid* aOutTargetGuid,
@@ -912,9 +898,7 @@ APZCTreeManager::ReceiveInputEvent(WidgetInputEvent& aEvent,
     }
     case eWheelEventClass: {
       WidgetWheelEvent& wheelEvent = *aEvent.AsWheelEvent();
-      if (wheelEvent.deltaMode != nsIDOMWheelEvent::DOM_DELTA_LINE ||
-          !EventStateManager::WheelEventIsScrollAction(&wheelEvent))
-      {
+      if (!WillHandleWheelEvent(&wheelEvent)) {
         // Don't send through APZ if we're not scrolling or if the delta mode
         // is not line-based.
         return ProcessEvent(aEvent, aOutTargetGuid, aOutInputBlockId);

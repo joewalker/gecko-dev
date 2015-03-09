@@ -97,10 +97,17 @@ public:
                                 const char* memberName);
   bool IsNotEnoughArgsError() const { return ErrorCode() == NS_ERROR_XPC_NOT_ENOUGH_ARGS; }
 
+  // Support for uncatchable exceptions.
+  void ThrowUncatchableException() {
+    Throw(NS_ERROR_UNCATCHABLE_EXCEPTION);
+  }
+  bool IsUncatchableException() const {
+    return ErrorCode() == NS_ERROR_UNCATCHABLE_EXCEPTION;
+  }
+
   // StealJSException steals the JS Exception from the object. This method must
   // be called only if IsJSException() returns true. This method also resets the
-  // ErrorCode() to NS_OK.  The value will be ensured to be sanitized wrt to the
-  // current compartment of cx if it happens to be a DOMException.
+  // ErrorCode() to NS_OK.
   void StealJSException(JSContext* cx, JS::MutableHandle<JS::Value> value);
 
   void MOZ_ALWAYS_INLINE MightThrowJSException()

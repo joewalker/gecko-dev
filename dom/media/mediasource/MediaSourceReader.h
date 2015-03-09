@@ -102,7 +102,7 @@ public:
   nsRefPtr<SeekPromise>
   Seek(int64_t aTime, int64_t aEndTime) MOZ_OVERRIDE;
 
-  void CancelSeek() MOZ_OVERRIDE;
+  nsresult ResetDecode() MOZ_OVERRIDE;
 
   // Acquires the decoder monitor, and is thus callable on any thread.
   nsresult GetBuffered(dom::TimeRanges* aBuffered) MOZ_OVERRIDE;
@@ -132,7 +132,7 @@ public:
 
   // Return true if the Ended method has been called
   bool IsEnded();
-  bool IsNearEnd(int64_t aTime /* microseconds */);
+  bool IsNearEnd(MediaData::Type aType, int64_t aTime /* microseconds */);
 
   // Set the duration of the attached mediasource element.
   void SetMediaSourceDuration(double aDuration /* seconds */);
@@ -160,7 +160,7 @@ private:
   // Search can be made using a fuzz factor. Should an approximated value be
   // found instead, aTarget will be updated to the actual target found.
   enum SwitchSourceResult {
-    SOURCE_ERROR = -1,
+    SOURCE_NONE = -1,
     SOURCE_EXISTING = 0,
     SOURCE_NEW = 1,
   };
@@ -206,8 +206,8 @@ private:
 
   // Return a decoder from the set available in aTrackDecoders that has data
   // available in the range requested by aTarget.
-  already_AddRefed<SourceBufferDecoder> SelectDecoder(int64_t aTarget,
-                                                      int64_t aTolerance,
+  already_AddRefed<SourceBufferDecoder> SelectDecoder(int64_t aTarget /* microseconds */,
+                                                      int64_t aTolerance /* microseconds */,
                                                       const nsTArray<nsRefPtr<SourceBufferDecoder>>& aTrackDecoders);
   bool HaveData(int64_t aTarget, MediaData::Type aType);
 

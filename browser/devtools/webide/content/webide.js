@@ -107,6 +107,8 @@ let UI = {
                                .QueryInterface(Ci.nsIDocShell)
                                .contentViewer;
     this.contentViewer.fullZoom = Services.prefs.getCharPref("devtools.webide.zoom");
+
+    gDevToolsBrowser.isWebIDEInitialized.resolve();
   },
 
   uninit: function() {
@@ -134,7 +136,7 @@ let UI = {
         AppManager.selectedProject.type != "mainProcess" &&
         AppManager.selectedProject.type != "runtimeApp" &&
         AppManager.selectedProject.type != "tab") {
-      AppManager.validateProject(AppManager.selectedProject);
+      AppManager.validateAndUpdateProject(AppManager.selectedProject);
     }
 
     // Hook to display promotional Developer Edition doorhanger. Only displayed once.
@@ -194,6 +196,9 @@ let UI = {
         break;
       case "runtime-apps-found":
         this.autoSelectProject();
+        break;
+      case "pre-package":
+        this.prePackageLog(details);
         break;
     };
     this._updatePromise = promise.resolve();
@@ -564,7 +569,7 @@ let UI = {
       menuindex: 1
     });
     this.projecteditor.on("onEditorSave", (editor, resource) => {
-      AppManager.validateProject(AppManager.selectedProject);
+      AppManager.validateAndUpdateProject(AppManager.selectedProject);
     });
     return this.projecteditor.loaded;
   },
@@ -663,9 +668,6 @@ let UI = {
         throw e;
       }
     }
-
-    // Validate project
-    yield AppManager.validateProject(project);
 
     // Select project
     AppManager.selectedProject = project;
@@ -768,9 +770,13 @@ let UI = {
   },
 
   selectDeckPanel: function(id) {
+    let deck = document.querySelector("#deck");
+    if (deck.selectedPanel && deck.selectedPanel.id === "deck-panel-" + id) {
+      // This panel is already displayed.
+      return;
+    }
     this.hidePanels();
     this.resetFocus();
-    let deck = document.querySelector("#deck");
     let panel = deck.querySelector("#deck-panel-" + id);
     let lazysrc = panel.getAttribute("lazysrc");
     if (lazysrc) {
@@ -921,8 +927,10 @@ let UI = {
           // We can't know for sure which one was used here, so reset the
           // |toolboxPromise| since someone must be destroying it to reach here,
           // and call our own close method.
-          this.toolboxPromise = null;
-          this._closeToolboxUI();
+          if (this.toolboxIframe && this.toolboxIframe.uid == json.uid) {
+            this.toolboxPromise = null;
+            this._closeToolboxUI();
+          }
           break;
       }
     } catch(e) { console.error(e); }
@@ -935,9 +943,9 @@ let UI = {
       this.toolboxPromise = null;
       return toolboxPromise.then(toolbox => {
         return toolbox.destroy();
-      }).catch(console.error)
+      }).then(null, console.error)
         .then(() => this._closeToolboxUI())
-        .catch(console.error);
+        .then(null, console.error);
     }
     return promise.resolve();
   },
@@ -960,9 +968,13 @@ let UI = {
     let iframe = document.createElement("iframe");
     iframe.id = "toolbox";
 
+    // Compute a uid on the iframe in order to identify toolbox iframe
+    // when receiving toolbox-close event
+    iframe.uid = new Date().getTime();
+
     document.querySelector("notificationbox").insertBefore(iframe, splitter.nextSibling);
     let host = devtools.Toolbox.HostType.CUSTOM;
-    let options = { customIframe: iframe, zoom: false };
+    let options = { customIframe: iframe, zoom: false, uid: iframe.uid };
     this.toolboxIframe = iframe;
 
     let height = Services.prefs.getIntPref("devtools.toolbox.footer.height");
@@ -1004,6 +1016,12 @@ let UI = {
     document.querySelector("#action-button-debug").removeAttribute("active");
     this.updateToolboxFullscreenState();
   },
+
+  prePackageLog: function (msg) {
+    if (msg == "start") {
+      UI.selectDeckPanel("logs");
+    }
+  }
 };
 
 let Cmds = {
@@ -1031,9 +1049,6 @@ let Cmds = {
 
       // Retrieve added project
       let project = AppProjects.get(ret.location);
-
-      // Validate project
-      yield AppManager.validateProject(project);
 
       // Select project
       AppManager.selectedProject = project;
@@ -1093,7 +1108,7 @@ let Cmds = {
           // The result of the validation process (storing names, icons, …) is not stored in
           // the IndexedDB database when App Manager v1 is used.
           // We need to run the validation again and update the name and icon of the app.
-          AppManager.validateProject(project).then(() => {
+          AppManager.validateAndUpdateProject(project).then(() => {
             panelItemNode.setAttribute("label", project.name);
             panelItemNode.setAttribute("image", project.icon);
           });
@@ -1203,7 +1218,13 @@ let Cmds = {
 
     for (let i = 0; i < tabs.length; i++) {
       let tab = tabs[i];
-      let url = new URL(tab.url);
+      let url;
+      try {
+        url = new URL(tab.url);
+      } catch (e) {
+        // Don't try to handle invalid URLs, especially from Valence.
+        continue;
+      }
       // Wanted to use nsIFaviconService here, but it only works for visited
       // tabs, so that's no help for any remote tabs.  Maybe some favicon wizard
       // knows how to get high-res favicons easily, or we could offer actor

@@ -107,13 +107,6 @@ public:
 
     bool      ProxyConnectFailed() { return mProxyConnectFailed; }
 
-    // setting mDontRouteViaWildCard to true means the transaction should only
-    // be dispatched on a specific ConnectionInfo Hash Key (as opposed to a
-    // generic wild card one). That means in the specific case of carrying this
-    // transaction on an HTTP/2 tunnel it will only be dispatched onto an
-    // existing tunnel instead of triggering creation of a new one.
-    void SetDontRouteViaWildCard(bool var) { mDontRouteViaWildCard = var; }
-    bool DontRouteViaWildCard() { return mDontRouteViaWildCard; }
     void EnableKeepAlive() { mCaps |= NS_HTTP_ALLOW_KEEPALIVE; }
     void MakeSticky() { mCaps |= NS_HTTP_STICKY_CONNECTION; }
 
@@ -121,7 +114,6 @@ public:
     void    SetPriority(int32_t priority) { mPriority = priority; }
     int32_t    Priority()                 { return mPriority; }
 
-    const TimingStruct& Timings() const { return mTimings; }
     enum Classifier Classification() { return mClassification; }
 
     void PrintDiagnostics(nsCString &log);
@@ -133,7 +125,7 @@ public:
 
     // overload of nsAHttpTransaction::LoadGroupConnectionInfo()
     nsILoadGroupConnectionInfo *LoadGroupConnectionInfo() MOZ_OVERRIDE { return mLoadGroupCI.get(); }
-    void SetLoadGroupConnectionInfo(nsILoadGroupConnectionInfo *aLoadGroupCI) { mLoadGroupCI = aLoadGroupCI; }
+    void SetLoadGroupConnectionInfo(nsILoadGroupConnectionInfo *aLoadGroupCI);
     void DispatchedAsBlocking();
     void RemoveDispatchedAsBlocking();
 
@@ -147,6 +139,24 @@ public:
         return r;
     }
     void SetPushedStream(Http2PushedStream *push) { mPushedStream = push; }
+
+    // Locked methods to get and set timing info
+    const TimingStruct Timings();
+    void SetDomainLookupStart(mozilla::TimeStamp timeStamp, bool onlyIfNull = false);
+    void SetDomainLookupEnd(mozilla::TimeStamp timeStamp, bool onlyIfNull = false);
+    void SetConnectStart(mozilla::TimeStamp timeStamp, bool onlyIfNull = false);
+    void SetConnectEnd(mozilla::TimeStamp timeStamp, bool onlyIfNull = false);
+    void SetRequestStart(mozilla::TimeStamp timeStamp, bool onlyIfNull = false);
+    void SetResponseStart(mozilla::TimeStamp timeStamp, bool onlyIfNull = false);
+    void SetResponseEnd(mozilla::TimeStamp timeStamp, bool onlyIfNull = false);
+
+    mozilla::TimeStamp GetDomainLookupStart();
+    mozilla::TimeStamp GetDomainLookupEnd();
+    mozilla::TimeStamp GetConnectStart();
+    mozilla::TimeStamp GetConnectEnd();
+    mozilla::TimeStamp GetRequestStart();
+    mozilla::TimeStamp GetResponseStart();
+    mozilla::TimeStamp GetResponseEnd();
 
 private:
     friend class DeleteHttpTransaction;
@@ -282,9 +292,10 @@ private:
     bool                            mPreserveStream;
     bool                            mDispatchedAsBlocking;
     bool                            mResponseTimeoutEnabled;
-    bool                            mDontRouteViaWildCard;
     bool                            mForceRestart;
     bool                            mReuseOnRestart;
+    bool                            mContentDecoding;
+    bool                            mContentDecodingCheck;
 
     // mClosed           := transaction has been explicitly closed
     // mTransactionDone  := transaction ran to completion or was interrupted
@@ -414,6 +425,21 @@ public:
     uint32_t ClassOfService() { return mClassOfService; }
 private:
     uint32_t mClassOfService;
+
+public:
+    // setting TunnelProvider to non-null means the transaction should only
+    // be dispatched on a specific ConnectionInfo Hash Key (as opposed to a
+    // generic wild card one). That means in the specific case of carrying this
+    // transaction on an HTTP/2 tunnel it will only be dispatched onto an
+    // existing tunnel instead of triggering creation of a new one.
+    // The tunnel provider is used for ASpdySession::MaybeReTunnel() checks.
+
+    void SetTunnelProvider(ASpdySession *provider) { mTunnelProvider = provider; }
+    ASpdySession *TunnelProvider() { return mTunnelProvider; }
+    nsIInterfaceRequestor *SecurityCallbacks() { return mCallbacks; }
+
+private:
+    nsRefPtr<ASpdySession> mTunnelProvider;
 };
 
 }} // namespace mozilla::net

@@ -538,7 +538,13 @@ public:
       nsStyleContext* oldStyleContext = mStyleContext;
       mStyleContext = aContext;
       aContext->AddRef();
+#ifdef DEBUG
+      aContext->FrameAddRef();
+#endif
       DidSetStyleContext(oldStyleContext);
+#ifdef DEBUG
+      oldStyleContext->FrameRelease();
+#endif
       oldStyleContext->Release();
     }
   }
@@ -552,9 +558,15 @@ public:
   void SetStyleContextWithoutNotification(nsStyleContext* aContext)
   {
     if (aContext != mStyleContext) {
+#ifdef DEBUG
+      mStyleContext->FrameRelease();
+#endif
       mStyleContext->Release();
       mStyleContext = aContext;
       aContext->AddRef();
+#ifdef DEBUG
+      aContext->FrameAddRef();
+#endif
     }
   }
 
@@ -2619,8 +2631,7 @@ NS_PTR_TO_INT32(frame->Properties().Get(nsIFrame::ParagraphDepthProperty()))
    * rect, with coordinates relative to this frame's origin. aRect must not be
    * null!
    */
-  bool GetClipPropClipRect(const nsStyleDisplay* aDisp, nsRect* aRect,
-                           const nsSize& aSize) const;
+  bool GetClipPropClipRect(nsRect* aRect, const nsSize& aSize) const;
 
   /**
    * Check if this frame is focusable and in the current tab order.

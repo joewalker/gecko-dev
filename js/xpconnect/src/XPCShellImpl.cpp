@@ -535,25 +535,6 @@ Options(JSContext *cx, unsigned argc, jsval *vp)
 }
 
 static bool
-Parent(JSContext *cx, unsigned argc, jsval *vp)
-{
-    CallArgs args = CallArgsFromVp(argc, vp);
-    if (args.length() != 1) {
-        JS_ReportError(cx, "Wrong number of arguments");
-        return false;
-    }
-
-    Value v = args[0];
-    if (v.isPrimitive()) {
-        JS_ReportError(cx, "Only objects have parents!");
-        return false;
-    }
-
-    args.rval().setObjectOrNull(JS_GetParent(&v.toObject()));
-    return true;
-}
-
-static bool
 Atob(JSContext *cx, unsigned argc, Value *vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
@@ -655,7 +636,6 @@ static const JSFunctionSpec glob_functions[] = {
     JS_FS("gczeal",          GCZeal,         1,0),
 #endif
     JS_FS("options",         Options,        0,0),
-    JS_FN("parent",          Parent,         1,0),
     JS_FS("sendCommand",     SendCommand,    1,0),
     JS_FS("atob",            Atob,           1,0),
     JS_FS("btoa",            Btoa,           1,0),
@@ -665,7 +645,8 @@ static const JSFunctionSpec glob_functions[] = {
 };
 
 static bool
-env_setProperty(JSContext *cx, HandleObject obj, HandleId id, bool strict, MutableHandleValue vp)
+env_setProperty(JSContext *cx, HandleObject obj, HandleId id, MutableHandleValue vp,
+                ObjectOpResult &result)
 {
 /* XXX porting may be easy, but these don't seem to supply setenv by default */
 #if !defined SOLARIS
@@ -715,7 +696,7 @@ env_setProperty(JSContext *cx, HandleObject obj, HandleId id, bool strict, Mutab
     }
     vp.set(STRING_TO_JSVAL(valstr));
 #endif /* !defined SOLARIS */
-    return true;
+    return result.succeed();
 }
 
 static bool

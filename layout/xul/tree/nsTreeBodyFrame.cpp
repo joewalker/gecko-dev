@@ -194,8 +194,7 @@ nsTreeBodyFrame::GetMinSize(nsBoxLayoutState& aBoxLayoutState)
   if (MOZ_UNLIKELY(!baseElement)) {
     desiredRows = 0;
   }
-  else if (baseElement->Tag() == nsGkAtoms::select &&
-           baseElement->IsHTML()) {
+  else if (baseElement->IsHTMLElement(nsGkAtoms::select)) {
     min.width = CalcMaxRowWidth();
     nsAutoString size;
     baseElement->GetAttr(kNameSpaceID_None, nsGkAtoms::size, size);
@@ -1786,8 +1785,7 @@ nsTreeBodyFrame::MarkDirtyIfSelect()
 {
   nsIContent* baseElement = GetBaseElement();
 
-  if (baseElement && baseElement->Tag() == nsGkAtoms::select &&
-      baseElement->IsHTML()) {
+  if (baseElement && baseElement->IsHTMLElement(nsGkAtoms::select)) {
     // If we are an intrinsically sized select widget, we may need to
     // resize, if the widest item was removed or a new item was added.
     // XXX optimize this more
@@ -2773,12 +2771,40 @@ nsTreeBodyFrame::HandleEvent(nsPresContext* aPresContext,
   return NS_OK;
 }
 
-static void
-PaintTreeBody(nsIFrame* aFrame, nsRenderingContext* aCtx,
-              const nsRect& aDirtyRect, nsPoint aPt)
-{
-  static_cast<nsTreeBodyFrame*>(aFrame)->PaintTreeBody(*aCtx, aDirtyRect, aPt);
-}
+class nsDisplayTreeBody MOZ_FINAL : public nsDisplayItem {
+public:
+  nsDisplayTreeBody(nsDisplayListBuilder* aBuilder, nsFrame* aFrame) :
+    nsDisplayItem(aBuilder, aFrame),
+    mDisableSubpixelAA(false) {
+    MOZ_COUNT_CTOR(nsDisplayTreeBody);
+  }
+#ifdef NS_BUILD_REFCNT_LOGGING
+  virtual ~nsDisplayTreeBody() {
+    MOZ_COUNT_DTOR(nsDisplayTreeBody);
+  }
+#endif
+
+  virtual void Paint(nsDisplayListBuilder* aBuilder,
+                     nsRenderingContext* aCtx) MOZ_OVERRIDE
+  {
+    gfxContext* ctx = aCtx->ThebesContext();
+    gfxContextAutoDisableSubpixelAntialiasing disable(ctx, mDisableSubpixelAA);
+    static_cast<nsTreeBodyFrame*>(mFrame)->
+      PaintTreeBody(*aCtx, mVisibleRect, ToReferenceFrame());
+  }
+  NS_DISPLAY_DECL_NAME("XULTreeBody", TYPE_XUL_TREE_BODY)
+
+  virtual nsRect GetComponentAlphaBounds(nsDisplayListBuilder* aBuilder) MOZ_OVERRIDE
+  {
+    bool snap;
+    return GetBounds(aBuilder, &snap);
+  }
+  virtual void DisableComponentAlpha() MOZ_OVERRIDE {
+    mDisableSubpixelAA = true;
+  }
+
+  bool mDisableSubpixelAA;
+};
 
 // Painting routines
 void
@@ -2799,8 +2825,7 @@ nsTreeBodyFrame::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
     return;
 
   aLists.Content()->AppendNewToTop(new (aBuilder)
-    nsDisplayGeneric(aBuilder, this, ::PaintTreeBody, "XULTreeBody",
-                     nsDisplayItem::TYPE_XUL_TREE_BODY));
+    nsDisplayTreeBody(aBuilder, this));
 }
 
 void
@@ -4292,7 +4317,7 @@ nsTreeBodyFrame::GetBaseElement()
 
       if (ni->Equals(nsGkAtoms::tree, kNameSpaceID_XUL) ||
           (ni->Equals(nsGkAtoms::select) &&
-           content->IsHTML()))
+           content->IsHTMLElement()))
         return content;
     }
 

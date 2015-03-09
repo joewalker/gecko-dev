@@ -50,6 +50,7 @@ static const char kPrefIPv4OnlyDomains[]     = "network.dns.ipv4OnlyDomains";
 static const char kPrefDisableIPv6[]         = "network.dns.disableIPv6";
 static const char kPrefDisablePrefetch[]     = "network.dns.disablePrefetch";
 static const char kPrefDnsLocalDomains[]     = "network.dns.localDomains";
+static const char kPrefDnsOfflineLocalhost[] = "network.dns.offline-localhost";
 static const char kPrefDnsNotifyResolution[] = "network.dns.notifyResolution";
 
 //-----------------------------------------------------------------------------
@@ -249,11 +250,13 @@ nsDNSRecord::HasMore(bool *result)
     }
 
     NetAddrElement *iterCopy = mIter;
+    int iterGenCntCopy = mIterGenCnt;
 
     NetAddr addr;
     *result = NS_SUCCEEDED(GetNextAddr(0, &addr));
 
     mIter = iterCopy;
+    mIterGenCnt = iterGenCntCopy;
     mDone = false;
 
     return NS_OK;
@@ -303,12 +306,14 @@ public:
                       const nsACString &host,
                       nsIDNSListener   *listener,
                       uint16_t          flags,
-                      uint16_t          af)
+                      uint16_t          af,
+                      const nsACString &netInterface)
         : mResolver(res)
         , mHost(host)
         , mListener(listener)
         , mFlags(flags)
-        , mAF(af) {}
+        , mAF(af)
+        , mNetworkInterface(netInterface) {}
 
     void OnLookupComplete(nsHostResolver *, nsHostRecord *, nsresult) MOZ_OVERRIDE;
     // Returns TRUE if the DNS listener arg is the same as the member listener
@@ -323,6 +328,7 @@ public:
     nsCOMPtr<nsIDNSListener> mListener;
     uint16_t                 mFlags;
     uint16_t                 mAF;
+    nsCString                mNetworkInterface;
 };
 
 void
@@ -382,7 +388,8 @@ NS_IMETHODIMP
 nsDNSAsyncRequest::Cancel(nsresult reason)
 {
     NS_ENSURE_ARG(NS_FAILED(reason));
-    mResolver->DetachCallback(mHost.get(), mFlags, mAF, this, reason);
+    mResolver->DetachCallback(mHost.get(), mFlags, mAF, mNetworkInterface.get(),
+                              this, reason);
     return NS_OK;
 }
 
@@ -529,12 +536,12 @@ nsDNSService::Init()
     if (mResolver)
         return NS_OK;
     NS_ENSURE_TRUE(!mResolver, NS_ERROR_ALREADY_INITIALIZED);
-
     // prefs
     uint32_t maxCacheEntries  = 400;
     uint32_t defaultCacheLifetime = 120; // seconds
     uint32_t defaultGracePeriod = 60; // seconds
     bool     disableIPv6      = false;
+    bool     offlineLocalhost = true;
     bool     disablePrefetch  = false;
     int      proxyType        = nsIProtocolProxyService::PROXYCONFIG_DIRECT;
     bool     notifyResolution = false;
@@ -557,6 +564,7 @@ nsDNSService::Init()
         prefs->GetBoolPref(kPrefDisableIPv6, &disableIPv6);
         prefs->GetCharPref(kPrefIPv4OnlyDomains, getter_Copies(ipv4OnlyDomains));
         prefs->GetCharPref(kPrefDnsLocalDomains, getter_Copies(localDomains));
+        prefs->GetBoolPref(kPrefDnsOfflineLocalhost, &offlineLocalhost);
         prefs->GetBoolPref(kPrefDisablePrefetch, &disablePrefetch);
 
         // If a manual proxy is in use, disable prefetch implicitly
@@ -575,6 +583,7 @@ nsDNSService::Init()
             prefs->AddObserver(kPrefIPv4OnlyDomains, this, false);
             prefs->AddObserver(kPrefDnsLocalDomains, this, false);
             prefs->AddObserver(kPrefDisableIPv6, this, false);
+            prefs->AddObserver(kPrefDnsOfflineLocalhost, this, false);
             prefs->AddObserver(kPrefDisablePrefetch, this, false);
             prefs->AddObserver(kPrefDnsNotifyResolution, this, false);
 
@@ -615,6 +624,7 @@ nsDNSService::Init()
         mResolver = res;
         mIDN = idn;
         mIPv4OnlyDomains = ipv4OnlyDomains; // exchanges buffer ownership
+        mOfflineLocalhost = offlineLocalhost;
         mDisableIPv6 = disableIPv6;
 
         // Disable prefetching either by explicit preference or if a manual proxy is configured 
@@ -710,6 +720,18 @@ nsDNSService::AsyncResolve(const nsACString  &aHostname,
                            nsIEventTarget    *target_,
                            nsICancelable    **result)
 {
+    return AsyncResolveExtended(aHostname, flags, EmptyCString(), listener, target_,
+                                result);
+}
+
+NS_IMETHODIMP
+nsDNSService::AsyncResolveExtended(const nsACString  &aHostname,
+                                   uint32_t           flags,
+                                   const nsACString  &aNetworkInterface,
+                                   nsIDNSListener    *listener,
+                                   nsIEventTarget    *target_,
+                                   nsICancelable    **result)
+{
     // grab reference to global host resolver and IDN service.  beware
     // simultaneous shutdown!!
     nsRefPtr<nsHostResolver> res;
@@ -735,12 +757,14 @@ nsDNSService::AsyncResolve(const nsACString  &aHostname,
     if (!res)
         return NS_ERROR_OFFLINE;
 
-    if (mOffline)
-        flags |= RESOLVE_OFFLINE;
-
     nsCString hostname;
     if (!PreprocessHostname(localDomain, aHostname, idn, hostname))
         return NS_ERROR_FAILURE;
+
+    if (mOffline &&
+        (!mOfflineLocalhost || !hostname.LowerCaseEqualsASCII("localhost"))) {
+        flags |= RESOLVE_OFFLINE;
+    }
 
     // make sure JS callers get notification on the main thread
     nsCOMPtr<nsIXPConnectWrappedJS> wrappedListener = do_QueryInterface(listener);
@@ -751,13 +775,14 @@ nsDNSService::AsyncResolve(const nsACString  &aHostname,
     }
 
     if (target) {
-      listener = new DNSListenerProxy(listener, target);
+        listener = new DNSListenerProxy(listener, target);
     }
 
     uint16_t af = GetAFForLookup(hostname, flags);
 
     nsDNSAsyncRequest *req =
-            new nsDNSAsyncRequest(res, hostname, listener, flags, af);
+        new nsDNSAsyncRequest(res, hostname, listener, flags, af,
+                              aNetworkInterface);
     if (!req)
         return NS_ERROR_OUT_OF_MEMORY;
     NS_ADDREF(*result = req);
@@ -767,7 +792,9 @@ nsDNSService::AsyncResolve(const nsACString  &aHostname,
 
     // addref for resolver; will be released when OnLookupComplete is called.
     NS_ADDREF(req);
-    nsresult rv = res->ResolveHost(req->mHost.get(), flags, af, req);
+    nsresult rv = res->ResolveHost(req->mHost.get(), flags, af,
+                                   req->mNetworkInterface.get(),
+                                   req);
     if (NS_FAILED(rv)) {
         NS_RELEASE(req);
         NS_RELEASE(*result);
@@ -780,6 +807,17 @@ nsDNSService::CancelAsyncResolve(const nsACString  &aHostname,
                                  uint32_t           aFlags,
                                  nsIDNSListener    *aListener,
                                  nsresult           aReason)
+{
+    return CancelAsyncResolveExtended(aHostname, aFlags, EmptyCString(), aListener,
+                                      aReason);
+}
+
+NS_IMETHODIMP
+nsDNSService::CancelAsyncResolveExtended(const nsACString  &aHostname,
+                                         uint32_t           aFlags,
+                                         const nsACString  &aNetworkInterface,
+                                         nsIDNSListener    *aListener,
+                                         nsresult           aReason)
 {
     // grab reference to global host resolver and IDN service.  beware
     // simultaneous shutdown!!
@@ -805,7 +843,9 @@ nsDNSService::CancelAsyncResolve(const nsACString  &aHostname,
 
     uint16_t af = GetAFForLookup(hostname, aFlags);
 
-    res->CancelAsyncRequest(hostname.get(), aFlags, af, aListener, aReason);
+    res->CancelAsyncRequest(hostname.get(), aFlags, af,
+                            nsPromiseFlatCString(aNetworkInterface).get(), aListener,
+                            aReason);
     return NS_OK;
 }
 
@@ -833,12 +873,14 @@ nsDNSService::Resolve(const nsACString &aHostname,
 
     NS_ENSURE_TRUE(res, NS_ERROR_OFFLINE);
 
-    if (mOffline)
-        flags |= RESOLVE_OFFLINE;
-
     nsCString hostname;
     if (!PreprocessHostname(localDomain, aHostname, idn, hostname))
         return NS_ERROR_FAILURE;
+
+    if (mOffline &&
+        (!mOfflineLocalhost || !hostname.LowerCaseEqualsASCII("localhost"))) {
+        flags |= RESOLVE_OFFLINE;
+    }
 
     //
     // sync resolve: since the host resolver only works asynchronously, we need
@@ -857,7 +899,7 @@ nsDNSService::Resolve(const nsACString &aHostname,
 
     uint16_t af = GetAFForLookup(hostname, flags);
 
-    nsresult rv = res->ResolveHost(hostname.get(), flags, af, &syncReq);
+    nsresult rv = res->ResolveHost(hostname.get(), flags, af, "", &syncReq);
     if (NS_SUCCEEDED(rv)) {
         // wait for result
         while (!syncReq.mDone)

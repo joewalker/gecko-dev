@@ -7,6 +7,7 @@
 #include "jit/Ion.h"
 
 #include "mozilla/MemoryReporting.h"
+#include "mozilla/SizePrintfMacros.h"
 #include "mozilla/ThreadLocal.h"
 
 #include "jscompartment.h"
@@ -14,11 +15,13 @@
 
 #include "gc/Marking.h"
 #include "jit/AliasAnalysis.h"
+#include "jit/AlignmentMaskAnalysis.h"
 #include "jit/BacktrackingAllocator.h"
 #include "jit/BaselineFrame.h"
 #include "jit/BaselineInspector.h"
 #include "jit/BaselineJIT.h"
 #include "jit/CodeGenerator.h"
+#include "jit/EagerSimdUnbox.h"
 #include "jit/EdgeCaseAnalysis.h"
 #include "jit/EffectiveAddressAnalysis.h"
 #include "jit/IonAnalysis.h"
@@ -43,7 +46,6 @@
 #include "vm/TraceLogging.h"
 
 #include "jscompartmentinlines.h"
-#include "jsgcinlines.h"
 #include "jsobjinlines.h"
 
 using namespace js;
@@ -486,6 +488,7 @@ jit::LazyLinkTopActivation(JSContext *cx)
 
     return script->baselineOrIonRawPointer();
 }
+
 /* static */ void
 JitRuntime::Mark(JSTracer *trc)
 {
@@ -495,6 +498,23 @@ JitRuntime::Mark(JSTracer *trc)
         JitCode *code = i.get<JitCode>();
         MarkJitCodeRoot(trc, &code, "wrapper");
     }
+}
+
+/* static */ void
+JitRuntime::MarkJitcodeGlobalTable(JSTracer *trc)
+{
+    if (trc->runtime()->hasJitRuntime() &&
+        trc->runtime()->jitRuntime()->hasJitcodeGlobalTable())
+    {
+        trc->runtime()->jitRuntime()->getJitcodeGlobalTable()->mark(trc);
+    }
+}
+
+/* static */ void
+JitRuntime::SweepJitcodeGlobalTable(JSRuntime *rt)
+{
+    if (rt->hasJitRuntime() && rt->jitRuntime()->hasJitcodeGlobalTable())
+        rt->jitRuntime()->getJitcodeGlobalTable()->sweep(rt);
 }
 
 void
@@ -533,6 +553,12 @@ JitCompartment::sweep(FreeOp *fop, JSCompartment *compartment)
 
     if (regExpTestStub_ && !IsJitCodeMarked(&regExpTestStub_))
         regExpTestStub_ = nullptr;
+
+    for (size_t i = 0; i <= SimdTypeDescr::LAST_TYPE; i++) {
+        ReadBarrieredObject &obj = simdTemplateObjects_[i];
+        if (obj && IsObjectAboutToBeFinalized(obj.unsafeGet()))
+            obj.set(nullptr);
+    }
 }
 
 void
@@ -574,7 +600,7 @@ JitCode *
 JitCode::New(JSContext *cx, uint8_t *code, uint32_t bufferSize, uint32_t headerSize,
              ExecutablePool *pool, CodeKind kind)
 {
-    JitCode *codeObj = js::NewJitCode<allowGC>(cx);
+    JitCode *codeObj = Allocate<JitCode, allowGC>(cx);
     if (!codeObj) {
         pool->release(headerSize + bufferSize, kind);
         return nullptr;
@@ -649,13 +675,15 @@ JitCode::fixupNurseryObjects(JSContext *cx, const ObjectVector &nurseryObjects)
 void
 JitCode::finalize(FreeOp *fop)
 {
+    // If this jitcode had a bytecode map, it must have already been removed.
+#ifdef DEBUG
     JSRuntime *rt = fop->runtime();
-
-    // If this jitcode has a bytecode map, de-register it.
     if (hasBytecodeMap_) {
+        JitcodeGlobalEntry result;
         MOZ_ASSERT(rt->jitRuntime()->hasJitcodeGlobalTable());
-        rt->jitRuntime()->getJitcodeGlobalTable()->removeEntry(raw(), rt);
+        MOZ_ASSERT(!rt->jitRuntime()->getJitcodeGlobalTable()->lookup(raw(), &result, rt));
     }
+#endif
 
     // Buffer can be freed at any time hereafter. Catch use-after-free bugs.
     // Don't do this if the Ion code is protected, as the signal handler will
@@ -744,7 +772,7 @@ IonScript::New(JSContext *cx, RecompileInfo recompileInfo,
     if (snapshotsListSize >= MAX_BUFFER_SIZE ||
         (bailoutEntries >= MAX_BUFFER_SIZE / sizeof(uint32_t)))
     {
-        js_ReportOutOfMemory(cx);
+        ReportOutOfMemory(cx);
         return nullptr;
     }
 
@@ -1235,6 +1263,29 @@ OptimizeMIR(MIRGenerator *mir)
             return false;
     }
 
+    if (mir->optimizationInfo().eagerSimdUnboxEnabled()) {
+        AutoTraceLog log(logger, TraceLogger_EagerSimdUnbox);
+        if (!EagerSimdUnbox(mir, graph))
+            return false;
+        IonSpewPass("Eager Simd Unbox");
+        AssertGraphCoherency(graph);
+
+        if (mir->shouldCancel("Eager Simd Unbox"))
+            return false;
+    }
+
+    if (mir->optimizationInfo().amaEnabled()) {
+        AutoTraceLog log(logger, TraceLogger_AlignmentMaskAnalysis);
+        AlignmentMaskAnalysis ama(graph);
+        if (!ama.analyze())
+            return false;
+        IonSpewPass("Alignment Mask Analysis");
+        AssertExtendedGraphCoherency(graph);
+
+        if (mir->shouldCancel("Alignment Mask Analysis"))
+            return false;
+    }
+
     ValueNumberer gvn(mir, graph);
     if (!gvn.init())
         return false;
@@ -1681,8 +1732,12 @@ MarkOffThreadNurseryObjects::mark(JSTracer *trc)
 {
     JSRuntime *rt = trc->runtime();
 
-    MOZ_ASSERT(rt->jitRuntime()->hasIonNurseryObjects());
-    rt->jitRuntime()->setHasIonNurseryObjects(false);
+    if (trc->runtime()->isHeapMinorCollecting()) {
+        // Only reset hasIonNurseryObjects if we're doing an actual minor GC,
+        // not if we're, for instance, verifying post barriers.
+        MOZ_ASSERT(rt->jitRuntime()->hasIonNurseryObjects());
+        rt->jitRuntime()->setHasIonNurseryObjects(false);
+    }
 
     AutoLockHelperThreadState lock;
     if (!HelperThreadState().threads)
@@ -1738,7 +1793,7 @@ TrackAllProperties(JSContext *cx, JSObject *obj)
 {
     MOZ_ASSERT(obj->isSingleton());
 
-    for (Shape::Range<NoGC> range(obj->lastProperty()); !range.empty(); range.popFront())
+    for (Shape::Range<NoGC> range(obj->as<NativeObject>().lastProperty()); !range.empty(); range.popFront())
         EnsureTrackPropertyTypes(cx, obj, range.front().propid());
 }
 
@@ -1885,14 +1940,20 @@ IonCompile(JSContext *cx, JSScript *script,
 
     if (!succeeded) {
         AbortReason reason = builder->abortReason();
-        if (reason == AbortReason_NewScriptProperties) {
-            // Some type was accessed which needs the new script properties
-            // analysis to be performed. Do this now and we will try to build
-            // again shortly.
-            const MIRGenerator::ObjectGroupVector &groups = builder->abortedNewScriptPropertiesGroups();
+        if (reason == AbortReason_PreliminaryObjects) {
+            // Some group was accessed which has associated preliminary objects
+            // to analyze. Do this now and we will try to build again shortly.
+            const MIRGenerator::ObjectGroupVector &groups = builder->abortedPreliminaryGroups();
             for (size_t i = 0; i < groups.length(); i++) {
-                if (!groups[i]->newScript()->maybeAnalyze(cx, groups[i], nullptr, /* force = */ true))
-                    return AbortReason_Alloc;
+                ObjectGroup *group = groups[i];
+                if (group->newScript()) {
+                    if (!group->newScript()->maybeAnalyze(cx, group, nullptr, /* force = */ true))
+                        return AbortReason_Alloc;
+                } else if (group->maybePreliminaryObjects()) {
+                    group->maybePreliminaryObjects()->maybeAnalyze(cx, group, /* force = */ true);
+                } else {
+                    MOZ_CRASH("Unexpected aborted preliminary group");
+                }
             }
         }
 
@@ -1912,7 +1973,7 @@ IonCompile(JSContext *cx, JSScript *script,
         if (!recompile)
             builderScript->setIonScript(cx, ION_COMPILING_SCRIPT);
 
-        JitSpew(JitSpew_IonLogs, "Can't log script %s:%d. (Compiled on background thread.)",
+        JitSpew(JitSpew_IonLogs, "Can't log script %s:%" PRIuSIZE ". (Compiled on background thread.)",
                 builderScript->filename(), builderScript->lineno());
 
         JSRuntime *rt = cx->runtime();
@@ -2054,13 +2115,13 @@ Compile(JSContext *cx, HandleScript script, BaselineFrame *osrFrame, jsbytecode 
     }
 
     if (!CheckScript(cx, script, bool(osrPc))) {
-        JitSpew(JitSpew_IonAbort, "Aborted compilation of %s:%d", script->filename(), script->lineno());
+        JitSpew(JitSpew_IonAbort, "Aborted compilation of %s:%" PRIuSIZE, script->filename(), script->lineno());
         return Method_CantCompile;
     }
 
     MethodStatus status = CheckScriptSize(cx, script);
     if (status != Method_Compiled) {
-        JitSpew(JitSpew_IonAbort, "Aborted compilation of %s:%d", script->filename(), script->lineno());
+        JitSpew(JitSpew_IonAbort, "Aborted compilation of %s:%" PRIuSIZE, script->filename(), script->lineno());
         return status;
     }
 
@@ -2098,7 +2159,7 @@ Compile(JSContext *cx, HandleScript script, BaselineFrame *osrFrame, jsbytecode 
         return Method_CantCompile;
 
     if (reason == AbortReason_Alloc) {
-        js_ReportOutOfMemory(cx);
+        ReportOutOfMemory(cx);
         return Method_Error;
     }
 
@@ -2453,6 +2514,11 @@ InvalidateActivation(FreeOp *fop, const JitActivationIterator &activations, bool
 {
     JitSpew(JitSpew_IonInvalidate, "BEGIN invalidating activation");
 
+#ifdef CHECK_OSIPOINT_REGISTERS
+    if (js_JitOptions.checkOsiPointRegisters)
+        activations->asJit()->setCheckRegs(false);
+#endif
+
     size_t frameno = 1;
 
     for (JitFrameIterator it(activations); !it.done(); ++it, ++frameno) {
@@ -2475,7 +2541,7 @@ InvalidateActivation(FreeOp *fop, const JitActivationIterator &activations, bool
                 type = "Baseline";
             else if (it.isBailoutJS())
                 type = "Bailing";
-            JitSpew(JitSpew_IonInvalidate, "#%d %s JS frame @ %p, %s:%d (fun: %p, script: %p, pc %p)",
+            JitSpew(JitSpew_IonInvalidate, "#%d %s JS frame @ %p, %s:%" PRIuSIZE " (fun: %p, script: %p, pc %p)",
                     frameno, type, it.fp(), it.script()->filename(), it.script()->lineno(),
                     it.maybeCallee(), (JSScript *)it.script(), it.returnAddressToFp());
             break;
@@ -2651,7 +2717,7 @@ jit::Invalidate(TypeZone &types, FreeOp *fop,
         if (!co->ion())
             continue;
 
-        JitSpew(JitSpew_IonInvalidate, " Invalidate %s:%u, IonScript %p",
+        JitSpew(JitSpew_IonInvalidate, " Invalidate %s:%" PRIuSIZE ", IonScript %p",
                 co->script()->filename(), co->script()->lineno(), co->ion());
 
         // Keep the ion script alive during the invalidation and flag this
@@ -2740,7 +2806,7 @@ jit::Invalidate(JSContext *cx, JSScript *script, bool resetUses, bool cancelOffT
             return false;
 
         // Construct the descriptive string.
-        JS_snprintf(buf, len, "Invalidate %s:%u", filename, (unsigned int)script->lineno());
+        JS_snprintf(buf, len, "Invalidate %s:%" PRIuSIZE, filename, script->lineno());
         cx->runtime()->spsProfiler.markEvent(buf);
         js_free(buf);
     }
@@ -2784,7 +2850,7 @@ jit::FinishInvalidation(FreeOp *fop, JSScript *script)
 void
 jit::ForbidCompilation(JSContext *cx, JSScript *script)
 {
-    JitSpew(JitSpew_IonAbort, "Disabling Ion compilation of script %s:%d",
+    JitSpew(JitSpew_IonAbort, "Disabling Ion compilation of script %s:%" PRIuSIZE,
             script->filename(), script->lineno());
 
     CancelOffThreadIonCompile(cx->compartment(), script);

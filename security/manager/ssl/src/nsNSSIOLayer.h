@@ -44,8 +44,6 @@ public:
   bool IsHandshakePending() const { return mHandshakePending; }
   void SetHandshakeNotPending() { mHandshakePending = false; }
 
-  void GetPreviousCert(nsIX509Cert** _result);
-
   void SetTLSVersionRange(SSLVersionRange range) { mTLSVersionRange = range; }
   SSLVersionRange GetTLSVersionRange() const { return mTLSVersionRange; };
 
@@ -165,6 +163,12 @@ private:
   nsCOMPtr<nsIX509Cert> mClientCert;
 };
 
+enum StrongCipherStatus {
+  StrongCipherStatusUnknown,
+  StrongCiphersWorked,
+  StrongCiphersFailed
+};
+
 class nsSSLIOLayerHelpers
 {
 public:
@@ -194,6 +198,7 @@ private:
     uint16_t tolerant;
     uint16_t intolerant;
     PRErrorCode intoleranceReason;
+    StrongCipherStatus strongCipherStatus;
 
     void AssertInvariant() const
     {
@@ -212,11 +217,14 @@ public:
   bool rememberIntolerantAtVersion(const nsACString& hostname, int16_t port,
                                    uint16_t intolerant, uint16_t minVersion,
                                    PRErrorCode intoleranceReason);
+  bool rememberStrongCiphersFailed(const nsACString& hostName, int16_t port,
+                                   PRErrorCode intoleranceReason);
   // returns the known tolerant version
   // or 0 if there is no known tolerant version
   uint16_t forgetIntolerance(const nsACString& hostname, int16_t port);
   void adjustForTLSIntolerance(const nsACString& hostname, int16_t port,
-                               /*in/out*/ SSLVersionRange& range);
+                               /*in/out*/ SSLVersionRange& range,
+                               /*out*/ StrongCipherStatus& strongCipherStatus);
   PRErrorCode getIntoleranceReason(const nsACString& hostname, int16_t port);
 
   void clearStoredData();
@@ -229,6 +237,7 @@ public:
   // to TLS 1.0 if true, set by the pref
   // security.tls.insecure_fallback_hosts.use_static_list.
   bool mUseStaticFallbackList;
+  bool mUnrestrictedRC4Fallback;
   uint16_t mVersionFallbackLimit;
 private:
   mozilla::Mutex mutex;

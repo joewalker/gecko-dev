@@ -73,15 +73,30 @@ static const char* const kCSSRawCounterDescs[] = {
 };
 
 static const char* const kCSSRawPredefinedCounterStyles[] = {
-  "none", "decimal", "decimal-leading-zero", "cjk-decimal",
-  "lower-roman", "upper-roman", "armenian", "georgian", "hebrew",
+  "none",
+  // 6 Simple Predefined Counter Styles
+  // 6.1 Numeric
+  "decimal", "decimal-leading-zero", "arabic-indic", "armenian",
+  "upper-armenian", "lower-armenian", "bengali", "cambodian", "khmer",
+  "cjk-decimal", "devanagari", "georgian", "gujarati", "gurmukhi", "hebrew",
+  "kannada", "lao", "malayalam", "mongolian", "myanmar", "oriya", "persian",
+  "lower-roman", "upper-roman", "tamil", "telugu", "thai", "tibetan",
+  // 6.2 Alphabetic
   "lower-alpha", "lower-latin", "upper-alpha", "upper-latin",
-  "lower-greek", "hiragana", "hiragana-iroha", "katakana", "katakana-iroha",
+  "cjk-earthly-branch", "cjk-heavenly-stem", "lower-greek",
+  "hiragana", "hiragana-iroha", "katakana", "katakana-iroha",
+  // 6.3 Symbolic
   "disc", "circle", "square", "disclosure-open", "disclosure-closed",
+  // 7 Complex Predefined Counter Styles
+  // 7.1 Longhand East Asian Counter Styles
+  // 7.1.1 Japanese
   "japanese-informal", "japanese-formal",
+  // 7.1.2 Korean
   "korean-hangul-formal", "korean-hanja-informal", "korean-hanja-formal",
+  // 7.1.3 Chinese
   "simp-chinese-informal", "simp-chinese-formal",
   "trad-chinese-informal", "trad-chinese-formal", "cjk-ideographic",
+  // 7.2 Ethiopic Numeric Counter Style
   "ethiopic-numeric"
 };
 
@@ -1623,6 +1638,14 @@ const KTableValue nsCSSProps::kResizeKTable[] = {
   eCSSKeyword_UNKNOWN,-1
 };
 
+const KTableValue nsCSSProps::kRubyAlignKTable[] = {
+  eCSSKeyword_start, NS_STYLE_RUBY_ALIGN_START,
+  eCSSKeyword_center, NS_STYLE_RUBY_ALIGN_CENTER,
+  eCSSKeyword_space_between, NS_STYLE_RUBY_ALIGN_SPACE_BETWEEN,
+  eCSSKeyword_space_around, NS_STYLE_RUBY_ALIGN_SPACE_AROUND,
+  eCSSKeyword_UNKNOWN, -1
+};
+
 const KTableValue nsCSSProps::kRubyPositionKTable[] = {
   eCSSKeyword_over, NS_STYLE_RUBY_POSITION_OVER,
   eCSSKeyword_under, NS_STYLE_RUBY_POSITION_UNDER,
@@ -1634,6 +1657,13 @@ const KTableValue nsCSSProps::kRubyPositionKTable[] = {
 const KTableValue nsCSSProps::kScrollBehaviorKTable[] = {
   eCSSKeyword_auto,       NS_STYLE_SCROLL_BEHAVIOR_AUTO,
   eCSSKeyword_smooth,     NS_STYLE_SCROLL_BEHAVIOR_SMOOTH,
+  eCSSKeyword_UNKNOWN,-1
+};
+
+const KTableValue nsCSSProps::kScrollSnapTypeKTable[] = {
+  eCSSKeyword_none,      NS_STYLE_SCROLL_SNAP_TYPE_NONE,
+  eCSSKeyword_mandatory, NS_STYLE_SCROLL_SNAP_TYPE_MANDATORY,
+  eCSSKeyword_proximity, NS_STYLE_SCROLL_SNAP_TYPE_PROXIMITY,
   eCSSKeyword_UNKNOWN,-1
 };
 
@@ -2567,6 +2597,12 @@ static const nsCSSProperty gMarkerSubpropTable[] = {
 // different parsing rules.
 static const nsCSSProperty gMozTransformSubpropTable[] = {
   eCSSProperty_transform,
+  eCSSProperty_UNKNOWN
+};
+
+static const nsCSSProperty gScrollSnapTypeSubpropTable[] = {
+  eCSSProperty_scroll_snap_type_x,
+  eCSSProperty_scroll_snap_type_y,
   eCSSProperty_UNKNOWN
 };
 

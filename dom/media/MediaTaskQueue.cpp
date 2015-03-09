@@ -147,8 +147,17 @@ MediaTaskQueue::BeginShutdown()
   return p;
 }
 
+void
+FlushableMediaTaskQueue::Flush()
+{
+  MonitorAutoLock mon(mQueueMonitor);
+  AutoSetFlushing autoFlush(this);
+  FlushLocked();
+  AwaitIdleLocked();
+}
+
 nsresult
-MediaTaskQueue::FlushAndDispatch(TemporaryRef<nsIRunnable> aRunnable)
+FlushableMediaTaskQueue::FlushAndDispatch(TemporaryRef<nsIRunnable> aRunnable)
 {
   MonitorAutoLock mon(mQueueMonitor);
   AutoSetFlushing autoFlush(this);
@@ -160,16 +169,7 @@ MediaTaskQueue::FlushAndDispatch(TemporaryRef<nsIRunnable> aRunnable)
 }
 
 void
-MediaTaskQueue::Flush()
-{
-  MonitorAutoLock mon(mQueueMonitor);
-  AutoSetFlushing autoFlush(this);
-  FlushLocked();
-  AwaitIdleLocked();
-}
-
-void
-MediaTaskQueue::FlushLocked()
+FlushableMediaTaskQueue::FlushLocked()
 {
   mQueueMonitor.AssertCurrentThreadOwns();
   MOZ_ASSERT(mIsFlushing);
@@ -195,12 +195,8 @@ MediaTaskQueue::IsEmpty()
 bool
 MediaTaskQueue::IsCurrentThreadIn()
 {
-#ifdef DEBUG
   MonitorAutoLock mon(mQueueMonitor);
   return NS_GetCurrentThread() == mRunningThread;
-#else
-  return false;
-#endif
 }
 
 nsresult

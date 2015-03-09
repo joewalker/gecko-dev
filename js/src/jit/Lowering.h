@@ -197,6 +197,7 @@ class LIRGenerator : public LIRGeneratorSpecific
     void visitStoreElementHole(MStoreElementHole *ins);
     void visitStoreUnboxedObjectOrNull(MStoreUnboxedObjectOrNull *ins);
     void visitStoreUnboxedString(MStoreUnboxedString *ins);
+    void visitConvertUnboxedObjectToNative(MConvertUnboxedObjectToNative *ins);
     void visitEffectiveAddress(MEffectiveAddress *ins);
     void visitArrayPopShift(MArrayPopShift *ins);
     void visitArrayPush(MArrayPush *ins);
@@ -219,7 +220,7 @@ class LIRGenerator : public LIRGeneratorSpecific
     void visitGuardClass(MGuardClass *ins);
     void visitGuardObject(MGuardObject *ins);
     void visitGuardString(MGuardString *ins);
-    void visitGuardShapePolymorphic(MGuardShapePolymorphic *ins);
+    void visitGuardReceiverPolymorphic(MGuardReceiverPolymorphic *ins);
     void visitPolyInlineGuard(MPolyInlineGuard *ins);
     void visitAssertRange(MAssertRange *ins);
     void visitCallGetProperty(MCallGetProperty *ins);
@@ -270,6 +271,7 @@ class LIRGenerator : public LIRGeneratorSpecific
     void visitSimdInsertElement(MSimdInsertElement *ins);
     void visitSimdSignMask(MSimdSignMask *ins);
     void visitSimdSwizzle(MSimdSwizzle *ins);
+    void visitSimdGeneralSwizzle(MSimdGeneralSwizzle *ins);
     void visitSimdShuffle(MSimdShuffle *ins);
     void visitSimdUnaryArith(MSimdUnaryArith *ins);
     void visitSimdBinaryComp(MSimdBinaryComp *ins);

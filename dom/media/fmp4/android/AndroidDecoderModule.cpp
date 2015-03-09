@@ -205,7 +205,7 @@ public:
     jni::Object::LocalRef buffer(env);
     NS_ENSURE_SUCCESS_VOID(aFormat->GetByteBuffer(NS_LITERAL_STRING("csd-0"), &buffer));
 
-    if (!buffer) {
+    if (!buffer && aConfig.audio_specific_config->Length() >= 2) {
       csd0[0] = (*aConfig.audio_specific_config)[0];
       csd0[1] = (*aConfig.audio_specific_config)[1];
 
@@ -260,7 +260,7 @@ AndroidDecoderModule::CreateVideoDecoder(
                                 const mp4_demuxer::VideoDecoderConfig& aConfig,
                                 layers::LayersBackend aLayersBackend,
                                 layers::ImageContainer* aImageContainer,
-                                MediaTaskQueue* aVideoTaskQueue,
+                                FlushableMediaTaskQueue* aVideoTaskQueue,
                                 MediaDataDecoderCallback* aCallback)
 {
   MediaFormat::LocalRef format;
@@ -279,7 +279,7 @@ AndroidDecoderModule::CreateVideoDecoder(
 
 already_AddRefed<MediaDataDecoder>
 AndroidDecoderModule::CreateAudioDecoder(const mp4_demuxer::AudioDecoderConfig& aConfig,
-                                         MediaTaskQueue* aAudioTaskQueue,
+                                         FlushableMediaTaskQueue* aAudioTaskQueue,
                                          MediaDataDecoderCallback* aCallback)
 {
   MOZ_ASSERT(aConfig.bits_per_sample == 16, "We only handle 16-bit audio!");
@@ -364,6 +364,29 @@ nsresult MediaCodecDataDecoder::InitDecoder(Surface::Param aSurface)
     break; \
   }
 
+nsresult MediaCodecDataDecoder::GetInputBuffer(JNIEnv* env, int index, jni::Object::LocalRef* buffer)
+{
+  bool retried = false;
+  while (!*buffer) {
+    *buffer = jni::Object::LocalRef::Adopt(env->GetObjectArrayElement(mInputBuffers.Get(), index));
+    if (!*buffer) {
+      if (!retried) {
+        // Reset the input buffers and then try again
+        nsresult res = ResetInputBuffers();
+        if (NS_FAILED(res)) {
+          return res;
+        }
+        retried = true;
+      } else {
+        // We already tried resetting the input buffers, return an error
+        return NS_ERROR_FAILURE;
+      }
+    }
+  }
+
+  return NS_OK;
+}
+
 void MediaCodecDataDecoder::DecoderLoop()
 {
   bool outputDone = false;
@@ -433,8 +456,10 @@ void MediaCodecDataDecoder::DecoderLoop()
       HANDLE_DECODER_ERROR();
 
       if (inputIndex >= 0) {
-        auto buffer = jni::Object::LocalRef::Adopt(
-            frame.GetEnv()->GetObjectArrayElement(mInputBuffers.Get(), inputIndex));
+        jni::Object::LocalRef buffer(frame.GetEnv());
+        res = GetInputBuffer(frame.GetEnv(), inputIndex, &buffer);
+        HANDLE_DECODER_ERROR();
+
         void* directBuffer = frame.GetEnv()->GetDirectBufferAddress(buffer.Get());
 
         MOZ_ASSERT(frame.GetEnv()->GetDirectBufferCapacity(buffer.Get()) >= sample->size,

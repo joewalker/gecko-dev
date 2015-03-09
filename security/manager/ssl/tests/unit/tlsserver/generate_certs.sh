@@ -260,6 +260,7 @@ make_EE localhostAndExampleCom 'CN=Test End-entity' testCA "localhost,*.example.
 make_EE otherIssuerEE 'CN=Wrong CA Pin Test End-Entity' otherCA "*.include-subdomains.pinning.example.com,*.exclude-subdomains.pinning.example.com,*.pinning.example.com"
 
 export_cert localhostAndExampleCom default-ee.der
+export_cert otherIssuerEE other-issuer-ee.der
 
 # A cert that is like localhostAndExampleCom, but with a different serial number for
 # testing the "OCSP response is from the right issuer, but it is for the wrong cert"
@@ -284,6 +285,13 @@ make_EE unknownissuer 'CN=Test End-entity from unknown issuer' deletedINT "unkno
 export_cert unknownissuer unknown-issuer.der
 
 $RUN_MOZILLA $CERTUTIL -d $DB_ARGUMENT -D -n deletedINT
+
+# certutil doesn't expose a way to directly specify a notBefore time.
+# Workaround this by just providing a large enough warp that the notBefore time
+# falls before the UNIX Epoch.
+make_EE beforeEpoch 'CN=Before UNIX Epoch Test End-entity' testCA "before-epoch.example.com" "-w -720 -v 960"
+make_INT beforeEpochINT 'CN=Before UNIX Epoch Test Intermediate' testCA "-w -720 -v 960"
+make_EE beforeEpochIssuer 'CN=Test End-entity with Before UNIX Epoch issuer' beforeEpochINT "before-epoch-issuer.example.com"
 
 make_INT expiredINT 'CN=Expired Test Intermediate' testCA "-w -400"
 make_EE expiredissuer 'CN=Test End-entity with expired issuer' expiredINT "expiredissuer.example.com"
@@ -329,5 +337,7 @@ make_EE eeIssuedByV1Cert 'CN=EE Issued by V1 Cert' v1Cert "localhost,*.example.c
 # Make a valid EE using testINT to test OneCRL revocation of testINT
 make_EE eeIssuedByIntermediate 'CN=EE issued by intermediate' testINT "localhost"
 export_cert eeIssuedByIntermediate test-int-ee.der
+
+make_EE badSubjectAltNames 'CN=EE with bad subjectAltNames' testCA "*.*.example.com"
 
 cleanup

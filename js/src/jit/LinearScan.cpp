@@ -823,7 +823,9 @@ LinearScanAllocator::allocateSlotFor(const LiveInterval *interval)
     LinearScanVirtualRegister *reg = &vregs[interval->vreg()];
 
     SlotList *freed;
-    if (reg->type() == LDefinition::DOUBLE)
+    if (reg->def()->isSimdType())
+        freed = &finishedQuadSlots_;
+    else if (reg->type() == LDefinition::DOUBLE)
         freed = &finishedDoubleSlots_;
 #if JS_BITS_PER_WORD == 64
     else if (reg->type() == LDefinition::GENERAL ||
@@ -916,7 +918,9 @@ LinearScanAllocator::freeAllocation(LiveInterval *interval, LAllocation *alloc)
     LinearScanVirtualRegister *mine = &vregs[interval->vreg()];
     if (!IsNunbox(mine)) {
         if (alloc->isStackSlot()) {
-            if (mine->type() == LDefinition::DOUBLE)
+            if (mine->def()->isSimdType())
+                finishedQuadSlots_.append(interval);
+            else if (mine->type() == LDefinition::DOUBLE)
                 finishedDoubleSlots_.append(interval);
 #if JS_BITS_PER_WORD == 64
             else if (mine->type() == LDefinition::GENERAL ||
@@ -994,7 +998,7 @@ LinearScanAllocator::findBestFreeRegister(CodePosition *freeUntil)
     for (RegisterSet regs(allRegisters_); !regs.empty(needFloat); ) {
         // If the requested register is a FP, we may need to look at
         // all of the float32 and float64 registers.
-        AnyRegister reg = regs.takeAny(needFloat);
+        AnyRegister reg = regs.takeUnaliasedAny(needFloat);
         freeUntilPos[reg.code()] = CodePosition::MAX;
     }
     for (IntervalIterator i(active.begin()); i != active.end(); i++) {
@@ -1122,7 +1126,7 @@ LinearScanAllocator::findBestBlockedRegister(CodePosition *nextUsed)
     CodePosition nextUsePos[AnyRegister::Total];
     bool needFloat = vregs[current->vreg()].isFloatReg();
     for (RegisterSet regs(allRegisters_); !regs.empty(needFloat); ) {
-        AnyRegister reg = regs.takeAny(needFloat);
+        AnyRegister reg = regs.takeUnaliasedAny(needFloat);
         nextUsePos[reg.code()] = CodePosition::MAX;
     }
     for (IntervalIterator i(active.begin()); i != active.end(); i++) {

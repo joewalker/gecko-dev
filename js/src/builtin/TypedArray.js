@@ -2,6 +2,77 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+// ES6 draft 20150304 %TypedArray%.prototype.copyWithin
+function TypedArrayCopyWithin(target, start, end = undefined) {
+    // This function is not generic.
+    if (!IsObject(this) || !IsTypedArray(this)) {
+        return callFunction(CallTypedArrayMethodIfWrapped, this, target, start, end,
+                            "TypedArrayCopyWithin");
+    }
+
+    // Bug 1101256: detachment checks mandated by ValidateTypedArray
+
+    // Steps 1-2.
+    var obj = this;
+
+    // Steps 3-4, modified for the typed array case.
+    var len = TypedArrayLength(obj);
+
+    assert(0 <= len && len <= 0x7FFFFFFF,
+           "assumed by some of the math below, see also the other assertions");
+
+    // Steps 5-7.
+    var relativeTarget = ToInteger(target);
+
+    var to = relativeTarget < 0 ? std_Math_max(len + relativeTarget, 0)
+                                : std_Math_min(relativeTarget, len);
+
+    // Steps 8-10.
+    var relativeStart = ToInteger(start);
+
+    var from = relativeStart < 0 ? std_Math_max(len + relativeStart, 0)
+                                 : std_Math_min(relativeStart, len);
+
+    // Steps 11-13.
+    var relativeEnd = end === undefined ? len
+                                        : ToInteger(end);
+
+    var final = relativeEnd < 0 ? std_Math_max(len + relativeEnd, 0)
+                                : std_Math_min(relativeEnd, len);
+
+    // Step 14.
+    var count = std_Math_min(final - from, len - to);
+
+    assert(0 <= to && to <= 0x7FFFFFFF,
+           "typed array |to| index assumed int32_t");
+    assert(0 <= from && from <= 0x7FFFFFFF,
+           "typed array |from| index assumed int32_t");
+
+    // Negative counts are possible for cases like tarray.copyWithin(0, 3, 0)
+    // where |count === final - from|.  As |to| is within the [0, len] range,
+    // only |final - from| may underflow; with |final| in the range [0, len]
+    // and |from| in the range [0, len] the overall subtraction range is
+    // [-len, len] for |count| -- and with |len| bounded by implementation
+    // limits to 2**31 - 1, there can be no exceeding int32_t.
+    assert(-0x7FFFFFFF - 1 <= count && count <= 0x7FFFFFFF,
+           "typed array element count assumed int32_t");
+
+    // Steps 15-17.
+    //
+    // Note that getting or setting a typed array element must throw if the
+    // typed array is neutered, so the intrinsic below checks for neutering.
+    // This happens *only* if a get/set occurs, i.e. when |count > 0|.
+    //
+    // Also note that this copies elements effectively by memmove, *not* in
+    // step 17's specified order.  This is unobservable, but it would be if we
+    // used this method to implement shared typed arrays' copyWithin.
+    if (count > 0)
+        MoveTypedArrayElements(obj, to | 0, from | 0, count | 0);
+
+    // Step 18.
+    return obj;
+}
+
 // ES6 draft rev30 (2014/12/24) 22.2.3.6 %TypedArray%.prototype.entries()
 function TypedArrayEntries() {
     // Step 1.
@@ -96,6 +167,70 @@ function TypedArrayFill(value, start = 0, end = undefined) {
 
     // Step 13.
     return O;
+}
+
+// ES6 draft 32 (2015-02-02) 22.2.3.9 %TypedArray%.prototype.filter(callbackfn[, thisArg])
+function TypedArrayFilter(callbackfn, thisArg = undefined) {
+    // Step 1.
+    var O = this;
+
+    // Steps 2-3.
+    // This function is not generic.
+    if (!IsObject(O) || !IsTypedArray(O)) {
+        return callFunction(CallTypedArrayMethodIfWrapped, this, callbackfn, thisArg,
+                           "TypedArrayFilter");
+    }
+
+    // Step 4.
+    var len = TypedArrayLength(O);
+
+    // Step 5.
+    if (arguments.length === 0)
+        ThrowError(JSMSG_MISSING_FUN_ARG, 0, "%TypedArray%.prototype.filter");
+    if (!IsCallable(callbackfn))
+        ThrowError(JSMSG_NOT_FUNCTION, DecompileArg(0, callbackfn));
+
+    // Step 6.
+    var T = thisArg;
+
+    // Step 7.
+    var defaultConstructor = _ConstructorForTypedArray(O);
+
+    // Steps 8-9.
+    var C = SpeciesConstructor(O, defaultConstructor);
+
+    // Step 10.
+    var kept = new List();
+
+    // Step 12.
+    var captured = 0;
+
+    // Steps 11, 13 and 13.g.
+    for (var k = 0; k < len; k++) {
+        // Steps 13.b-c.
+        var kValue = O[k];
+        // Steps 13.d-e.
+        var selected = ToBoolean(callFunction(callbackfn, T, kValue, k, O));
+        // Step 13.f.
+        if (selected) {
+            // Step 13.f.i.
+            kept.push(kValue);
+            // Step 13.f.ii.
+            captured++;
+        }
+    }
+
+    // Steps 14-15.
+    var A = new C(captured);
+
+    // Steps 16 and 17.c.
+    for (var n = 0; n < captured; n++) {
+        // Steps 17.a-b.
+        A[n] = kept[n];
+    }
+
+    // Step 18.
+    return A;
 }
 
 // ES6 draft rev28 (2014/10/14) 22.2.3.10 %TypedArray%.prototype.find(predicate[, thisArg]).
@@ -353,6 +488,51 @@ function TypedArrayLastIndexOf(searchElement, fromIndex = undefined) {
     return -1;
 }
 
+// ES6 draft rev32 (2015-02-02) 22.2.3.18 %TypedArray%.prototype.map(callbackfn [, thisArg]).
+function TypedArrayMap(callbackfn, thisArg = undefined) {
+    // Step 1.
+    var O = this;
+
+    // Steps 2-3.
+    // This function is not generic.
+    if (!IsObject(O) || !IsTypedArray(O)) {
+        return callFunction(CallTypedArrayMethodIfWrapped, this, callbackfn, thisArg,
+                            "TypedArrayMap");
+    }
+
+    // Step 4.
+    var len = TypedArrayLength(O);
+
+    // Step 5.
+    if (arguments.length === 0)
+        ThrowError(JSMSG_MISSING_FUN_ARG, 0, '%TypedArray%.prototype.map');
+    if (!IsCallable(callbackfn))
+        ThrowError(JSMSG_NOT_FUNCTION, DecompileArg(0, callbackfn));
+
+    // Step 6.
+    var T = thisArg;
+
+    // Step 7.
+    var defaultConstructor = _ConstructorForTypedArray(O);
+
+    // Steps 8-9.
+    var C = SpeciesConstructor(O, defaultConstructor);
+
+    // Steps 10-11.
+    var A = new C(len);
+
+    // Steps 12, 13.a (implicit) and 13.h.
+    for (var k = 0; k < len; k++) {
+        // Steps 13.d-e.
+        var mappedValue = callFunction(callbackfn, T, O[k], k, O);
+        // Steps 13.f-g.
+        A[k] = mappedValue;
+    }
+
+    // Step 14.
+    return A;
+}
+
 // ES6 draft rev30 (2014/12/24) 22.2.3.19 %TypedArray%.prototype.reduce(callbackfn[, initialValue]).
 function TypedArrayReduce(callbackfn/*, initialValue*/) {
     // This function is not generic.
@@ -469,6 +649,65 @@ function TypedArrayReverse() {
     return O;
 }
 
+// ES6 draft rev32 (2015-02-02) 22.2.3.23 %TypedArray%.prototype.slice(start, end).
+function TypedArraySlice(start, end) {
+
+    // Step 1.
+    var O = this;
+
+    // Step 2-3.
+    if (!IsObject(O) || !IsTypedArray(O)) {
+        return callFunction(CallTypedArrayMethodIfWrapped, O, start, end, "TypedArraySlice");
+    }
+
+    // Step 4.
+    var len = TypedArrayLength(O);
+
+    // Steps 5-6.
+    var relativeStart = ToInteger(start);
+
+    // Step 7.
+    var k = relativeStart < 0
+            ? std_Math_max(len + relativeStart, 0)
+            : std_Math_min(relativeStart, len);
+
+    // Steps 8-9.
+    var relativeEnd = end === undefined ? len : ToInteger(end);
+
+    // Step 10.
+    var final = relativeEnd < 0
+                ? std_Math_max(len + relativeEnd, 0)
+                : std_Math_min(relativeEnd, len);
+
+    // Step 11.
+    var count = std_Math_max(final - k, 0);
+
+    // Step 12.
+    var defaultConstructor = _ConstructorForTypedArray(O);
+
+    // Steps 13-14.
+    var C = SpeciesConstructor(O, defaultConstructor);
+
+    // Steps 15-16.
+    var A = new C(count);
+
+    // Step 17.
+    var n = 0;
+
+    // Step 18.
+    while (k < final) {
+        // Steps 18.a-e.
+        A[n] = O[k];
+        // Step 18f.
+        k++;
+        // Step 18g.
+        n++;
+    }
+
+    // Step 19.
+    return A;
+}
+
 // ES6 draft rev30 (2014/12/24) 22.2.3.25 %TypedArray%.prototype.some(callbackfn[, thisArg]).
 function TypedArraySome(callbackfn, thisArg = undefined) {
     // This function is not generic.
@@ -508,6 +747,52 @@ function TypedArraySome(callbackfn, thisArg = undefined) {
 
     // Step 10.
     return false;
+}
+
+// ES6 draft 20150304 %TypedArray%.prototype.subarray
+function TypedArraySubarray(begin, end) {
+    // Step 1.
+    var obj = this;
+
+    // Steps 2-3.
+    // This function is not generic.
+    if (!IsObject(obj) || !IsTypedArray(obj)) {
+        return callFunction(CallTypedArrayMethodIfWrapped, this, begin, end,
+                            "TypedArraySubarray");
+    }
+
+    // Steps 4-6.
+    var buffer = TypedArrayBuffer(obj);
+    var srcLength = TypedArrayLength(obj);
+
+    // Steps 7-9.
+    var relativeBegin = ToInteger(begin);
+    var beginIndex = relativeBegin < 0 ? std_Math_max(srcLength + relativeBegin, 0)
+                                       : std_Math_min(relativeBegin, srcLength);
+
+    // Steps 10-12.
+    var relativeEnd = end === undefined ? srcLength : ToInteger(end);
+    var endIndex = relativeEnd < 0 ? std_Math_max(srcLength + relativeEnd, 0)
+                                   : std_Math_min(relativeEnd, srcLength);
+
+    // Step 13.
+    var newLength = std_Math_max(endIndex - beginIndex, 0);
+
+    // Steps 14-15, altered to use a shift instead of a size for performance.
+    var elementShift = TypedArrayElementShift(obj);
+
+    // Step 16.
+    var srcByteOffset = TypedArrayByteOffset(obj);
+
+    // Step 17.
+    var beginByteOffset = srcByteOffset + (beginIndex << elementShift);
+
+    // Steps 18-20.
+    var defaultConstructor = _ConstructorForTypedArray(obj);
+    var constructor = SpeciesConstructor(obj, defaultConstructor);
+
+    // Steps 21-22.
+    return new constructor(buffer, beginByteOffset, newLength);
 }
 
 // ES6 draft rev30 (2014/12/24) 22.2.3.30 %TypedArray%.prototype.values()

@@ -5,8 +5,10 @@
 
 package org.mozilla.gecko;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.URLEncoder;
 import java.util.EnumSet;
@@ -70,6 +72,7 @@ import org.mozilla.gecko.toolbar.AutocompleteHandler;
 import org.mozilla.gecko.toolbar.BrowserToolbar;
 import org.mozilla.gecko.toolbar.BrowserToolbar.TabEditingState;
 import org.mozilla.gecko.toolbar.ToolbarProgressView;
+import org.mozilla.gecko.util.ActivityUtils;
 import org.mozilla.gecko.util.Clipboard;
 import org.mozilla.gecko.util.EventCallback;
 import org.mozilla.gecko.util.GamepadUtils;
@@ -114,6 +117,8 @@ import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.text.TextUtils;
 import android.util.AttributeSet;
+import android.util.Base64;
+import android.util.Base64OutputStream;
 import android.util.Log;
 import android.view.InputDevice;
 import android.view.KeyEvent;
@@ -128,14 +133,11 @@ import android.view.ViewGroup;
 import android.view.ViewStub;
 import android.view.ViewTreeObserver;
 import android.view.Window;
-import android.view.WindowManager;
 import android.view.animation.Interpolator;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 import android.widget.ViewFlipper;
-
-import com.readystatesoftware.systembartint.SystemBarTintManager;
 
 public class BrowserApp extends GeckoApp
                         implements TabsPanel.TabsLayoutChangeListener,
@@ -149,6 +151,8 @@ public class BrowserApp extends GeckoApp
                                    ActionModeCompat.Presenter,
                                    LayoutInflater.Factory {
     private static final String LOGTAG = "GeckoBrowserApp";
+
+    private static final boolean ZOOMED_VIEW_ENABLED = AppConstants.NIGHTLY_BUILD;
 
     private static final int TABS_ANIMATION_DURATION = 450;
 
@@ -172,19 +176,22 @@ public class BrowserApp extends GeckoApp
     public ViewFlipper mActionBarFlipper;
     public ActionModeCompatView mActionBar;
     private BrowserToolbar mBrowserToolbar;
+    // We can't name the TabStrip class because it's not included on API 9.
+    private Refreshable mTabStrip;
     private ToolbarProgressView mProgressView;
     private FirstrunPane mFirstrunPane;
     private HomePager mHomePager;
     private TabsPanel mTabsPanel;
     private ViewGroup mHomePagerContainer;
-    protected Telemetry.Timer mAboutHomeStartupTimer;
     private ActionModeCompat mActionMode;
     private boolean mHideDynamicToolbarOnActionModeEnd;
     private TabHistoryController tabHistoryController;
+    private ZoomedView mZoomedView;
 
     private static final int GECKO_TOOLS_MENU = -1;
     private static final int ADDON_MENU_OFFSET = 1000;
     public static final String TAB_HISTORY_FRAGMENT_TAG = "tabHistoryFragment";
+
     private static class MenuItemInfo {
         public int id;
         public String label;
@@ -234,8 +241,6 @@ public class BrowserApp extends GeckoApp
     private BrowserHealthReporter mBrowserHealthReporter;
 
     private ReadingListHelper mReadingListHelper;
-
-    private SystemBarTintManager mTintManager;
 
     // The tab to be selected on editing mode exit.
     private Integer mTargetTabForEditingMode;
@@ -653,8 +658,6 @@ public class BrowserApp extends GeckoApp
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        mAboutHomeStartupTimer = new Telemetry.UptimeTimer("FENNEC_STARTUP_TIME_ABOUTHOME");
-
         final Intent intent = getIntent();
 
         // Note that we're calling GeckoProfile.get *before GeckoApp.onCreate*.
@@ -678,8 +681,6 @@ public class BrowserApp extends GeckoApp
         super.onCreate(savedInstanceState);
 
         final Context appContext = getApplicationContext();
-
-        setupSystemUITinting();
 
         mBrowserChrome = (ViewGroup) findViewById(R.id.browser_chrome);
         mActionBarFlipper = (ViewFlipper) findViewById(R.id.browser_actionbar);
@@ -717,7 +718,7 @@ public class BrowserApp extends GeckoApp
         }
 
         if (HardwareUtils.isTablet()) {
-            findViewById(R.id.new_tablet_tab_strip).setVisibility(View.VISIBLE);
+            mTabStrip = (Refreshable) (((ViewStub) findViewById(R.id.new_tablet_tab_strip)).inflate());
         }
 
         ((GeckoApp.MainLayout) mMainLayout).setTouchEventInterceptor(new HideOnTouchListener());
@@ -766,6 +767,7 @@ public class BrowserApp extends GeckoApp
             "Accounts:Create",
             "CharEncoding:Data",
             "CharEncoding:State",
+            "Favicon:CacheLoad",
             "Feedback:LastUrl",
             "Feedback:MaybeLater",
             "Feedback:OpenPlayStore",
@@ -774,8 +776,7 @@ public class BrowserApp extends GeckoApp
             "Reader:Share",
             "Settings:Show",
             "Telemetry:Gather",
-            "Updater:Launch",
-            "BrowserToolbar:Visibility");
+            "Updater:Launch");
 
         Distribution distribution = Distribution.init(this);
 
@@ -823,31 +824,11 @@ public class BrowserApp extends GeckoApp
 
         // Set the maximum bits-per-pixel the favicon system cares about.
         IconDirectoryEntry.setMaxBPP(GeckoAppShell.getScreenDepth());
-    }
 
-    private void setupSystemUITinting() {
-        if (!Versions.feature19Plus) {
-            return;
+        if (ZOOMED_VIEW_ENABLED) {
+            ViewStub stub = (ViewStub) findViewById(R.id.zoomed_view_stub);
+            mZoomedView = (ZoomedView) stub.inflate();
         }
-
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-
-        mTintManager = new SystemBarTintManager(this);
-        mTintManager.setTintColor(getResources().getColor(R.color.background_tabs));
-        updateSystemUITinting(mRootLayout.getSystemUiVisibility());
-
-        mRootLayout.setOnSystemUiVisibilityChangeListener(new View.OnSystemUiVisibilityChangeListener() {
-            @Override
-            public void onSystemUiVisibilityChange(int visibility) {
-                updateSystemUITinting(visibility);
-            }
-        });
-    }
-
-    private void updateSystemUITinting(int visibility) {
-        final boolean shouldTint = (visibility & View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0 &&
-                                   (visibility & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0;
-        mTintManager.setStatusBarTintEnabled(shouldTint);
     }
 
     /**
@@ -1046,7 +1027,9 @@ public class BrowserApp extends GeckoApp
                 }
 
                 // Temporarily disable doorhanger notifications.
-                mDoorHangerPopup.disable();
+                if (mDoorHangerPopup != null) {
+                    mDoorHangerPopup.disable();
+                }
             }
         });
 
@@ -1069,7 +1052,9 @@ public class BrowserApp extends GeckoApp
                 hideHomePager();
 
                 // Re-enable doorhanger notifications. They may trigger on the selected tab above.
-                mDoorHangerPopup.enable();
+                if (mDoorHangerPopup != null) {
+                    mDoorHangerPopup.enable();
+                }
             }
         });
 
@@ -1297,6 +1282,9 @@ public class BrowserApp extends GeckoApp
             mReadingListHelper.uninit();
             mReadingListHelper = null;
         }
+        if (mZoomedView != null) {
+            mZoomedView.destroy();
+        }
 
         EventDispatcher.getInstance().unregisterGeckoThreadListener((GeckoEventListener)this,
             "Menu:Open",
@@ -1309,6 +1297,7 @@ public class BrowserApp extends GeckoApp
             "Accounts:Create",
             "CharEncoding:Data",
             "CharEncoding:State",
+            "Favicon:CacheLoad",
             "Feedback:LastUrl",
             "Feedback:MaybeLater",
             "Feedback:OpenPlayStore",
@@ -1317,8 +1306,7 @@ public class BrowserApp extends GeckoApp
             "Reader:Share",
             "Settings:Show",
             "Telemetry:Gather",
-            "Updater:Launch",
-            "BrowserToolbar:Visibility");
+            "Updater:Launch");
 
         if (AppConstants.MOZ_ANDROID_BEAM) {
             NfcAdapter nfc = NfcAdapter.getDefaultAdapter(this);
@@ -1372,16 +1360,6 @@ public class BrowserApp extends GeckoApp
 
         // Context: Sharing via chrome list (no explicit session is active)
         Telemetry.sendUIEvent(TelemetryContract.Event.SHARE, TelemetryContract.Method.LIST);
-    }
-
-    @Override
-    protected void loadStartupTab(String url, int flags) {
-        // We aren't showing about:home, so cancel the telemetry timer
-        if (url != null || mShouldRestore) {
-            mAboutHomeStartupTimer.cancel();
-        }
-
-        super.loadStartupTab(url, flags);
     }
 
     private void setToolbarMargin(int margin) {
@@ -1526,23 +1504,16 @@ public class BrowserApp extends GeckoApp
             mTabsPanel.refresh();
         }
 
+        if (mTabStrip != null) {
+            mTabStrip.refresh();
+        }
+
         mBrowserToolbar.refresh();
     }
 
     @Override
     public boolean hasTabsSideBar() {
         return (mTabsPanel != null && mTabsPanel.isSideBar());
-    }
-
-    private void setBrowserToolbarVisible(final boolean visible) {
-        ThreadUtils.postToUiThread(new Runnable() {
-            @Override
-            public void run() {
-                if (mDynamicToolbar.isEnabled()) {
-                    mDynamicToolbar.setVisible(visible, VisibilityTransition.IMMEDIATE);
-                }
-            }
-        });
     }
 
     private boolean isSideBar() {
@@ -1634,6 +1605,10 @@ public class BrowserApp extends GeckoApp
                 }
             });
 
+        } else if ("Favicon:CacheLoad".equals(event)) {
+            final String url = message.getString("url");
+            getFaviconFromCache(callback, url);
+
         } else if ("Feedback:LastUrl".equals(event)) {
             getLastUrl(callback);
 
@@ -1705,13 +1680,56 @@ public class BrowserApp extends GeckoApp
             }
         } else if ("Updater:Launch".equals(event)) {
             handleUpdaterLaunch();
-
-        } else if ("BrowserToolbar:Visibility".equals(event)) {
-            setBrowserToolbarVisible(message.getBoolean("visible"));
-
         } else {
             super.handleMessage(event, message, callback);
         }
+    }
+
+    private void getFaviconFromCache(final EventCallback callback, final String url) {
+        final OnFaviconLoadedListener listener = new OnFaviconLoadedListener() {
+            @Override
+            public void onFaviconLoaded(final String url, final String faviconURL, final Bitmap favicon) {
+                ThreadUtils.assertOnUiThread();
+                // Convert Bitmap to Base64 data URI in background.
+                ThreadUtils.postToBackgroundThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        ByteArrayOutputStream out = null;
+                        Base64OutputStream b64 = null;
+
+                        // Failed to load favicon from local.
+                        if (favicon == null) {
+                            callback.sendError("Failed to get favicon from cache");
+                        } else {
+                            try {
+                                out = new ByteArrayOutputStream();
+                                out.write("data:image/png;base64,".getBytes());
+                                b64 = new Base64OutputStream(out, Base64.NO_WRAP);
+                                favicon.compress(Bitmap.CompressFormat.PNG, 100, b64);
+                                callback.sendSuccess(new String(out.toByteArray()));
+                            } catch (IOException e) {
+                                Log.w(LOGTAG, "Failed to convert to base64 data URI");
+                                callback.sendError("Failed to convert favicon to a base64 data URI");
+                            } finally {
+                                try {
+                                    if (out != null) {
+                                        out.close();
+                                    }
+                                    if (b64 != null) {
+                                        b64.close();
+                                    }
+                                } catch (IOException e) {
+                                    Log.w(LOGTAG, "Failed to close the streams");
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        };
+        Favicons.getSizedFaviconForPageFromLocal(getContext(),
+                url,
+                listener);
     }
 
     /**
@@ -2233,7 +2251,11 @@ public class BrowserApp extends GeckoApp
                 recordSearch(null, "barkeyword");
 
                 // Otherwise, construct a search query from the bookmark keyword.
-                final String searchUrl = keywordUrl.replace("%s", URLEncoder.encode(keywordSearch));
+                // Replace lower case bookmark keywords with URLencoded search query or
+                // replace upper case bookmark keywords with un-encoded search query.
+                // This makes it match the same behaviour as on Firefox for the desktop.
+                final String searchUrl = keywordUrl.replace("%s", URLEncoder.encode(keywordSearch)).replace("%S", keywordSearch);
+
                 Tabs.getInstance().loadUrl(searchUrl, Tabs.LOADURL_USER_ENTERED);
                 Telemetry.sendUIEvent(TelemetryContract.Event.LOAD_URL,
                                       TelemetryContract.Method.ACTIONBAR,
@@ -2603,11 +2625,6 @@ public class BrowserApp extends GeckoApp
                 view.getHitRect(mTempRect);
                 mTempRect.offset(-view.getScrollX(), -view.getScrollY());
 
-                if (mTintManager != null) {
-                    SystemBarTintManager.SystemBarConfig config = mTintManager.getConfig();
-                    mTempRect.offset(0, -config.getPixelInsetTop(false));
-                }
-
                 int[] viewCoords = new int[2];
                 view.getLocationOnScreen(viewCoords);
 
@@ -2840,6 +2857,10 @@ public class BrowserApp extends GeckoApp
             return;
         }
 
+        if (ActivityUtils.isFullScreen(this)) {
+            return;
+        }
+
         if (areTabsShown()) {
             mTabsPanel.showMenu();
             return;
@@ -2926,6 +2947,7 @@ public class BrowserApp extends GeckoApp
                                                         ClearOnShutdownPref.PREF,
                                                         new HashSet<String>()).isEmpty();
         aMenu.findItem(R.id.quit).setVisible(visible);
+        aMenu.findItem(R.id.logins).setVisible(AppConstants.NIGHTLY_BUILD);
 
         if (tab == null || tab.getURL() == null) {
             bookmark.setEnabled(false);
@@ -3151,6 +3173,11 @@ public class BrowserApp extends GeckoApp
 
         if (itemId == R.id.addons) {
             Tabs.getInstance().loadUrlInTab(AboutPages.ADDONS);
+            return true;
+        }
+
+        if (itemId == R.id.logins) {
+            Tabs.getInstance().loadUrlInTab(AboutPages.PASSWORDS);
             return true;
         }
 
@@ -3471,6 +3498,12 @@ public class BrowserApp extends GeckoApp
         return GeckoProfile.getDefaultProfileName(this);
     }
 
+    // For use from tests only.
+    @RobocopTarget
+    public ReadingListHelper getReadingListHelper() {
+        return mReadingListHelper;
+    }
+
     /**
      * Launch UI that lets the user update Firefox.
      *
@@ -3564,5 +3597,9 @@ public class BrowserApp extends GeckoApp
                                          osLocale,
                                          appLocale,
                                          previousSession);
+    }
+
+    public static interface Refreshable {
+        public void refresh();
     }
 }

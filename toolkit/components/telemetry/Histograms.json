@@ -210,6 +210,12 @@
     "n_buckets": 50,
     "description": "Time spent on one asynchronous SnowWhite freeing (ms)"
   },
+  "DEVICE_RESET_REASON": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 10,
+    "description": "GPU Device Reset Reason (ok, hung, removed, reset, internal error, invalid call)"
+  },
   "FORGET_SKIPPABLE_MAX": {
     "expires_in_version": "never",
     "kind": "exponential",
@@ -4162,6 +4168,11 @@
     "kind": "boolean",
     "description": "DOM: Ranges that are detached on destruction (bug 702948)"
   },
+  "DOM_WINDOW_SHOWMODALDIALOG_USED": {
+    "expires_in_version": "41",
+    "kind": "flag",
+    "description": "Whether Window.showModalDialog was used in this session"
+  },
   "LOCALDOMSTORAGE_INIT_DATABASE_MS": {
     "expires_in_version": "40",
     "kind": "exponential",
@@ -4326,6 +4337,12 @@
     "n_buckets": 10,
     "extended_statistics_ok": true,
     "description": "Number of histograms with total count low errors"
+  },
+  "TELEMETRY_DISCARDED_CONTENT_PINGS_COUNT": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
+    "expires_in_version": "never",
+    "kind": "count",
+    "description": "Count of discarded content payloads."
   },
   "TELEMETRY_FILES_EVICTED": {
     "alert_emails": ["rvitillo@mozilla.com"],
@@ -4530,15 +4547,6 @@
     "kind": "enumerated",
     "n_values": 4,
     "description": "The way the GeckoApp was launched. (Normal, URL, Prefetch, Redirector)",
-    "cpp_guard": "ANDROID"
-  },
-  "FENNEC_STARTUP_TIME_ABOUTHOME": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "low": 100,
-    "high": "10000",
-    "n_buckets": 20,
-    "description": "Time for the about:home page to be displayed (ms)",
     "cpp_guard": "ANDROID"
   },
   "FENNEC_STARTUP_TIME_GECKOREADY": {
@@ -6592,6 +6600,61 @@
     "n_values": "7",
     "description": "Final status of the CacheFileInputStream (0=ok, 1=other error, 2=out of memory, 3=disk full, 4=file corrupted, 5=file not found, 6=binding aborted)"
   },
+  "NETWORK_CACHE_FS_TYPE": {
+    "expires_in_version": "42",
+    "kind": "enumerated",
+    "n_values": "5",
+    "description": "Type of FS that the cache is stored on (0=NTFS (Win), 1=FAT32 (Win), 2=FAT (Win), 3=other FS (Win), 4=other OS)"
+  },
+  "NETWORK_CACHE_SIZE_FULL_FAT": {
+    "expires_in_version": "42",
+    "kind": "linear",
+    "high": "500",
+    "n_buckets": 50,
+    "description": "Size (in MB) of a cache that reached a file count limit"
+  },
+  "NETWORK_CACHE_HIT_MISS_STAT_PER_CACHE_SIZE": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 40,
+    "description": "Hit/Miss count split by cache size in file count (0=Hit 0-5000, 1=Miss 0-5000, 2=Hit 5001-10000, ...)"
+  },
+  "NETWORK_CACHE_HIT_RATE_PER_CACHE_SIZE": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 400,
+    "description": "Hit rate for a specific cache size in file count. The hit rate is split into 20 buckets, the lower limit of the range in percents is 5*n/20. The cache size is divided into 20 ranges of length 5000, the lower limit of the range is 5000*(n%20)"
+  },
+  "NETWORK_CACHE_METADATA_FIRST_READ_TIME_MS": {
+    "expires_in_version": "never",
+    "kind": "exponential",
+    "high": "10000",
+    "n_buckets": 50,
+    "extended_statistics_ok": true,
+    "description": "Time spent to read the first part of the metadata from the cache entry file."
+  },
+  "NETWORK_CACHE_METADATA_SECOND_READ_TIME_MS": {
+    "expires_in_version": "never",
+    "kind": "exponential",
+    "high": "10000",
+    "n_buckets": 50,
+    "extended_statistics_ok": true,
+    "description": "Time spent to read the missing part of the metadata from the cache entry file."
+  },
+  "NETWORK_CACHE_METADATA_FIRST_READ_SIZE": {
+    "expires_in_version": "never",
+    "kind": "linear",
+    "high": "5119",
+    "n_buckets": 256,
+    "description": "Guessed size of the metadata that we read from the cache file as the first part."
+  },
+  "NETWORK_CACHE_METADATA_SIZE": {
+    "expires_in_version": "never",
+    "kind": "linear",
+    "high": "5119",
+    "n_buckets": 256,
+    "description": "Actual size of the metadata parsed from the disk."
+  },
   "DATABASE_LOCKED_EXCEPTION": {
     "expires_in_version": "42",
     "kind": "enumerated",
@@ -6681,6 +6744,12 @@
     "kind": "enumerated",
     "n_values": 16,
     "description": "TLS/SSL version fallback reached the minimum version (1=TLS 1.0, 2=TLS 1.1, 3=TLS 1.2) or the fallback limit (4=TLS 1.0, 8=TLS 1.1, 12=TLS 1.2), stopped the fallback"
+  },
+  "SSL_WEAK_CIPHERS_FALLBACK": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 64,
+    "description": "Fallback attempted when server did not support any strong cipher suites"
   },
   "SSL_CIPHER_SUITE_FULL": {
     "expires_in_version": "never",
@@ -6777,6 +6846,13 @@
     "kind": "enumerated",
     "n_values": 24,
     "description": "Was a certificate error overridden on this handshake? What was it? (0=unknown error (indicating bug), 1=no, >1=a specific error)"
+  },
+  "SSL_CERT_VERIFICATION_ERRORS": {
+    "alert_emails": ["seceng@mozilla.org"],
+    "expires_in_version": "default",
+    "kind": "enumerated",
+    "n_values": 100,
+    "description": "If certificate verification failed in a TLS handshake, what was the error? (see mapping in SSLServerCertVerification.cpp)"
   },
   "SSL_PERMANENT_CERT_ERROR_OVERRIDES": {
     "alert_emails": ["seceng@mozilla.org"],
@@ -6881,6 +6957,12 @@
     "kind": "enumerated",
     "n_values": 512,
     "description": "Certificate pinning test results by host for Mozilla operational sites"
+  },
+  "CERT_CHAIN_KEY_SIZE_STATUS": {
+    "expires_in_version": "default",
+    "kind": "enumerated",
+    "n_values": 4,
+    "description": "Does enforcing a larger minimum RSA key size cause verification failures? 1 = no, 2 = yes, 3 = another error prevented finding a verified chain"
   },
   "WEAVE_CONFIGURED": {
     "expires_in_version": "default",
@@ -7250,6 +7332,12 @@
     "n_buckets": 16,
     "description": "The number of entries in persistent DataStorage (HSTS and HPKP data, basically)"
   },
+  "VIDEO_MSE_UNLOAD_STATE": {
+    "expires_in_version": "45",
+    "kind": "enumerated",
+    "n_values": 5,
+    "description": "MSE video state when unloading. ended = 0, paused = 1, stalled = 2, seeking = 3, other = 4"
+  },
   "FX_SANITIZE_TOTAL": {
     "alert_emails": ["firefox-dev@mozilla.org", "gavin@mozilla.com"],
     "expires_in_version": "40",
@@ -7357,6 +7445,18 @@
     "extended_statistics_ok": true,
     "description": "The number of sites for which the user has explicitly rejected saving logins"
   },
+  "PWMGR_FORM_ACTION_EFFECT": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values" : 5,
+    "description": "The effect of the form action on signon autofill. (0=No effect, 1=Fewer logins after considering the form action, 2=No logins match form origin and action."
+  },
+  "PWMGR_FORM_AUTOFILL_RESULT": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values" : 20,
+    "description": "The result of auto-filling a login form. See http://mzl.la/1Mbs6jL for bucket descriptions."
+  },
   "PWMGR_NUM_PASSWORDS_PER_HOSTNAME": {
     "expires_in_version": "never",
     "kind": "linear",
@@ -7372,12 +7472,31 @@
     "extended_statistics_ok": true,
     "description": "Total number of saved logins, including those that cannot be decrypted"
   },
+  "PWMGR_NUM_HTTPAUTH_PASSWORDS": {
+    "expires_in_version": "never",
+    "kind": "exponential",
+    "high": 750,
+    "n_buckets" : 50,
+    "description": "Number of HTTP Auth logins"
+  },
   "PWMGR_LOGIN_LAST_USED_DAYS": {
     "expires_in_version": "never",
     "kind": "exponential",
     "high": 750,
     "n_buckets" : 40,
     "description": "Time in days each saved login was last used"
+  },
+  "PWMGR_PROMPT_REMEMBER_ACTION" : {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 5,
+    "description": "Action taken by user through prompt for creating a login. (0=Prompt displayed [always recorded], 1=Add login, 2=Don't save now, 3=Never save)"
+  },
+  "PWMGR_PROMPT_UPDATE_ACTION" : {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 5,
+    "description": "Action taken by user through prompt for modifying a login. (0=Prompt displayed [always recorded], 1=Update login)"
   },
   "PWMGR_SAVING_ENABLED": {
     "expires_in_version": "never",

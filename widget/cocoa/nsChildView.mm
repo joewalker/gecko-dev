@@ -44,6 +44,7 @@
 #include "nsMenuUtilsX.h"
 #include "nsMenuBarX.h"
 #include "NativeKeyBindings.h"
+#include "ComplexTextInputPanel.h"
 
 #include "gfxContext.h"
 #include "gfxQuartzSurface.h"
@@ -542,6 +543,8 @@ nsresult nsChildView::Create(nsIWidget *aParent,
 
   NS_ASSERTION(!mTextInputHandler, "mTextInputHandler has already existed");
   mTextInputHandler = new TextInputHandler(this, mView);
+
+  mPluginFocused = false;
 
   return NS_OK;
 
@@ -1617,6 +1620,48 @@ nsChildView::NotifyIMEInternal(const IMENotification& aIMENotification)
   }
 }
 
+NS_IMETHODIMP
+nsChildView::StartPluginIME(const mozilla::WidgetKeyboardEvent& aKeyboardEvent,
+                            int32_t aPanelX, int32_t aPanelY,
+                            nsString& aCommitted)
+{
+  NS_ENSURE_TRUE(mView, NS_ERROR_NOT_AVAILABLE);
+
+  ComplexTextInputPanel* ctiPanel =
+    ComplexTextInputPanel::GetSharedComplexTextInputPanel();
+
+  ctiPanel->PlacePanel(aPanelX, aPanelY);
+  // We deliberately don't use TextInputHandler::GetCurrentKeyEvent() to
+  // obtain the NSEvent* we pass to InterpretKeyEvent().  This works fine in
+  // non-e10s mode.  But in e10s mode TextInputHandler::HandleKeyDownEvent()
+  // has already returned, so the relevant KeyEventState* (and its NSEvent*)
+  // is already out of scope.  Furthermore we don't *need* to use it.
+  // StartPluginIME() is only ever called to start a new IME session when none
+  // currently exists.  So nested IME should never reach here, and so it should
+  // be fine to use the last key-down event received by -[ChildView keyDown:]
+  // (as we currently do).
+  ctiPanel->InterpretKeyEvent([mView lastKeyDownEvent], aCommitted);
+
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsChildView::SetPluginFocused(bool& aFocused)
+{
+  if (aFocused == mPluginFocused) {
+    return NS_OK;
+  }
+  if (!aFocused) {
+    ComplexTextInputPanel* ctiPanel =
+      ComplexTextInputPanel::GetSharedComplexTextInputPanel();
+    if (ctiPanel) {
+      ctiPanel->CancelComposition();
+    }
+  }
+  mPluginFocused = aFocused;
+  return NS_OK;
+}
+
 NS_IMETHODIMP_(void)
 nsChildView::SetInputContext(const InputContext& aContext,
                              const InputContextAction& aAction)
@@ -2327,11 +2372,13 @@ nsChildView::UpdateThemeGeometries(const nsTArray<ThemeGeometry>& aThemeGeometri
   if (![[mView window] isKindOfClass:[ToolbarWindow class]])
     return;
 
-  // Update unified toolbar height.
+  // Update unified toolbar height and sheet attachment position.
   int32_t windowWidth = mBounds.width;
   int32_t titlebarBottom = FindTitlebarBottom(aThemeGeometries, windowWidth);
   int32_t unifiedToolbarBottom =
     FindUnifiedToolbarBottom(aThemeGeometries, windowWidth, titlebarBottom);
+  int32_t toolboxBottom =
+    FindFirstRectOfType(aThemeGeometries, nsNativeThemeCocoa::eThemeGeometryTypeToolbox).YMost();
 
   ToolbarWindow* win = (ToolbarWindow*)[mView window];
   bool drawsContentsIntoWindowFrame = [win drawsContentsIntoWindowFrame];
@@ -2339,6 +2386,8 @@ nsChildView::UpdateThemeGeometries(const nsTArray<ThemeGeometry>& aThemeGeometri
   int32_t contentOffset = drawsContentsIntoWindowFrame ? titlebarHeight : 0;
   int32_t devUnifiedHeight = titlebarHeight + unifiedToolbarBottom - contentOffset;
   [win setUnifiedToolbarHeight:DevPixelsToCocoaPoints(devUnifiedHeight)];
+  int32_t devSheetPosition = titlebarHeight + std::max(toolboxBottom, unifiedToolbarBottom) - contentOffset;
+  [win setSheetAttachmentPosition:DevPixelsToCocoaPoints(devSheetPosition)];
 
   // Update titlebar control offsets.
   nsIntRect windowButtonRect = FindFirstRectOfType(aThemeGeometries, nsNativeThemeCocoa::eThemeGeometryTypeWindowButtons);
@@ -2901,6 +2950,7 @@ NSEvent* gLastDragMouseDownEvent = nil;
     mExpectingWheelStop = NO;
 
     mLastMouseDownEvent = nil;
+    mLastKeyDownEvent = nil;
     mClickThroughMouseDownEvent = nil;
     mDragService = nullptr;
 
@@ -2953,6 +3003,26 @@ NSEvent* gLastDragMouseDownEvent = nil;
   return self;
 
   NS_OBJC_END_TRY_ABORT_BLOCK_NIL;
+}
+
+// ComplexTextInputPanel's interpretKeyEvent hack won't work without this.
+// It makes calls to +[NSTextInputContext currentContext], deep in system
+// code, return the appropriate context.
+- (NSTextInputContext *)inputContext
+{
+  NSTextInputContext* pluginContext = NULL;
+  if (mGeckoChild && mGeckoChild->IsPluginFocused()) {
+    ComplexTextInputPanel* ctiPanel =
+      ComplexTextInputPanel::GetSharedComplexTextInputPanel();
+    if (ctiPanel) {
+      pluginContext = (NSTextInputContext*) ctiPanel->GetInputContext();
+    }
+  }
+  if (pluginContext) {
+    return pluginContext;
+  } else {
+    return [super inputContext];
+  }
 }
 
 - (void)installTextInputHandler:(TextInputHandler*)aHandler
@@ -3032,6 +3102,7 @@ NSEvent* gLastDragMouseDownEvent = nil;
   [mGLContext release];
   [mPendingDirtyRects release];
   [mLastMouseDownEvent release];
+  [mLastKeyDownEvent release];
   [mClickThroughMouseDownEvent release];
   CGImageRelease(mTopLeftCornerMask);
   ChildViewMouseTracker::OnDestroyView(self);
@@ -5281,9 +5352,17 @@ static int32_t RoundUp(double aDouble)
   return YES;
 }
 
+- (NSEvent*)lastKeyDownEvent
+{
+  return mLastKeyDownEvent;
+}
+
 - (void)keyDown:(NSEvent*)theEvent
 {
   NS_OBJC_BEGIN_TRY_ABORT_BLOCK;
+
+  [mLastKeyDownEvent release];
+  mLastKeyDownEvent = [theEvent retain];
 
   // Weird things can happen on keyboard input if the key window isn't in the
   // current space.  For example see bug 1056251.  To get around this, always

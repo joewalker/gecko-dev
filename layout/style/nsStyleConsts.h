@@ -840,6 +840,12 @@ static inline mozilla::css::Side operator++(mozilla::css::Side& side, int) {
 #define NS_STYLE_HYPHENS_MANUAL                 1
 #define NS_STYLE_HYPHENS_AUTO                   2
 
+// ruby-align, see nsStyleText
+#define NS_STYLE_RUBY_ALIGN_START               0
+#define NS_STYLE_RUBY_ALIGN_CENTER              1
+#define NS_STYLE_RUBY_ALIGN_SPACE_BETWEEN       2
+#define NS_STYLE_RUBY_ALIGN_SPACE_AROUND        3
+
 // ruby-position, see nsStyleText
 #define NS_STYLE_RUBY_POSITION_OVER             0
 #define NS_STYLE_RUBY_POSITION_UNDER            1
@@ -1014,10 +1020,12 @@ static inline mozilla::css::Side operator++(mozilla::css::Side& side, int) {
 #define NS_STYLE_VECTOR_EFFECT_NONE                 0
 #define NS_STYLE_VECTOR_EFFECT_NON_SCALING_STROKE   1
 
+// backface-visibility
 // 3d Transforms - Backface visibility
 #define NS_STYLE_BACKFACE_VISIBILITY_VISIBLE        1
 #define NS_STYLE_BACKFACE_VISIBILITY_HIDDEN         0
 
+// transform-style
 #define NS_STYLE_TRANSFORM_STYLE_FLAT               0
 #define NS_STYLE_TRANSFORM_STYLE_PRESERVE_3D        1
 
@@ -1067,6 +1075,11 @@ static inline mozilla::css::Side operator++(mozilla::css::Side& side, int) {
 // See nsStyleDisplay::mScrollBehavior
 #define NS_STYLE_SCROLL_BEHAVIOR_AUTO       0
 #define NS_STYLE_SCROLL_BEHAVIOR_SMOOTH     1
+
+// See nsStyleDisplay::mScrollSnapType{X,Y}
+#define NS_STYLE_SCROLL_SNAP_TYPE_NONE              0
+#define NS_STYLE_SCROLL_SNAP_TYPE_MANDATORY         1
+#define NS_STYLE_SCROLL_SNAP_TYPE_PROXIMITY         2
 
 /*****************************************************************************
  * Constants for media features.                                             *

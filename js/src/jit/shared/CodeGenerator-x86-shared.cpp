@@ -363,6 +363,82 @@ CodeGeneratorX86Shared::visitOutOfLineLoadTypedArrayOutOfBounds(OutOfLineLoadTyp
     masm.jmp(ool->rejoin());
 }
 
+void
+CodeGeneratorX86Shared::visitOffsetBoundsCheck(OffsetBoundsCheck *oolCheck)
+{
+    // The access is heap[ptr + offset]. The inline code checks that
+    // ptr < heap.length - offset. We get here when that fails. We need to check
+    // for the case where ptr + offset >= 0, in which case the access is still
+    // in bounds.
+    MOZ_ASSERT(oolCheck->offset() != 0,
+               "An access without a constant offset doesn't need a separate OffsetBoundsCheck");
+    masm.cmp32(oolCheck->ptrReg(), Imm32(-uint32_t(oolCheck->offset())));
+    masm.j(Assembler::Below, oolCheck->outOfBounds());
+
+#ifdef JS_CODEGEN_X64
+    // In order to get the offset to wrap properly, we must sign-extend the
+    // pointer to 32-bits. We'll zero out the sign extension immediately
+    // after the access to restore asm.js invariants.
+    masm.movslq(oolCheck->ptrReg(), oolCheck->ptrReg());
+#endif
+
+    masm.jmp(oolCheck->rejoin());
+}
+
+uint32_t
+CodeGeneratorX86Shared::emitAsmJSBoundsCheckBranch(const MAsmJSHeapAccess *access,
+                                                   const MInstruction *mir,
+                                                   Register ptr, Label *fail)
+{
+    // Emit a bounds-checking branch for |access|.
+
+    MOZ_ASSERT(gen->needsAsmJSBoundsCheckBranch(access));
+
+    Label *pass = nullptr;
+
+    // If we have a non-zero offset, it's possible that |ptr| itself is out of
+    // bounds, while adding the offset computes an in-bounds address. To catch
+    // this case, we need a second branch, which we emit out of line since it's
+    // unlikely to be needed in normal programs.
+    if (access->offset() != 0) {
+        OffsetBoundsCheck *oolCheck = new(alloc()) OffsetBoundsCheck(fail, ptr, access->offset());
+        fail = oolCheck->entry();
+        pass = oolCheck->rejoin();
+        addOutOfLineCode(oolCheck, mir);
+    }
+
+    // The bounds check is a comparison with an immediate value. The asm.js
+    // module linking process will add the length of the heap to the immediate
+    // field, so -access->endOffset() will turn into
+    // (heapLength - access->endOffset()), allowing us to test whether the end
+    // of the access is beyond the end of the heap.
+    uint32_t maybeCmpOffset = masm.cmp32WithPatch(ptr, Imm32(-access->endOffset())).offset();
+    masm.j(Assembler::Above, fail);
+
+    if (pass)
+        masm.bind(pass);
+
+    return maybeCmpOffset;
+}
+
+void
+CodeGeneratorX86Shared::cleanupAfterAsmJSBoundsCheckBranch(const MAsmJSHeapAccess *access,
+                                                           Register ptr)
+{
+    // Clean up after performing a heap access checked by a branch.
+
+    MOZ_ASSERT(gen->needsAsmJSBoundsCheckBranch(access));
+
+#ifdef JS_CODEGEN_X64
+    // If the offset is 0, we don't use an OffsetBoundsCheck.
+    if (access->offset() != 0) {
+        // Zero out the high 32 bits, in case the OffsetBoundsCheck code had to
+        // sign-extend (movslq) the pointer value to get wraparound to work.
+        masm.movl(ptr, ptr);
+    }
+#endif
+}
+
 bool
 CodeGeneratorX86Shared::generateOutOfLineCode()
 {
@@ -1489,7 +1565,7 @@ CodeGeneratorX86Shared::visitOutOfLineTableSwitch(OutOfLineTableSwitch *ool)
 {
     MTableSwitch *mir = ool->mir();
 
-    masm.align(sizeof(void*));
+    masm.haltingAlign(sizeof(void*));
     masm.bind(ool->jumpLabel()->src());
     masm.addCodeLabel(*ool->jumpLabel());
 
@@ -2173,6 +2249,27 @@ CodeGeneratorX86Shared::visitSimdSplatX4(LSimdSplatX4 *ins)
 }
 
 void
+CodeGeneratorX86Shared::visitSimdReinterpretCast(LSimdReinterpretCast *ins)
+{
+    FloatRegister input = ToFloatRegister(ins->input());
+    FloatRegister output = ToFloatRegister(ins->output());
+
+    if (input.aliases(output))
+        return;
+
+    switch (ins->mir()->type()) {
+      case MIRType_Int32x4:
+        masm.vmovdqa(input, output);
+        break;
+      case MIRType_Float32x4:
+        masm.vmovaps(input, output);
+        break;
+      default:
+        MOZ_CRASH("Unknown SIMD kind");
+    }
+}
+
+void
 CodeGeneratorX86Shared::visitSimdExtractElementI(LSimdExtractElementI *ins)
 {
     FloatRegister input = ToFloatRegister(ins->input());
@@ -2283,6 +2380,93 @@ CodeGeneratorX86Shared::visitSimdSignMaskX4(LSimdSignMaskX4 *ins)
 }
 
 void
+CodeGeneratorX86Shared::visitSimdGeneralSwizzleI(LSimdGeneralSwizzleI *ins)
+{
+    FloatRegister input = ToFloatRegister(ins->base());
+    Register temp = ToRegister(ins->temp());
+
+    // This won't generate fast code, but it's fine because we expect users
+    // to have used constant indices (and thus MSimdGeneralSwizzle to be fold
+    // into MSimdSwizzle, which are fast).
+    masm.reserveStack(Simd128DataSize * 2);
+
+    masm.storeAlignedInt32x4(input, Address(StackPointer, Simd128DataSize));
+
+    for (size_t i = 0; i < 4; i++) {
+        Operand lane = ToOperand(ins->lane(i));
+
+        Label go, join;
+        masm.cmp32(lane, Imm32(4));
+        masm.j(Assembler::Below, &go);
+
+        {
+            masm.store32(Imm32(0), Address(StackPointer, i * sizeof(int32_t)));
+            masm.jump(&join);
+        }
+
+        masm.bind(&go);
+        if (lane.kind() == Operand::REG) {
+            masm.load32(Operand(StackPointer, ToRegister(ins->lane(i)), TimesFour, Simd128DataSize),
+                        temp);
+        } else {
+            masm.load32(lane, temp);
+            masm.load32(Operand(StackPointer, temp, TimesFour, Simd128DataSize), temp);
+        }
+
+        masm.store32(temp, Address(StackPointer, i * sizeof(int32_t)));
+        masm.bind(&join);
+    }
+
+    FloatRegister output = ToFloatRegister(ins->output());
+    masm.loadAlignedInt32x4(Address(StackPointer, 0), output);
+
+    masm.freeStack(Simd128DataSize * 2);
+}
+
+void
+CodeGeneratorX86Shared::visitSimdGeneralSwizzleF(LSimdGeneralSwizzleF *ins)
+{
+    FloatRegister input = ToFloatRegister(ins->base());
+    Register temp = ToRegister(ins->temp());
+
+    // See comment in the visitSimdGeneralSwizzleI.
+    masm.reserveStack(Simd128DataSize * 2);
+
+    masm.storeAlignedFloat32x4(input, Address(StackPointer, Simd128DataSize));
+
+    for (size_t i = 0; i < 4; i++) {
+        Operand lane = ToOperand(ins->lane(i));
+
+        Label go, join;
+        masm.cmp32(lane, Imm32(4));
+        masm.j(Assembler::Below, &go);
+
+        {
+            masm.loadConstantFloat32(float(GenericNaN()), ScratchFloat32Reg);
+            masm.storeFloat32(ScratchFloat32Reg, Address(StackPointer, i * sizeof(int32_t)));
+            masm.jump(&join);
+        }
+
+        masm.bind(&go);
+        if (lane.kind() == Operand::REG) {
+            masm.loadFloat32(Operand(StackPointer, ToRegister(ins->lane(i)), TimesFour, Simd128DataSize),
+                             ScratchFloat32Reg);
+        } else {
+            masm.load32(lane, temp);
+            masm.loadFloat32(Operand(StackPointer, temp, TimesFour, Simd128DataSize), ScratchFloat32Reg);
+        }
+
+        masm.storeFloat32(ScratchFloat32Reg, Address(StackPointer, i * sizeof(int32_t)));
+        masm.bind(&join);
+    }
+
+    FloatRegister output = ToFloatRegister(ins->output());
+    masm.loadAlignedFloat32x4(Address(StackPointer, 0), output);
+
+    masm.freeStack(Simd128DataSize * 2);
+}
+
+void
 CodeGeneratorX86Shared::visitSimdSwizzleI(LSimdSwizzleI *ins)
 {
     FloatRegister input = ToFloatRegister(ins->input());
@@ -2328,6 +2512,10 @@ CodeGeneratorX86Shared::visitSimdSwizzleF(LSimdSwizzleF *ins)
     }
 
     if (ins->lanesMatch(0, 1, 0, 1)) {
+        if (AssemblerX86Shared::HasSSE3() && !AssemblerX86Shared::HasAVX()) {
+            masm.vmovddup(input, output);
+            return;
+        }
         FloatRegister inputCopy = masm.reusedInputFloat32x4(input, output);
         masm.vmovlhps(input, inputCopy, output);
         return;

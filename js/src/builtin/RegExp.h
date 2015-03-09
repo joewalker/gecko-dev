@@ -9,12 +9,6 @@
 
 #include "vm/RegExpObject.h"
 
-JSObject *
-js_InitRegExpClass(JSContext *cx, js::HandleObject obj);
-
-bool
-regexp_flags(JSContext *cx, unsigned argc, JS::Value *vp);
-
 /*
  * The following builtin natives are extern'd for pointer comparison in
  * other parts of the engine.
@@ -22,9 +16,18 @@ regexp_flags(JSContext *cx, unsigned argc, JS::Value *vp);
 
 namespace js {
 
+bool
+regexp_flags(JSContext *cx, unsigned argc, JS::Value *vp);
+
+JSObject *
+InitRegExpClass(JSContext *cx, HandleObject obj);
+
 // Whether RegExp statics should be updated with the input and results of a
 // regular expression execution.
 enum RegExpStaticsUpdate { UpdateRegExpStatics, DontUpdateRegExpStatics };
+
+// Whether RegExp statics should be used to create a RegExp instance.
+enum RegExpStaticsUse { UseRegExpStatics, DontUseRegExpStatics };
 
 RegExpRunStatus
 ExecuteRegExp(JSContext *cx, HandleObject regexp, HandleString string,
@@ -79,6 +82,16 @@ regexp_exec_no_statics(JSContext *cx, unsigned argc, Value *vp);
  */
 extern bool
 regexp_test_no_statics(JSContext *cx, unsigned argc, Value *vp);
+
+/*
+ * Behaves like RegExp(string) or RegExp(string, string), but doesn't use
+ * RegExp statics.
+ *
+ * Usage: re = regexp_construct(pattern)
+ *        re = regexp_construct(pattern, flags)
+ */
+extern bool
+regexp_construct_no_statics(JSContext *cx, unsigned argc, Value *vp);
 
 } /* namespace js */
 

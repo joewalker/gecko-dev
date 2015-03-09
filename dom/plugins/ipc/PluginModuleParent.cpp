@@ -37,7 +37,6 @@
 
 #ifdef XP_WIN
 #include "mozilla/widget/AudioSession.h"
-#include "nsWindowsHelpers.h"
 #include "PluginHangUIParent.h"
 #endif
 
@@ -97,6 +96,7 @@ mozilla::plugins::SetupBridge(uint32_t aPluginId,
                               bool aForceBridgeNow,
                               nsresult* rv)
 {
+    PluginModuleChromeParent::ClearInstantiationFlag();
     nsRefPtr<nsPluginHost> host = nsPluginHost::GetInst();
     nsRefPtr<nsNPAPIPlugin> plugin;
     *rv = host->GetPluginForContentProcess(aPluginId, getter_AddRefs(plugin));
@@ -105,12 +105,74 @@ mozilla::plugins::SetupBridge(uint32_t aPluginId,
     }
     PluginModuleChromeParent* chromeParent = static_cast<PluginModuleChromeParent*>(plugin->GetLibrary());
     chromeParent->SetContentParent(aContentParent);
-    if (!aForceBridgeNow && chromeParent->IsStartingAsync()) {
+    if (!aForceBridgeNow && chromeParent->IsStartingAsync() &&
+        PluginModuleChromeParent::DidInstantiate()) {
         // We'll handle the bridging asynchronously
         return true;
     }
     return PPluginModule::Bridge(aContentParent, chromeParent);
 }
+
+#ifdef MOZ_CRASHREPORTER_INJECTOR
+
+/**
+ * Use for executing CreateToolhelp32Snapshot off main thread
+ */
+class mozilla::plugins::FinishInjectorInitTask : public CancelableTask
+{
+public:
+    FinishInjectorInitTask()
+        : mMutex("FlashInjectorInitTask::mMutex")
+        , mParent(nullptr)
+        , mMainThreadMsgLoop(MessageLoop::current())
+    {
+        MOZ_ASSERT(NS_IsMainThread());
+    }
+
+    void Init(PluginModuleChromeParent* aParent)
+    {
+        MOZ_ASSERT(aParent);
+        mParent = aParent;
+    }
+
+    void PostToMainThread()
+    {
+        mSnapshot.own(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0));
+        bool deleteThis = false;
+        {   // Scope for lock
+            mozilla::MutexAutoLock lock(mMutex);
+            if (mMainThreadMsgLoop) {
+                mMainThreadMsgLoop->PostTask(FROM_HERE, this);
+            } else {
+                deleteThis = true;
+            }
+        }
+        if (deleteThis) {
+            delete this;
+        }
+    }
+
+    void Run() MOZ_OVERRIDE
+    {
+        mParent->DoInjection(mSnapshot);
+    }
+
+    void Cancel() MOZ_OVERRIDE
+    {
+        mozilla::MutexAutoLock lock(mMutex);
+        mMainThreadMsgLoop = nullptr;
+    }
+
+private:
+    mozilla::Mutex            mMutex;
+    nsAutoHandle              mSnapshot;
+    PluginModuleChromeParent* mParent;
+    MessageLoop*              mMainThreadMsgLoop;
+};
+
+#endif // MOZ_CRASHREPORTER_INJECTOR
+
+namespace {
 
 /**
  * Objects of this class remain linked until either an error occurs in the
@@ -261,6 +323,8 @@ PRCList PluginModuleMapping::sModuleListHead =
     PR_INIT_STATIC_CLIST(&PluginModuleMapping::sModuleListHead);
 
 bool PluginModuleMapping::sIsLoadModuleOnStack = false;
+
+} // anonymous namespace
 
 void
 mozilla::plugins::TerminatePlugin(uint32_t aPluginId)
@@ -415,7 +479,9 @@ PluginModuleChromeParent::LoadModule(const char* aFilePath, uint32_t aPluginId,
         return nullptr;
     }
     parent->mIsFlashPlugin = aPluginTag->mIsFlashPlugin;
-    parent->mIsBlocklisted = aPluginTag->GetBlocklistState() != 0;
+    uint32_t blocklistState;
+    nsresult rv = aPluginTag->GetBlocklistState(&blocklistState);
+    parent->mIsBlocklisted = NS_FAILED(rv) || blocklistState != 0;
     if (!parent->mIsStartingAsync) {
         int32_t launchTimeoutSecs = Preferences::GetInt(kLaunchTimeoutPref, 0);
         if (!parent->mSubprocess->WaitUntilConnected(launchTimeoutSecs * 1000)) {
@@ -561,6 +627,8 @@ PluginModuleContentParent::~PluginModuleContentParent()
     Preferences::UnregisterCallback(TimeoutChanged, kContentTimeoutPref, this);
 }
 
+bool PluginModuleChromeParent::sInstantiated = false;
+
 PluginModuleChromeParent::PluginModuleChromeParent(const char* aFilePath, uint32_t aPluginId)
     : PluginModuleParent(true)
     , mSubprocess(new PluginProcessParent(aFilePath))
@@ -580,6 +648,7 @@ PluginModuleChromeParent::PluginModuleChromeParent(const char* aFilePath, uint32
 #ifdef MOZ_CRASHREPORTER_INJECTOR
     , mFlashProcess1(0)
     , mFlashProcess2(0)
+    , mFinishInitTask(nullptr)
 #endif
     , mInitOnAsyncConnect(false)
     , mAsyncInitRv(NS_ERROR_NOT_INITIALIZED)
@@ -588,6 +657,7 @@ PluginModuleChromeParent::PluginModuleChromeParent(const char* aFilePath, uint32
     , mIsFlashPlugin(false)
 {
     NS_ASSERTION(mSubprocess, "Out of memory!");
+    sInstantiated = true;
 
     RegisterSettingsCallbacks();
 
@@ -626,6 +696,10 @@ PluginModuleChromeParent::~PluginModuleChromeParent()
         UnregisterInjectorCallback(mFlashProcess1);
     if (mFlashProcess2)
         UnregisterInjectorCallback(mFlashProcess2);
+    if (mFinishInitTask) {
+        // mFinishInitTask will be deleted by the main thread message_loop
+        mFinishInitTask->Cancel();
+    }
 #endif
 
     UnregisterSettingsCallbacks();
@@ -897,6 +971,13 @@ CreateFlashMinidump(DWORD processId, ThreadId childThread,
 bool
 PluginModuleChromeParent::ShouldContinueFromReplyTimeout()
 {
+    if (mIsFlashPlugin) {
+        MessageLoop::current()->PostTask(
+            FROM_HERE,
+            mTaskFactory.NewRunnableMethod(
+                &PluginModuleChromeParent::NotifyFlashHang));
+    }
+
 #ifdef XP_WIN
     if (LaunchHangUI()) {
         return true;
@@ -1280,6 +1361,15 @@ PluginModuleChromeParent::ActorDestroy(ActorDestroyReason why)
 }
 
 void
+PluginModuleParent::NotifyFlashHang()
+{
+    nsCOMPtr<nsIObserverService> obs = services::GetObserverService();
+    if (obs) {
+        obs->NotifyObservers(nullptr, "flash-plugin-hang", nullptr);
+    }
+}
+
+void
 PluginModuleParent::NotifyPluginCrashed()
 {
     if (!OkToCleanup()) {
@@ -1366,7 +1456,7 @@ NP_END_MACRO
 
 NPError
 PluginModuleParent::NPP_Destroy(NPP instance,
-                                NPSavedData** /*saved*/)
+                                NPSavedData** saved)
 {
     // FIXME/cjones:
     //  (1) send a "destroy" message to the child
@@ -1375,7 +1465,12 @@ PluginModuleParent::NPP_Destroy(NPP instance,
     //  (4) free parent
 
     PLUGIN_LOG_DEBUG_FUNCTION;
-    PluginInstanceParent* parentInstance = PluginInstanceParent::Cast(instance);
+    PluginAsyncSurrogate* surrogate = nullptr;
+    PluginInstanceParent* parentInstance =
+        PluginInstanceParent::Cast(instance, &surrogate);
+    if (surrogate && (!parentInstance || parentInstance->UseSurrogate())) {
+        return surrogate->NPP_Destroy(saved);
+    }
 
     if (!parentInstance)
         return NPERR_NO_ERROR;
@@ -1408,11 +1503,7 @@ PluginModuleParent::NPP_DestroyStream(NPP instance,
                                       NPStream* stream,
                                       NPReason reason)
 {
-    PluginInstanceParent* i = PluginInstanceParent::Cast(instance);
-    if (!i)
-        return NPERR_GENERIC_ERROR;
-
-    return i->NPP_DestroyStream(stream, reason);
+    RESOLVE_AND_CALL(instance, NPP_DestroyStream(stream, reason));
 }
 
 int32_t
@@ -1626,6 +1717,8 @@ PluginModuleParent::OnInitFailure()
         Close();
     }
 
+    mShutdown = true;
+
     if (mIsStartingAsync) {
         /* If we've failed then we need to enumerate any pending NPP_New calls
            and clean them up. */
@@ -1752,13 +1845,18 @@ PluginModuleParent::NP_Initialize(NPNetscapeFuncs* bFuncs, NPPluginFuncs* pFuncs
         return NS_ERROR_FAILURE;
     }
 
+    *error = NPERR_NO_ERROR;
     if (mIsStartingAsync) {
-        PluginAsyncSurrogate::NP_GetEntryPoints(pFuncs);
+        if (GetIPCChannel()->CanSend()) {
+            // We're already connected, so we may call this immediately.
+            RecvNP_InitializeResult(*error);
+        } else {
+            PluginAsyncSurrogate::NP_GetEntryPoints(pFuncs);
+        }
     } else {
         SetPluginFuncs(pFuncs);
     }
 
-    *error = NPERR_NO_ERROR;
     return NS_OK;
 }
 
@@ -1873,6 +1971,22 @@ PluginModuleParent::NP_Initialize(NPNetscapeFuncs* bFuncs, NPError* error)
     *error = NPERR_NO_ERROR;
     return NS_OK;
 }
+
+#if defined(XP_WIN) || defined(XP_MACOSX)
+
+nsresult
+PluginModuleContentParent::NP_Initialize(NPNetscapeFuncs* bFuncs, NPError* error)
+{
+    PLUGIN_LOG_DEBUG_METHOD;
+    nsresult rv = PluginModuleParent::NP_Initialize(bFuncs, error);
+    if (mIsStartingAsync && GetIPCChannel()->CanSend()) {
+        // We're already connected, so we may call this immediately.
+        RecvNP_InitializeResult(*error);
+    }
+    return rv;
+}
+
+#endif
 
 nsresult
 PluginModuleChromeParent::NP_Initialize(NPNetscapeFuncs* bFuncs, NPError* error)
@@ -2559,22 +2673,41 @@ PluginModuleChromeParent::InitializeInjector()
         return;
 
     TimeStamp th32Start = TimeStamp::Now();
-    nsAutoHandle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0));
-    if (INVALID_HANDLE_VALUE == snapshot)
+    mFinishInitTask = mChromeTaskFactory.NewTask<FinishInjectorInitTask>();
+    mFinishInitTask->Init(this);
+    if (!::QueueUserWorkItem(&PluginModuleChromeParent::GetToolhelpSnapshot,
+                             mFinishInitTask, WT_EXECUTEDEFAULT)) {
+        delete mFinishInitTask;
+        mFinishInitTask = nullptr;
         return;
+    }
     TimeStamp th32End = TimeStamp::Now();
     mTimeBlocked += (th32End - th32Start);
+}
 
+void
+PluginModuleChromeParent::DoInjection(const nsAutoHandle& aSnapshot)
+{
     DWORD pluginProcessPID = GetProcessId(Process()->GetChildProcessHandle());
-    mFlashProcess1 = GetFlashChildOfPID(pluginProcessPID, snapshot);
+    mFlashProcess1 = GetFlashChildOfPID(pluginProcessPID, aSnapshot);
     if (mFlashProcess1) {
         InjectCrashReporterIntoProcess(mFlashProcess1, this);
 
-        mFlashProcess2 = GetFlashChildOfPID(mFlashProcess1, snapshot);
+        mFlashProcess2 = GetFlashChildOfPID(mFlashProcess1, aSnapshot);
         if (mFlashProcess2) {
             InjectCrashReporterIntoProcess(mFlashProcess2, this);
         }
     }
+    mFinishInitTask = nullptr;
+}
+
+DWORD WINAPI
+PluginModuleChromeParent::GetToolhelpSnapshot(LPVOID aContext)
+{
+    FinishInjectorInitTask* task = static_cast<FinishInjectorInitTask*>(aContext);
+    MOZ_ASSERT(task);
+    task->PostToMainThread();
+    return 0;
 }
 
 void

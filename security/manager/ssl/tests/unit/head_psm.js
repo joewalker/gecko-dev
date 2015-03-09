@@ -32,6 +32,7 @@ const MOZILLA_PKIX_ERROR_BASE = Ci.nsINSSErrorsService.MOZILLA_PKIX_ERROR_BASE;
 
 // Sort in numerical order
 const SEC_ERROR_INVALID_ARGS                            = SEC_ERROR_BASE +   5; // -8187
+const SEC_ERROR_INVALID_TIME                            = SEC_ERROR_BASE +   8;
 const SEC_ERROR_BAD_DER                                 = SEC_ERROR_BASE +   9;
 const SEC_ERROR_EXPIRED_CERTIFICATE                     = SEC_ERROR_BASE +  11;
 const SEC_ERROR_REVOKED_CERTIFICATE                     = SEC_ERROR_BASE +  12; // -8180
@@ -255,6 +256,9 @@ function add_connection_test(aHost, aExpectedResult,
     let sts = Cc["@mozilla.org/network/socket-transport-service;1"]
                 .getService(Ci.nsISocketTransportService);
     this.transport = sts.createTransport(["ssl"], 1, aHost, REMOTE_PORT, null);
+    // See bug 1129771 - attempting to connect to [::1] when the server is
+    // listening on 127.0.0.1 causes frequent failures on OS X 10.10.
+    this.transport.connectionFlags |= Ci.nsISocketTransport.DISABLE_IPV6;
     this.transport.setEventSink(this, this.thread);
     this.inputStream = null;
     this.outputStream = null;

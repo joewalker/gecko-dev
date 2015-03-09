@@ -386,7 +386,7 @@ LayerTransactionParent::RecvUpdate(InfallibleTArray<Edit>&& cset,
         containerLayer->SetInheritedScale(attrs.inheritedXScale(), attrs.inheritedYScale());
         containerLayer->SetScaleToResolution(attrs.scaleToResolution(),
                                              attrs.presShellResolution());
-        containerLayer->SetForceDispatchToContentRegion(attrs.forceDispatchToContentRegion());
+        containerLayer->SetEventRegionsOverride(attrs.eventRegionsOverride());
 
         if (attrs.hmdInfo()) {
           if (!IsSameProcess()) {
@@ -428,6 +428,7 @@ LayerTransactionParent::RecvUpdate(InfallibleTArray<Edit>&& cset,
           return false;
         }
         refLayer->SetReferentId(specific.get_RefLayerAttributes().id());
+        refLayer->SetEventRegionsOverride(specific.get_RefLayerAttributes().eventRegionsOverride());
         break;
       }
       case Specific::TImageLayerAttributes: {
@@ -842,6 +843,8 @@ LayerTransactionParent::RecvClearCachedResources()
     // context, it's just a subtree root.  We need to scope the clear
     // of resources to exactly that subtree, so we specify it here.
     mLayerManager->ClearCachedResources(mRoot);
+
+    mShadowLayersManager->NotifyClearCachedResources(this);
   }
   return true;
 }
@@ -934,20 +937,23 @@ LayerTransactionParent::RecvChildAsyncMessages(InfallibleTArray<AsyncChildMessag
         MOZ_ASSERT(tex.get());
         compositable->RemoveTextureHost(tex);
 
-        // send FenceHandle if present via ImageBridge.
-        ImageBridgeParent::SendFenceHandleToTrackerIfPresent(
-                             GetChildProcessId(),
-                             op.holderId(),
-                             op.transactionId(),
-                             op.textureParent(),
-                             compositable);
-
-        // Send message back via PImageBridge.
-        ImageBridgeParent::ReplyRemoveTexture(
-                             GetChildProcessId(),
-                             OpReplyRemoveTexture(true, // isMain
-                                                  op.holderId(),
-                                                  op.transactionId()));
+        if (ImageBridgeParent::GetInstance(GetChildProcessId())) {
+          // send FenceHandle if present via ImageBridge.
+          ImageBridgeParent::SendFenceHandleToTrackerIfPresent(
+            GetChildProcessId(),
+            op.holderId(),
+            op.transactionId(),
+            op.textureParent(),
+            compositable);
+          // Send message back via PImageBridge.
+          ImageBridgeParent::ReplyRemoveTexture(
+            GetChildProcessId(),
+            OpReplyRemoveTexture(true, // isMain
+            op.holderId(),
+            op.transactionId()));
+        } else {
+          NS_ERROR("ImageBridgeParent should exist");
+        }
         break;
       }
       default:

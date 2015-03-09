@@ -52,6 +52,7 @@
 #include "nsIAuthPrompt2.h"
 #include "nsIChannelEventSink.h"
 #include "nsIAsyncVerifyRedirectCallback.h"
+#include "nsIServiceWorkerManager.h"
 #include "nsIScriptSecurityManager.h"
 #include "nsIScriptObjectPrincipal.h"
 #include "nsIScrollableFrame.h"
@@ -351,11 +352,7 @@ IsElementAnchor(nsIContent* aContent)
 {
   // Make sure we are dealing with either an <A> or <AREA> element in the HTML
   // or XHTML namespace.
-  if (!aContent->IsHTML()) {
-    return false;
-  }
-  nsIAtom* nameAtom = aContent->Tag();
-  return nameAtom == nsGkAtoms::a || nameAtom == nsGkAtoms::area;
+  return aContent->IsAnyOfHTMLElements(nsGkAtoms::a, nsGkAtoms::area);
 }
 
 static void
@@ -590,7 +587,16 @@ SendPing(void* aClosure, nsIContent* aContent, nsIURI* aURI,
   nsIDocument* doc = aContent->OwnerDoc();
 
   nsCOMPtr<nsIChannel> chan;
-  aIOService->NewChannelFromURI(aURI, getter_AddRefs(chan));
+  NS_NewChannel(getter_AddRefs(chan),
+                aURI,
+                doc,
+                nsILoadInfo::SEC_NORMAL,
+                nsIContentPolicy::TYPE_PING,
+                nullptr, // aLoadGroup
+                nullptr, // aCallbacks
+                nsIRequest::LOAD_NORMAL, // aLoadFlags,
+                aIOService);
+
   if (!chan) {
     return;
   }
@@ -1032,6 +1038,7 @@ NS_INTERFACE_MAP_BEGIN(nsDocShell)
   NS_INTERFACE_MAP_ENTRY(nsILinkHandler)
   NS_INTERFACE_MAP_ENTRY(nsIClipboardCommands)
   NS_INTERFACE_MAP_ENTRY(nsIDOMStorageManager)
+  NS_INTERFACE_MAP_ENTRY(nsINetworkInterceptController)
 NS_INTERFACE_MAP_END_INHERITING(nsDocLoader)
 
 ///*****************************************************************************
@@ -2609,7 +2616,7 @@ nsDocShell::GetFullscreenAllowed(bool* aFullscreenAllowed)
   }
   nsCOMPtr<Element> frameElement = win->GetFrameElementInternal();
   if (frameElement &&
-      frameElement->IsHTML(nsGkAtoms::iframe) &&
+      frameElement->IsHTMLElement(nsGkAtoms::iframe) &&
       !frameElement->HasAttr(kNameSpaceID_None, nsGkAtoms::allowfullscreen) &&
       !frameElement->HasAttr(kNameSpaceID_None, nsGkAtoms::mozallowfullscreen)) {
     return NS_OK;
@@ -4964,8 +4971,15 @@ nsDocShell::DisplayLoadError(nsresult aError, nsIURI* aURI,
     }
     tsi = do_QueryInterface(securityInfo);
     if (tsi) {
-      // Usually we should have aFailedChannel and get a detailed message
-      tsi->GetErrorMessage(getter_Copies(messageStr));
+      uint32_t securityState;
+      tsi->GetSecurityState(&securityState);
+      if (securityState & nsIWebProgressListener::STATE_USES_SSL_3) {
+        error.AssignLiteral("sslv3Used");
+        addHostPort = true;
+      } else {
+        // Usually we should have aFailedChannel and get a detailed message
+        tsi->GetErrorMessage(getter_Copies(messageStr));
+      }
     } else {
       // No channel, let's obtain the generic error message
       if (nsserr) {
@@ -7911,7 +7925,7 @@ nsDocShell::CreateAboutBlankContentViewer(nsIPrincipal* aPrincipal,
   mFiredUnloadEvent = false;
 
   nsCOMPtr<nsIDocumentLoaderFactory> docFactory =
-    nsContentUtils::FindInternalContentViewer("text/html");
+    nsContentUtils::FindInternalContentViewer(NS_LITERAL_CSTRING("text/html"));
 
   if (docFactory) {
     nsCOMPtr<nsIPrincipal> principal;
@@ -8869,7 +8883,7 @@ nsDocShell::RestoreFromHistory()
 }
 
 nsresult
-nsDocShell::CreateContentViewer(const char* aContentType,
+nsDocShell::CreateContentViewer(const nsACString& aContentType,
                                 nsIRequest* aRequest,
                                 nsIStreamListener** aContentHandler)
 {
@@ -9065,7 +9079,7 @@ nsDocShell::CreateContentViewer(const char* aContentType,
 }
 
 nsresult
-nsDocShell::NewContentViewerObj(const char* aContentType,
+nsDocShell::NewContentViewerObj(const nsACString& aContentType,
                                 nsIRequest* aRequest, nsILoadGroup* aLoadGroup,
                                 nsIStreamListener** aContentHandler,
                                 nsIContentViewer** aViewer)
@@ -13378,7 +13392,8 @@ nsDocShell::OnLinkClickSync(nsIContent* aContent,
   // XXX When the linking node was HTMLFormElement, it is synchronous event.
   //     That is, the caller of this method is not |OnLinkClickEvent::Run()|
   //     but |HTMLFormElement::SubmitSubmission(...)|.
-  if (nsGkAtoms::form == aContent->Tag() && ShouldBlockLoadingForBackButton()) {
+  if (aContent->IsHTMLElement(nsGkAtoms::form) &&
+      ShouldBlockLoadingForBackButton()) {
     return NS_OK;
   }
 
@@ -13408,7 +13423,7 @@ nsDocShell::OnLinkClickSync(nsIContent* aContent,
 
   uint32_t flags = INTERNAL_LOAD_FLAGS_NONE;
   if (IsElementAnchor(aContent)) {
-    MOZ_ASSERT(aContent->IsHTML());
+    MOZ_ASSERT(aContent->IsHTMLElement());
     nsAutoString referrer;
     aContent->GetAttr(kNameSpaceID_None, nsGkAtoms::rel, referrer);
     nsWhitespaceTokenizerTemplate<nsContentUtils::IsHTMLWhitespace> tok(referrer);
@@ -13800,10 +13815,6 @@ nsDocShell::GetAppManifestURL(nsAString& aAppManifestURL)
 NS_IMETHODIMP
 nsDocShell::GetAsyncPanZoomEnabled(bool* aOut)
 {
-  if (TabChild* tabChild = TabChild::GetFrom(this)) {
-    *aOut = tabChild->IsAsyncPanZoomEnabled();
-    return NS_OK;
-  }
   *aOut = Preferences::GetBool("layers.async-pan-zoom.enabled", false);
   return NS_OK;
 }
@@ -13910,6 +13921,52 @@ nsDocShell::MaybeNotifyKeywordSearchLoading(const nsString& aProvider,
     }
   }
 #endif
+}
+
+NS_IMETHODIMP
+nsDocShell::ShouldPrepareForIntercept(nsIURI* aURI, bool aIsNavigate, bool* aShouldIntercept)
+{
+  *aShouldIntercept = false;
+  nsCOMPtr<nsIServiceWorkerManager> swm = mozilla::services::GetServiceWorkerManager();
+  if (!swm) {
+    return NS_OK;
+  }
+
+  if (aIsNavigate) {
+    return swm->IsAvailableForURI(aURI, aShouldIntercept);
+  }
+
+  nsCOMPtr<nsIDocument> doc = GetDocument();
+  if (!doc) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  return swm->IsControlled(doc, aShouldIntercept);
+}
+
+NS_IMETHODIMP
+nsDocShell::ChannelIntercepted(nsIInterceptedChannel* aChannel)
+{
+  nsCOMPtr<nsIServiceWorkerManager> swm = mozilla::services::GetServiceWorkerManager();
+  if (!swm) {
+    aChannel->Cancel();
+    return NS_OK;
+  }
+
+  bool isNavigation = false;
+  nsresult rv = aChannel->GetIsNavigation(&isNavigation);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  nsCOMPtr<nsIDocument> doc;
+
+  if (!isNavigation) {
+    doc = GetDocument();
+    if (!doc) {
+      return NS_ERROR_NOT_AVAILABLE;
+    }
+  }
+
+  return swm->DispatchFetchEvent(doc, aChannel);
 }
 
 NS_IMETHODIMP

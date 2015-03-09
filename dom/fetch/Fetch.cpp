@@ -177,7 +177,7 @@ public:
     nsRefPtr<FetchDriver> fetch = new FetchDriver(mRequest, principal, loadGroup);
     nsIDocument* doc = mResolver->GetWorkerPrivate()->GetDocument();
     if (doc) {
-      fetch->SetReferrerPolicy(doc->GetReferrerPolicy());
+      fetch->SetDocument(doc);
     }
 
     nsresult rv = fetch->Fetch(mResolver);
@@ -234,7 +234,7 @@ FetchRequest(nsIGlobalObject* aGlobal, const RequestOrUSVString& aInput,
     nsCOMPtr<nsILoadGroup> loadGroup = doc->GetDocumentLoadGroup();
     nsRefPtr<FetchDriver> fetch =
       new FetchDriver(r, doc->NodePrincipal(), loadGroup);
-    fetch->SetReferrerPolicy(doc->GetReferrerPolicy());
+    fetch->SetDocument(doc);
     aRv = fetch->Fetch(resolver);
     if (NS_WARN_IF(aRv.Failed())) {
       return nullptr;
@@ -315,7 +315,6 @@ public:
       result.ThrowTypeError(MSG_FETCH_FAILED);
       promise->MaybeReject(result);
     }
-
     return true;
   }
 };
@@ -866,6 +865,11 @@ FetchBody<Request>::FetchBody();
 template
 FetchBody<Response>::FetchBody();
 
+template <class Derived>
+FetchBody<Derived>::~FetchBody()
+{
+}
+
 // Returns true if addref succeeded.
 // Always succeeds on main thread.
 // May fail on worker if RegisterFeature() fails. In that case, it will release
@@ -1159,7 +1163,7 @@ FetchBody<Derived>::ConsumeBody(ConsumeType aType, ErrorResult& aRv)
 {
   mConsumeType = aType;
   if (BodyUsed()) {
-    aRv.ThrowTypeError(MSG_REQUEST_BODY_CONSUMED_ERROR);
+    aRv.ThrowTypeError(MSG_FETCH_BODY_CONSUMED_ERROR);
     return nullptr;
   }
 

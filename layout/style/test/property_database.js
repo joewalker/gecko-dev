@@ -4568,7 +4568,7 @@ function logical_axis_prop_get_computed(cs, property)
     throw "unexpected writing mode " + writingMode;
   }
 
-  return prop;
+  return cs.getPropertyValue(prop);
 }
 
 function logical_box_prop_get_computed(cs, property)
@@ -4645,7 +4645,7 @@ function logical_box_prop_get_computed(cs, property)
   } else if (/^offset-(block|inline)-(start|end)/.test(property)) {
     property = property.substring(7);  // we want "top" not "offset-top", e.g.
     property = physicalize(property, blockMapping, "block-");
-    property = physicalize(property, blockMapping, "inline-");
+    property = physicalize(property, inlineMapping, "inline-");
   } else if (/-(block|inline)-(start|end)/.test(property)) {
     property = physicalize(property, blockMapping, "block-");
     property = physicalize(property, inlineMapping, "inline-");
@@ -5051,7 +5051,7 @@ if (SpecialPowers.getBoolPref("layout.css.vertical-text.enabled")) {
         "calc(25px*3)",
         "calc(3*25px + 50%)",
       ],
-      invalid_values: ["none", "5" ]
+      invalid_values: [ "auto", "5" ]
     },
     "max-inline-size": {
       domProp: "maxInlineSize",
@@ -5069,7 +5069,7 @@ if (SpecialPowers.getBoolPref("layout.css.vertical-text.enabled")) {
         "calc(25px*3)",
         "calc(3*25px + 50%)",
       ],
-      invalid_values: ["none", "5" ]
+      invalid_values: [ "auto", "5" ]
     },
     "min-block-size": {
       domProp: "minBlockSize",
@@ -5087,7 +5087,7 @@ if (SpecialPowers.getBoolPref("layout.css.vertical-text.enabled")) {
         "calc(25px*3)",
         "calc(3*25px + 50%)",
       ],
-      invalid_values: ["none", "5" ]
+      invalid_values: [ "none", "5" ]
     },
     "min-inline-size": {
       domProp: "minInlineSize",
@@ -5105,7 +5105,7 @@ if (SpecialPowers.getBoolPref("layout.css.vertical-text.enabled")) {
         "calc(25px*3)",
         "calc(3*25px + 50%)",
       ],
-      invalid_values: ["none", "5" ]
+      invalid_values: [ "none", "5" ]
     },
     "offset-block-end": {
       domProp: "offsetBlockEnd",
@@ -5255,6 +5255,19 @@ if (SpecialPowers.getBoolPref("layout.css.vertical-text.enabled")) {
   for (var prop in verticalTextProperties) {
     gCSSProperties[prop] = verticalTextProperties[prop];
   }
+  /*
+   * Vertical vs horizontal writing-mode can affect line-height
+   * because font metrics may not be symmetrical,
+   * so we require writing-mode:initial to ensure consistency
+   * in font shorthand and line-height tests.
+   */
+  ["font", "line-height"].forEach(function(prop) {
+    var p = gCSSProperties[prop];
+    if (p.prerequisites === undefined) {
+      p.prerequisites = {};
+    }
+    p.prerequisites["writing-mode"] = "initial";
+  });
 }
 
 if (SpecialPowers.getBoolPref("layout.css.masking.enabled")) {
@@ -5702,6 +5715,16 @@ if (SpecialPowers.getBoolPref("layout.css.ruby.enabled")) {
                                                  "ruby-base-container",
                                                  "ruby-text",
                                                  "ruby-text-container");
+  gCSSProperties["ruby-align"] = {
+    domProp: "rubyAlign",
+    inherited: true,
+    type: CSS_TYPE_LONGHAND,
+    initial_values: [ "space-around" ],
+    other_values: [ "start", "center", "space-between" ],
+    invalid_values: [
+      "end", "1", "10px", "50%", "start center"
+    ]
+  };
   gCSSProperties["ruby-position"] = {
     domProp: "rubyPosition",
     inherited: true,
@@ -6221,7 +6244,7 @@ if (SpecialPowers.getBoolPref("layout.css.image-orientation.enabled")) {
 
 if (SpecialPowers.getBoolPref("layout.css.osx-font-smoothing.enabled")) {
   gCSSProperties["-moz-osx-font-smoothing"] = {
-    domProp: "MozOSXFontSmoothing",
+    domProp: "MozOsxFontSmoothing",
     inherited: true,
     type: CSS_TYPE_LONGHAND,
     initial_values: [ "auto" ],
@@ -6363,6 +6386,85 @@ if (SpecialPowers.getBoolPref("layout.css.scroll-behavior.property-enabled")) {
     other_values: [ "smooth" ],
     invalid_values: [ "none",  "1px" ]
   };
+}
+
+if (SpecialPowers.getBoolPref("layout.css.scroll-snap.enabled")) {
+  gCSSProperties["scroll-snap-type-x"] = {
+    domProp: "scrollSnapTypeX",
+    inherited: false,
+    type: CSS_TYPE_LONGHAND,
+    initial_values: [ "none" ],
+    other_values: ["mandatory", "proximity"],
+    invalid_values: [ "auto",  "1px" ]
+  };
+  gCSSProperties["scroll-snap-type-y"] = {
+    domProp: "scrollSnapTypeY",
+    inherited: false,
+    type: CSS_TYPE_LONGHAND,
+    initial_values: [ "none" ],
+    other_values: ["mandatory", "proximity"],
+    invalid_values: [ "auto",  "1px" ]
+  };
+  gCSSProperties["scroll-snap-type"] = {
+    domProp: "scrollSnapType",
+    inherited: false,
+    type: CSS_TYPE_TRUE_SHORTHAND,
+    subproperties: [ "scroll-snap-type-x", "scroll-snap-type-y" ],
+    initial_values: [ "none" ],
+    other_values: [ "mandatory", "proximity" ],
+    invalid_values: [ "auto",  "1px" ]
+  };
+  gCSSProperties["scroll-snap-points-x"] = {
+    domProp: "scrollSnapPointsX",
+    inherited: false,
+    type: CSS_TYPE_LONGHAND,
+    initial_values: [ "none" ],
+    other_values: [ "repeat(100%)", "repeat(120px)", "repeat(calc(3*25px))" ],
+    invalid_values: [ "auto", "1px", "left", "rgb(1,2,3)" ]
+  }
+  gCSSProperties["scroll-snap-points-y"] = {
+    domProp: "scrollSnapPointsY",
+    inherited: false,
+    type: CSS_TYPE_LONGHAND,
+    initial_values: [ "none" ],
+    other_values: [ "repeat(100%)", "repeat(120px)", "repeat(calc(3*25px))" ],
+    invalid_values: [ "auto", "1px", "top", "rgb(1,2,3)" ]
+  }
+  gCSSProperties["scroll-snap-destination"] = {
+    domProp: "scrollSnapDestination",
+    inherited: false,
+    type: CSS_TYPE_LONGHAND,
+    initial_values: [ "0px 0px" ],
+    other_values: [ "25% 25%", "6px 5px", "20% 3em", "0 0", "0in 1in",
+                    "top", "right", "top left", "top right", "center",
+                    "calc(2px)",
+                    "calc(50%)",
+                    "calc(3*25px)",
+                    "calc(3*25px) 5px",
+                    "5px calc(3*25px)",
+                    "calc(20%) calc(3*25px)",
+                    "calc(25px*3)",
+                    "calc(3*25px + 50%)"],
+    invalid_values: [ "auto", "none", "default" ]
+  }
+  gCSSProperties["scroll-snap-coordinate"] = {
+    domProp: "scrollSnapCoordinate",
+    inherited: false,
+    type: CSS_TYPE_LONGHAND,
+    initial_values: [ "none" ],
+    other_values: [ "25% 25%", "top", "0px 100px, 10em 50%",
+                    "top left, top right, bottom left, bottom right, center",
+                    "calc(2px)",
+                    "calc(50%)",
+                    "calc(3*25px)",
+                    "calc(3*25px) 5px",
+                    "5px calc(3*25px)",
+                    "calc(20%) calc(3*25px)",
+                    "calc(25px*3)",
+                    "calc(3*25px + 50%)",
+                    "calc(20%) calc(3*25px), center"],
+    invalid_values: [ "auto", "default" ]
+  }
 }
 
 if (SpecialPowers.getBoolPref("layout.css.unset-value.enabled")) {

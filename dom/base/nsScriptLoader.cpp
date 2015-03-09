@@ -44,6 +44,7 @@
 #include "nsCRT.h"
 #include "nsContentCreatorFunctions.h"
 #include "nsCORSListenerProxy.h"
+#include "nsProxyRelease.h"
 #include "nsSandboxFlags.h"
 #include "nsContentTypeParser.h"
 #include "nsINetworkPredictor.h"
@@ -188,7 +189,7 @@ NS_IMPL_ISUPPORTS(nsScriptLoader, nsIStreamLoaderObserver)
 static bool
 IsScriptEventHandler(nsIContent* aScriptElement)
 {
-  if (!aScriptElement->IsHTML()) {
+  if (!aScriptElement->IsHTMLElement()) {
     return false;
   }
 
@@ -574,7 +575,7 @@ nsScriptLoader::ProcessScriptElement(nsIScriptElement *aElement)
     // no 'type=' element
     // "language" is a deprecated attribute of HTML, so we check it only for
     // HTML script elements.
-    if (scriptContent->IsHTML()) {
+    if (scriptContent->IsHTMLElement()) {
       nsAutoString language;
       scriptContent->GetAttr(kNameSpaceID_None, nsGkAtoms::language, language);
       if (!language.IsEmpty()) {
@@ -796,6 +797,8 @@ public:
     : mRequest(aRequest), mLoader(aLoader), mToken(nullptr)
   {}
 
+  virtual ~NotifyOffThreadScriptLoadCompletedRunnable();
+
   void SetToken(void* aToken) {
     MOZ_ASSERT(aToken && !mToken);
     mToken = aToken;
@@ -812,6 +815,23 @@ nsScriptLoader::ProcessOffThreadRequest(nsScriptLoadRequest* aRequest, void **aO
   nsresult rv = ProcessRequest(aRequest, aOffThreadToken);
   mDocument->UnblockOnload(false);
   return rv;
+}
+
+NotifyOffThreadScriptLoadCompletedRunnable::~NotifyOffThreadScriptLoadCompletedRunnable()
+{
+  if (MOZ_UNLIKELY(mRequest || mLoader) && !NS_IsMainThread()) {
+    nsCOMPtr<nsIThread> mainThread;
+    NS_GetMainThread(getter_AddRefs(mainThread));
+    if (mainThread) {
+      NS_ProxyRelease(mainThread, mRequest);
+      NS_ProxyRelease(mainThread, mLoader);
+    } else {
+      MOZ_ASSERT(false, "We really shouldn't leak!");
+      // Better to leak than crash.
+      unused << mRequest.forget();
+      unused << mLoader.forget();
+    }
+  }
 }
 
 NS_IMETHODIMP

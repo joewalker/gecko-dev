@@ -10,6 +10,7 @@ describe("loop.OTSdkDriver", function () {
   var FAILURE_DETAILS = loop.shared.utils.FAILURE_DETAILS;
   var STREAM_PROPERTIES = loop.shared.utils.STREAM_PROPERTIES;
   var SCREEN_SHARE_STATES = loop.shared.utils.SCREEN_SHARE_STATES;
+
   var sandbox;
   var dispatcher, driver, publisher, sdk, session, sessionData;
   var fakeLocalElement, fakeRemoteElement, fakeScreenElement;
@@ -46,12 +47,21 @@ describe("loop.OTSdkDriver", function () {
     publisher = _.extend({
       destroy: sinon.stub(),
       publishAudio: sinon.stub(),
-      publishVideo: sinon.stub()
+      publishVideo: sinon.stub(),
+      _: {
+        switchAcquiredWindow: sinon.stub()
+      }
     }, Backbone.Events);
 
-    sdk = {
+    sdk = _.extend({
       initPublisher: sinon.stub().returns(publisher),
       initSession: sinon.stub().returns(session)
+    }, Backbone.Events);
+
+    window.OT = {
+      ExceptionCodes: {
+        UNABLE_TO_PUBLISH: 1500
+      }
     };
 
     driver = new loop.OTSdkDriver({
@@ -87,6 +97,37 @@ describe("loop.OTSdkDriver", function () {
       }));
 
       sinon.assert.calledOnce(sdk.initPublisher);
+      sinon.assert.calledWith(sdk.initPublisher, fakeLocalElement, publisherConfig);
+    });
+  });
+
+  describe("#retryPublishWithoutVideo", function() {
+    beforeEach(function() {
+      sdk.initPublisher.returns(publisher);
+
+      driver.setupStreamElements(new sharedActions.SetupStreamElements({
+        getLocalElementFunc: function() {return fakeLocalElement;},
+        getRemoteElementFunc: function() {return fakeRemoteElement;},
+        publisherConfig: publisherConfig
+      }));
+    });
+
+    it("should make MediaStreamTrack.getSources return without a video source", function(done) {
+      driver.retryPublishWithoutVideo();
+
+      window.MediaStreamTrack.getSources(function(sources) {
+        expect(sources.some(function(src) {
+          return src.kind === "video";
+        })).eql(false);
+
+        done();
+      });
+    });
+
+    it("should call initPublisher", function() {
+      driver.retryPublishWithoutVideo();
+
+      sinon.assert.calledTwice(sdk.initPublisher);
       sinon.assert.calledWith(sdk.initPublisher, fakeLocalElement, publisherConfig);
     });
   });
@@ -138,22 +179,51 @@ describe("loop.OTSdkDriver", function () {
       };
     });
 
-    it("should dispatch a `ScreenSharingState` action", function() {
-      driver.startScreenShare(new sharedActions.StartScreenShare());
-
-      sinon.assert.calledOnce(dispatcher.dispatch);
-      sinon.assert.calledWithExactly(dispatcher.dispatch,
-        new sharedActions.ScreenSharingState({
-          state: SCREEN_SHARE_STATES.PENDING
-        }));
-    });
-
     it("should initialize a publisher", function() {
-      driver.startScreenShare(new sharedActions.StartScreenShare());
+      // We're testing with `videoSource` set to 'browser', not 'window', as it
+      // has multiple options.
+      var options = {
+        videoSource: "browser",
+        constraints: {
+          browserWindow: 42,
+          scrollWithPage: true
+        }
+      };
+      driver.startScreenShare(options);
 
       sinon.assert.calledOnce(sdk.initPublisher);
-      sinon.assert.calledWithMatch(sdk.initPublisher,
-        fakeElement, {videoSource: "window"});
+      sinon.assert.calledWithMatch(sdk.initPublisher, fakeElement, options);
+    });
+  });
+
+  describe("#switchAcquiredWindow", function() {
+    beforeEach(function() {
+      var options = {
+        videoSource: "browser",
+        constraints: {
+          browserWindow: 42,
+          scrollWithPage: true
+        }
+      };
+      driver.getScreenShareElementFunc = function() {
+        return fakeScreenElement;
+      };
+      sandbox.stub(dispatcher, "dispatch");
+
+      driver.startScreenShare(options);
+    });
+
+    it("should switch to the acquired window", function() {
+      driver.switchAcquiredWindow(72);
+
+      sinon.assert.calledOnce(publisher._.switchAcquiredWindow);
+      sinon.assert.calledWithExactly(publisher._.switchAcquiredWindow, 72);
+    });
+
+    it("should not switch if the window is the same as the currently selected one", function() {
+      driver.switchAcquiredWindow(42);
+
+      sinon.assert.notCalled(publisher._.switchAcquiredWindow);
     });
   });
 
@@ -161,7 +231,9 @@ describe("loop.OTSdkDriver", function () {
     beforeEach(function() {
       driver.getScreenShareElementFunc = function() {};
 
-      driver.startScreenShare(new sharedActions.StartScreenShare());
+      driver.startScreenShare({
+        videoSource: "window"
+      });
 
       sandbox.stub(dispatcher, "dispatch");
 
@@ -175,19 +247,9 @@ describe("loop.OTSdkDriver", function () {
     });
 
     it("should destroy the share", function() {
-      driver.endScreenShare(new sharedActions.EndScreenShare());
+      expect(driver.endScreenShare()).to.equal(true);
 
       sinon.assert.calledOnce(publisher.destroy);
-    });
-
-    it("should dispatch a `ScreenSharingState` action", function() {
-      driver.endScreenShare(new sharedActions.EndScreenShare());
-
-      sinon.assert.calledOnce(dispatcher.dispatch);
-      sinon.assert.calledWithExactly(dispatcher.dispatch,
-        new sharedActions.ScreenSharingState({
-          state: SCREEN_SHARE_STATES.INACTIVE
-        }));
     });
   });
 
@@ -603,6 +665,32 @@ describe("loop.OTSdkDriver", function () {
         sinon.assert.calledOnce(fakeEvent.preventDefault);
       });
     });
+
+    describe("exception", function() {
+      describe("Unable to publish (GetUserMedia)", function() {
+        it("should destroy the publisher", function() {
+          sdk.trigger("exception", {
+            code: OT.ExceptionCodes.UNABLE_TO_PUBLISH,
+            message: "GetUserMedia"
+          });
+
+          sinon.assert.calledOnce(publisher.destroy);
+        });
+
+        it("should dispatch a ConnectionFailure action", function() {
+          sdk.trigger("exception", {
+            code: OT.ExceptionCodes.UNABLE_TO_PUBLISH,
+            message: "GetUserMedia"
+          });
+
+          sinon.assert.calledOnce(dispatcher.dispatch);
+          sinon.assert.calledWithExactly(dispatcher.dispatch,
+            new sharedActions.ConnectionFailure({
+              reason: FAILURE_DETAILS.UNABLE_TO_PUBLISH_MEDIA
+            }));
+        });
+      });
+    });
   });
 
   describe("Events (screenshare)", function() {
@@ -611,7 +699,9 @@ describe("loop.OTSdkDriver", function () {
 
       driver.getScreenShareElementFunc = function() {};
 
-      driver.startScreenShare(new sharedActions.StartScreenShare());
+      driver.startScreenShare({
+        videoSource: "window"
+      });
 
       sandbox.stub(dispatcher, "dispatch");
     });

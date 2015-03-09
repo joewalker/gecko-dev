@@ -29,6 +29,11 @@ let AddonWatcher = {
       return;
     }
 
+    this._interval = Preferences.get("browser.addon-watch.interval", 15000);
+    if (this._interval == -1) {
+      return;
+    }
+
     this._callback = callback;
     try {
       this._ignoreList = new Set(JSON.parse(Preferences.get("browser.addon-watch.ignore", null)));
@@ -36,8 +41,13 @@ let AddonWatcher = {
       // probably some malformed JSON, ignore and carry on
       this._ignoreList = new Set();
     }
-    this._interval = Preferences.get("browser.addon-watch.interval", 15000);
     this._timer.initWithCallback(this._checkAddons.bind(this), this._interval, Ci.nsITimer.TYPE_REPEATING_SLACK);
+  },
+  uninit: function() {
+    if (this._timer) {
+      this._timer.cancel();
+      this._timer = null;
+    }
   },
   _checkAddons: function() {
     let compartmentInfo = Cc["@mozilla.org/compartment-info;1"]
@@ -58,7 +68,10 @@ let AddonWatcher = {
     let limit = this._interval * Preferences.get("browser.addon-watch.percentage-limit", 75) * 10;
     for (let addonId in addons) {
       if (!this._ignoreList.has(addonId)) {
-        if (this._lastAddonTime[addonId] && (addons[addonId] - this._lastAddonTime[addonId]) > limit) {
+        if (!this._lastAddonTime[addonId]) {
+          this._lastAddonTime[addonId] = 0;
+        }
+        if ((addons[addonId] - this._lastAddonTime[addonId]) > limit) {
           this._callback(addonId);
         }
         this._lastAddonTime[addonId] = addons[addonId];

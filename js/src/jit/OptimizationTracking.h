@@ -52,6 +52,7 @@ class OptimizationAttempt
 };
 
 typedef Vector<OptimizationAttempt, 4, JitAllocPolicy> TempOptimizationAttemptsVector;
+typedef Vector<TypeSet::Type, 1, JitAllocPolicy> TempTypeList;
 
 class UniqueTrackedTypes;
 
@@ -59,7 +60,7 @@ class OptimizationTypeInfo
 {
     JS::TrackedTypeSite site_;
     MIRType mirType_;
-    TypeSet::TypeList types_;
+    TempTypeList types_;
 
   public:
     OptimizationTypeInfo(OptimizationTypeInfo &&other)
@@ -68,9 +69,10 @@ class OptimizationTypeInfo
         types_(mozilla::Move(other.types_))
     { }
 
-    OptimizationTypeInfo(JS::TrackedTypeSite site, MIRType mirType)
+    OptimizationTypeInfo(TempAllocator &alloc, JS::TrackedTypeSite site, MIRType mirType)
       : site_(site),
-        mirType_(mirType)
+        mirType_(mirType),
+        types_(alloc)
     { }
 
     bool trackTypeSet(TemporaryTypeSet *typeSet);
@@ -78,7 +80,7 @@ class OptimizationTypeInfo
 
     JS::TrackedTypeSite site() const { return site_; }
     MIRType mirType() const { return mirType_; }
-    const TypeSet::TypeList &types() const { return types_; }
+    const TempTypeList &types() const { return types_; }
 
     bool operator ==(const OptimizationTypeInfo &other) const;
     bool operator !=(const OptimizationTypeInfo &other) const;
@@ -484,10 +486,25 @@ class IonTrackedOptimizationsTypeInfo
     // JS::ForEachTrackedOptimizaitonTypeInfoOp cannot be used directly. The
     // internal API needs to deal with engine-internal data structures (e.g.,
     // TypeSet::Type) directly.
+    //
+    // An adapter is provided below.
     struct ForEachOp
     {
         virtual void readType(const IonTrackedTypeWithAddendum &tracked) = 0;
         virtual void operator()(JS::TrackedTypeSite site, MIRType mirType) = 0;
+    };
+
+    class ForEachOpAdapter : public ForEachOp
+    {
+        JS::ForEachTrackedOptimizationTypeInfoOp &op_;
+
+      public:
+        explicit ForEachOpAdapter(JS::ForEachTrackedOptimizationTypeInfoOp &op)
+          : op_(op)
+        { }
+
+        void readType(const IonTrackedTypeWithAddendum &tracked) MOZ_OVERRIDE;
+        void operator()(JS::TrackedTypeSite site, MIRType mirType) MOZ_OVERRIDE;
     };
 
     void forEach(ForEachOp &op, const IonTrackedTypeVector *allTypes);

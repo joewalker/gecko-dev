@@ -22,11 +22,14 @@
     _(SimdSplatX4)                  \
     _(Int32x4)                      \
     _(Float32x4)                    \
+    _(SimdReinterpretCast)          \
     _(SimdExtractElementI)          \
     _(SimdExtractElementF)          \
     _(SimdInsertElementI)           \
     _(SimdInsertElementF)           \
     _(SimdSignMaskX4)               \
+    _(SimdGeneralSwizzleI)          \
+    _(SimdGeneralSwizzleF)          \
     _(SimdSwizzleI)                 \
     _(SimdSwizzleF)                 \
     _(SimdShuffle)                  \
@@ -200,7 +203,7 @@
     _(StoreSlotV)                   \
     _(StoreSlotT)                   \
     _(GuardShape)                   \
-    _(GuardShapePolymorphic)        \
+    _(GuardReceiverPolymorphic)     \
     _(GuardObjectGroup)             \
     _(GuardObjectIdentity)          \
     _(GuardClass)                   \
@@ -223,6 +226,7 @@
     _(StoreElementV)                \
     _(StoreElementT)                \
     _(StoreUnboxedPointer)          \
+    _(ConvertUnboxedObjectToNative) \
     _(ArrayPopShiftV)               \
     _(ArrayPopShiftT)               \
     _(ArrayPushV)                   \

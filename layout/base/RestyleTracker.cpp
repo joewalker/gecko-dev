@@ -16,6 +16,7 @@
 #include "nsStyleChangeList.h"
 #include "RestyleManager.h"
 #include "RestyleTrackerInlines.h"
+#include "nsTransitionManager.h"
 
 namespace mozilla {
 
@@ -39,7 +40,7 @@ FrameTagToString(dom::Element* aElement)
     nsFrame::ListTag(result, frame);
   } else {
     nsAutoString buf;
-    aElement->Tag()->ToString(buf);
+    aElement->NodeInfo()->NameAtom()->ToString(buf);
     result.AppendPrintf("(%s@%p)", NS_ConvertUTF16toUTF8(buf).get(), aElement);
   }
   return result;
@@ -221,7 +222,8 @@ RestyleTracker::DoProcessRestyles()
 
     LOG_RESTYLE("Processing %d pending %srestyles with %d restyle roots for %s",
                 mPendingRestyles.Count(),
-                mRestyleManager->IsProcessingAnimationStyleChange()
+                mRestyleManager->PresContext()->TransitionManager()->
+                  InAnimationOnlyStyleUpdate()
                   ? (const char*) "animation " : (const char*) "",
                 static_cast<int>(mRestyleRoots.Length()),
                 GetDocumentURI(Document()).get());

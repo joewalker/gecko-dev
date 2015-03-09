@@ -55,6 +55,25 @@ HTMLSourceElement::MatchesCurrentMedia()
   return true;
 }
 
+/* static */ bool
+HTMLSourceElement::WouldMatchMediaForDocument(const nsAString& aMedia,
+                                              const nsIDocument *aDocument)
+{
+  if (aMedia.IsEmpty()) {
+    return true;
+  }
+
+  nsIPresShell* presShell = aDocument->GetShell();
+  nsPresContext* pctx = presShell ? presShell->GetPresContext() : nullptr;
+  MOZ_ASSERT(pctx, "Called for document with no prescontext");
+
+  nsCSSParser cssParser;
+  nsRefPtr<nsMediaList> mediaList = new nsMediaList();
+  cssParser.ParseMediaList(aMedia, nullptr, 0, mediaList, false);
+
+  return pctx && mediaList->Matches(pctx, nullptr);
+}
+
 nsresult
 HTMLSourceElement::AfterSetAttr(int32_t aNameSpaceID, nsIAtom* aName,
                                 const nsAttrValue* aValue, bool aNotify)
@@ -67,12 +86,12 @@ HTMLSourceElement::AfterSetAttr(int32_t aNameSpaceID, nsIAtom* aName,
        aName == nsGkAtoms::sizes ||
        aName == nsGkAtoms::media ||
        aName == nsGkAtoms::type) &&
-      parent && parent->Tag() == nsGkAtoms::picture) {
+      parent && parent->IsHTMLElement(nsGkAtoms::picture)) {
     nsString strVal = aValue ? aValue->GetStringValue() : EmptyString();
     // Find all img siblings after this <source> and notify them of the change
     nsCOMPtr<nsINode> sibling = AsContent();
     while ( (sibling = sibling->GetNextSibling()) ) {
-      if (sibling->Tag() == nsGkAtoms::img) {
+      if (sibling->IsHTMLElement(nsGkAtoms::img)) {
         HTMLImageElement *img = static_cast<HTMLImageElement*>(sibling.get());
         if (aName == nsGkAtoms::srcset) {
           img->PictureSourceSrcsetChanged(AsContent(), strVal, aNotify);
@@ -102,7 +121,7 @@ HTMLSourceElement::AfterSetAttr(int32_t aNameSpaceID, nsIAtom* aName,
 }
 
 void
-HTMLSourceElement::GetItemValueText(nsAString& aValue)
+HTMLSourceElement::GetItemValueText(DOMString& aValue)
 {
   GetSrc(aValue);
 }
@@ -128,11 +147,11 @@ HTMLSourceElement::BindToTree(nsIDocument *aDocument,
   if (aParent && aParent->IsNodeOfType(nsINode::eMEDIA)) {
     HTMLMediaElement* media = static_cast<HTMLMediaElement*>(aParent);
     media->NotifyAddedSource();
-  } else if (aParent && aParent->Tag() == nsGkAtoms::picture) {
+  } else if (aParent && aParent->IsHTMLElement(nsGkAtoms::picture)) {
     // Find any img siblings after this <source> and notify them
     nsCOMPtr<nsINode> sibling = AsContent();
     while ( (sibling = sibling->GetNextSibling()) ) {
-      if (sibling->Tag() == nsGkAtoms::img) {
+      if (sibling->IsHTMLElement(nsGkAtoms::img)) {
         HTMLImageElement *img = static_cast<HTMLImageElement*>(sibling.get());
         img->PictureSourceAdded(AsContent());
       }

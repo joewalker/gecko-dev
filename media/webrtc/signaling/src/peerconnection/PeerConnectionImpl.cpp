@@ -178,95 +178,89 @@ private:
 class TracksAvailableCallback : public DOMMediaStream::OnTracksAvailableCallback
 {
 public:
-  TracksAvailableCallback(const std::list<std::string>& audioTrackIds,
-                          const std::list<std::string>& videoTrackIds,
-                          const std::set<std::string>& preexistingTrackIds,
+  TracksAvailableCallback(size_t numNewAudioTracks,
+                          size_t numNewVideoTracks,
+                          const std::string& pcHandle,
                           nsRefPtr<PeerConnectionObserver> aObserver)
-  : DOMMediaStream::OnTracksAvailableCallback(
-      // Once DOMMediaStream can handle more than one of each, this will change.
-      (audioTrackIds.empty() ? 0 : DOMMediaStream::HINT_CONTENTS_AUDIO) |
-      (videoTrackIds.empty() ? 0 : DOMMediaStream::HINT_CONTENTS_VIDEO))
+  : DOMMediaStream::OnTracksAvailableCallback()
   , mObserver(aObserver)
-  , mAudioTrackIds(audioTrackIds)
-  , mVideoTrackIds(videoTrackIds)
-  , mPreexistingTrackIds(preexistingTrackIds) {}
+  , mPcHandle(pcHandle)
+  {}
 
   virtual void NotifyTracksAvailable(DOMMediaStream* aStream) MOZ_OVERRIDE
   {
     MOZ_ASSERT(NS_IsMainThread());
 
-    // Start currentTime from the point where this stream was successfully
-    // returned.
-    aStream->SetLogicalStreamStartTime(aStream->GetStream()->GetCurrentTime());
+    PeerConnectionWrapper wrapper(mPcHandle);
 
-    CSFLogInfo(logTag, "Returning success for OnAddStream()");
-    // We are running on main thread here so we shouldn't have a race
-    // on this callback
+    if (!wrapper.impl() || wrapper.impl()->IsClosed()) {
+      return;
+    }
 
     nsTArray<nsRefPtr<MediaStreamTrack>> tracks;
     aStream->GetTracks(tracks);
 
+    std::string streamId = PeerConnectionImpl::GetStreamId(*aStream);
+    bool notifyStream = true;
+
     for (size_t i = 0; i < tracks.Length(); i++) {
-      if (mPreexistingTrackIds.count(
-            PeerConnectionImpl::GetTrackId(*tracks[i]))) {
+      std::string trackId;
+      // This is the first chance we get to set the string track id on this
+      // track. It would be nice if we could specify this along with the numeric
+      // track id from the start, but we're stuck doing this fixup after the
+      // fact.
+      nsresult rv = wrapper.impl()->GetRemoteTrackId(streamId,
+                                                     tracks[i]->GetTrackID(),
+                                                     &trackId);
+
+      if (NS_FAILED(rv)) {
+        CSFLogError(logTag, "%s: Failed to get string track id for %u, rv = %u",
+                            __FUNCTION__,
+                            static_cast<unsigned>(tracks[i]->GetTrackID()),
+                            static_cast<unsigned>(rv));
+        MOZ_ASSERT(false);
         continue;
       }
 
-      AssignNextIdToTrack(tracks[i]);
-      JSErrorResult rv;
-      mObserver->OnAddTrack(*tracks[i], rv);
-      CSFLogInfo(logTag, "Calling OnAddTrack(%s)",
-                         PeerConnectionImpl::GetTrackId(*tracks[i]).c_str());
-      if (rv.Failed()) {
+      std::string origTrackId = PeerConnectionImpl::GetTrackId(*tracks[i]);
+
+      if (origTrackId == trackId) {
+        // Pre-existing track
+        notifyStream = false;
+        continue;
+      }
+
+      tracks[i]->AssignId(NS_ConvertUTF8toUTF16(trackId.c_str()));
+
+      JSErrorResult jrv;
+      CSFLogInfo(logTag, "Calling OnAddTrack(%s)", trackId.c_str());
+      mObserver->OnAddTrack(*tracks[i], jrv);
+      if (jrv.Failed()) {
         CSFLogError(logTag, ": OnAddTrack(%u) failed! Error: %u",
                     static_cast<unsigned>(i),
-                    static_cast<unsigned>(rv.ErrorCode()));
+                    static_cast<unsigned>(jrv.ErrorCode()));
       }
     }
 
-    JSErrorResult rv;
-    CSFLogInfo(logTag, "Calling OnAddStream");
-    mObserver->OnAddStream(*aStream, rv);
-    if (rv.Failed()) {
-      CSFLogError(logTag, ": OnAddStream() failed! Error: %u",
-                  static_cast<unsigned>(rv.ErrorCode()));
+    if (notifyStream) {
+      // Start currentTime from the point where this stream was successfully
+      // returned.
+      aStream->SetLogicalStreamStartTime(
+          aStream->GetStream()->GetCurrentTime());
+
+      JSErrorResult rv;
+      CSFLogInfo(logTag, "Calling OnAddStream(%s)", streamId.c_str());
+      mObserver->OnAddStream(*aStream, rv);
+      if (rv.Failed()) {
+        CSFLogError(logTag, ": OnAddStream() failed! Error: %u",
+                    static_cast<unsigned>(rv.ErrorCode()));
+      }
     }
-
-    if (!mAudioTrackIds.empty() || !mVideoTrackIds.empty()) {
-      CSFLogError(logTag, "Failed to assign %u audio and %u video tracks!",
-                  static_cast<unsigned>(mAudioTrackIds.size()),
-                  static_cast<unsigned>(mVideoTrackIds.size()));
-    }
-  }
-
-  void AssignNextIdToTrack(MediaStreamTrack* track)
-  {
-    std::list<std::string>* trackIds;
-
-    if (track->AsAudioStreamTrack()) {
-      trackIds = &mAudioTrackIds;
-    } else if (track->AsVideoStreamTrack()) {
-      trackIds = &mVideoTrackIds;
-    } else {
-      MOZ_ASSERT(false, "Track is neither an AudioStreamTrack nor "
-                        "VideoStreamTrack");
-      return;
-    }
-
-    if (trackIds->empty()) {
-      MOZ_ASSERT(false, "Too many new MediaStreamTracks were created");
-      return;
-    }
-
-    track->AssignId(NS_ConvertUTF8toUTF16(trackIds->front().c_str()));
-    trackIds->pop_front();
   }
 
 private:
   nsRefPtr<PeerConnectionObserver> mObserver;
-  std::list<std::string> mAudioTrackIds;
-  std::list<std::string> mVideoTrackIds;
-  const std::set<std::string> mPreexistingTrackIds;
+  const std::string mPcHandle;
 };
 #endif
 
@@ -394,6 +388,7 @@ PeerConnectionImpl::PeerConnectionImpl(const GlobalObject* aGlobal)
   , mHaveDataStream(false)
   , mAddCandidateErrorCount(0)
   , mTrickle(true) // TODO(ekr@rtfm.com): Use pref
+  , mShouldSuppressNegotiationNeeded(true)
 {
 #ifdef MOZILLA_INTERNAL_API
   MOZ_ASSERT(NS_IsMainThread());
@@ -452,10 +447,10 @@ PeerConnectionImpl::~PeerConnectionImpl()
 }
 
 already_AddRefed<DOMMediaStream>
-PeerConnectionImpl::MakeMediaStream(uint32_t aHint)
+PeerConnectionImpl::MakeMediaStream()
 {
   nsRefPtr<DOMMediaStream> stream =
-    DOMMediaStream::CreateSourceStream(GetWindow(), aHint);
+    DOMMediaStream::CreateSourceStream(GetWindow());
 
 #ifdef MOZILLA_INTERNAL_API
   // Make the stream data (audio/video samples) accessible to the receiving page.
@@ -488,16 +483,10 @@ PeerConnectionImpl::CreateRemoteSourceStreamInfo(nsRefPtr<RemoteSourceStreamInfo
   MOZ_ASSERT(aInfo);
   PC_AUTO_ENTER_API_CALL_NO_CHECK();
 
-  // We need to pass a dummy hint here because FakeMediaStream currently
-  // needs to actually propagate a hint for local streams.
-  // TODO(ekr@rtfm.com): Clean up when we have explicit track lists.
-  // See bug 834835.
-  nsRefPtr<DOMMediaStream> stream = MakeMediaStream(0);
+  nsRefPtr<DOMMediaStream> stream = MakeMediaStream();
   if (!stream) {
     return NS_ERROR_FAILURE;
   }
-
-  static_cast<SourceMediaStream*>(stream->GetStream())->SetPullEnabled(true);
 
   nsRefPtr<RemoteSourceStreamInfo> remote;
   remote = new RemoteSourceStreamInfo(stream.forget(), mMedia, aStreamID);
@@ -914,6 +903,10 @@ PeerConnectionImpl::ConfigureJsepSessionCodecs() {
 
   bool h264Enabled = hardwareH264Supported || softwareH264Enabled;
 
+  bool vp9Enabled = false;
+  branch->GetBoolPref("media.peerconnection.video.vp9_enabled",
+                      &vp9Enabled);
+  
   auto& codecs = mJsepSession->Codecs();
 
   // We use this to sort the list of codecs once everything is configured
@@ -963,7 +956,11 @@ PeerConnectionImpl::ConfigureJsepSessionCodecs() {
             if (hardwareH264Supported) {
               comparator.AddHardwareCodec(videoCodec.mDefaultPt);
             }
-          } else if (codec.mName == "VP8") {
+          } else if (codec.mName == "VP8" || codec.mName == "VP9") {
+            if (videoCodec.mName == "VP9" && !vp9Enabled) {
+              videoCodec.mEnabled = false;
+              break;
+            }
             int32_t maxFs = 0;
             branch->GetIntPref("media.navigator.video.max_fs", &maxFs);
             if (maxFs <= 0) {
@@ -977,6 +974,7 @@ PeerConnectionImpl::ConfigureJsepSessionCodecs() {
               maxFr = 60; // We must specify something other than 0
             }
             videoCodec.mMaxFr = maxFr;
+
           }
         }
         break;
@@ -1040,15 +1038,22 @@ PeerConnectionImpl::GetDatachannelParameters(
     const mozilla::JsepApplicationCodecDescription** datachannelCodec,
     uint16_t* level) const {
 
-  for (size_t j = 0; j < mJsepSession->GetNegotiatedTrackPairCount(); ++j) {
-    const JsepTrackPair* trackPair;
-    nsresult res = mJsepSession->GetNegotiatedTrackPair(j, &trackPair);
+  auto trackPairs = mJsepSession->GetNegotiatedTrackPairs();
+  for (auto j = trackPairs.begin(); j != trackPairs.end(); ++j) {
+    JsepTrackPair& trackPair = *j;
 
-    if (NS_SUCCEEDED(res) &&
-        trackPair->mSending && // Assumes we don't do recvonly datachannel
-        trackPair->mSending->GetMediaType() == SdpMediaSection::kApplication) {
+    bool sendDataChannel =
+      trackPair.mSending &&
+      trackPair.mSending->GetMediaType() == SdpMediaSection::kApplication;
+    bool recvDataChannel =
+      trackPair.mReceiving &&
+      trackPair.mReceiving->GetMediaType() == SdpMediaSection::kApplication;
+    (void)recvDataChannel;
+    MOZ_ASSERT(sendDataChannel == recvDataChannel);
 
-      if (!trackPair->mSending->GetNegotiatedDetails()->GetCodecCount()) {
+    if (sendDataChannel) {
+
+      if (!trackPair.mSending->GetNegotiatedDetails()->GetCodecCount()) {
         CSFLogError(logTag, "%s: Negotiated m=application with no codec. "
                             "This is likely to be broken.",
                             __FUNCTION__);
@@ -1056,10 +1061,11 @@ PeerConnectionImpl::GetDatachannelParameters(
       }
 
       for (size_t i = 0;
-           i < trackPair->mSending->GetNegotiatedDetails()->GetCodecCount();
+           i < trackPair.mSending->GetNegotiatedDetails()->GetCodecCount();
            ++i) {
         const JsepCodecDescription* codec;
-        res = trackPair->mSending->GetNegotiatedDetails()->GetCodec(i, &codec);
+        nsresult res =
+          trackPair.mSending->GetNegotiatedDetails()->GetCodec(i, &codec);
 
         if (NS_FAILED(res)) {
           CSFLogError(logTag, "%s: Failed getting codec for m=application.",
@@ -1086,10 +1092,10 @@ PeerConnectionImpl::GetDatachannelParameters(
 
         *datachannelCodec =
           static_cast<const JsepApplicationCodecDescription*>(codec);
-        if (trackPair->mBundleLevel.isSome()) {
-          *level = static_cast<uint16_t>(*trackPair->mBundleLevel);
+        if (trackPair.mBundleLevel.isSome()) {
+          *level = static_cast<uint16_t>(*trackPair.mBundleLevel);
         } else {
-          *level = static_cast<uint16_t>(trackPair->mLevel);
+          *level = static_cast<uint16_t>(trackPair.mLevel);
         }
         return NS_OK;
       }
@@ -1235,6 +1241,7 @@ PeerConnectionImpl::CreateDataChannel(const nsAString& aLabel,
       return rv;
     }
     mHaveDataStream = true;
+    OnNegotiationNeeded();
   }
   nsIDOMDataChannel *retval;
   rv = NS_NewDOMDataChannel(dataChannel.forget(), mWindow, &retval);
@@ -1305,6 +1312,8 @@ PeerConnectionImpl::NotifyDataChannel(already_AddRefed<DataChannel> aChannel)
   nsresult rv = NS_NewDOMDataChannel(already_AddRefed<DataChannel>(channel),
                                      mWindow, getter_AddRefs(domchannel));
   NS_ENSURE_SUCCESS_VOID(rv);
+
+  mHaveDataStream = true;
 
   nsRefPtr<PeerConnectionObserver> pco = do_QueryObjectReferent(mPCObserver);
   if (!pco) {
@@ -1609,22 +1618,13 @@ PeerConnectionImpl::SetRemoteDescription(int32_t action, const char* aSDP)
                 __FUNCTION__, mHandle.c_str(), errorString.c_str());
     pco->OnSetRemoteDescriptionError(error, ObString(errorString.c_str()), jrv);
   } else {
-    // Add the tracks. This code is pretty complicated because the tracks
-    // come in arbitrary orders and we want to group them by streamId.
-    size_t numTracks = mJsepSession->GetRemoteTrackCount();
+    std::vector<RefPtr<JsepTrack>> newTracks =
+      mJsepSession->GetRemoteTracksAdded();
 
-    // Group tracks by stream id
+    // Group new tracks by stream id
     std::map<std::string, std::vector<RefPtr<JsepTrack>>> tracksByStreamId;
-
-    for (size_t i = 0; i < numTracks; ++i) {
-      RefPtr<JsepTrack> track;
-      nrv = mJsepSession->GetRemoteTrack(i, &track);
-      if (NS_FAILED(nrv)) {
-        pco->OnSetRemoteDescriptionError(kInternalError,
-                                         ObString("GetRemoteTrack failed"),
-                                         jrv);
-        return NS_OK;
-      }
+    for (auto i = newTracks.begin(); i != newTracks.end(); ++i) {
+      RefPtr<JsepTrack> track = *i;
 
       if (track->GetMediaType() == mozilla::SdpMediaSection::kApplication) {
         // Ignore datachannel
@@ -1658,41 +1658,71 @@ PeerConnectionImpl::SetRemoteDescription(int32_t action, const char* aSDP)
               jrv);
           return NS_OK;
         }
+        CSFLogDebug(logTag, "Added remote stream %s", info->GetId().c_str());
+
+#ifdef MOZILLA_INTERNAL_API
+        info->GetMediaStream()->AssignId(NS_ConvertUTF8toUTF16(streamId.c_str()));
+#else
+        info->GetMediaStream()->AssignId((streamId));
+#endif
       }
 
-      // TODO(bug 1017888): Only get new tracks for renegotiation
-      std::list<std::string> newAudioTrackIds;
-      std::list<std::string> newVideoTrackIds;
-      // TODO(bug 1017888): Fill in for renegotiation
-      std::set<std::string> preexistingTrackIds;
+      size_t numNewAudioTracks = 0;
+      size_t numNewVideoTracks = 0;
+      size_t numPreexistingTrackIds = 0;
 
       for (auto j = tracks.begin(); j != tracks.end(); ++j) {
         RefPtr<JsepTrack> track = *j;
-        if (track->GetMediaType() == SdpMediaSection::kAudio) {
+        if (!info->HasTrack(track->GetTrackId())) {
+          if (track->GetMediaType() == SdpMediaSection::kAudio) {
+            ++numNewAudioTracks;
+          } else if (track->GetMediaType() == SdpMediaSection::kVideo) {
+            ++numNewVideoTracks;
+          } else {
+            MOZ_ASSERT(false);
+            continue;
+          }
           info->AddTrack(track->GetTrackId());
-          newAudioTrackIds.push_back(track->GetTrackId());
-        } else if (track->GetMediaType() == SdpMediaSection::kVideo) {
-          info->AddTrack(track->GetTrackId());
-          newVideoTrackIds.push_back(track->GetTrackId());
+          CSFLogDebug(logTag, "Added remote track %s/%s",
+                      info->GetId().c_str(), track->GetTrackId().c_str());
         } else {
-          MOZ_ASSERT(false);
-          continue;
+          ++numPreexistingTrackIds;
         }
-
       }
 
       // Now that the streams are all set up, notify about track availability.
-      // TODO(bug 1017888): Suppress on renegotiation when no change.
 #ifdef MOZILLA_INTERNAL_API
       TracksAvailableCallback* tracksAvailableCallback =
-        new TracksAvailableCallback(newAudioTrackIds,
-                                    newVideoTrackIds,
-                                    preexistingTrackIds,
+        new TracksAvailableCallback(numNewAudioTracks,
+                                    numNewVideoTracks,
+                                    mHandle,
                                     pco);
       info->GetMediaStream()->OnTracksAvailable(tracksAvailableCallback);
 #else
-      pco->OnAddStream(info->GetMediaStream(), jrv);
+      if (!numPreexistingTrackIds) {
+        pco->OnAddStream(*info->GetMediaStream(), jrv);
+      }
 #endif
+    }
+
+    std::vector<RefPtr<JsepTrack>> removedTracks =
+      mJsepSession->GetRemoteTracksRemoved();
+
+    for (auto i = removedTracks.begin(); i != removedTracks.end(); ++i) {
+      nsRefPtr<RemoteSourceStreamInfo> info =
+        mMedia->GetRemoteStreamById((*i)->GetStreamId());
+      if (!info) {
+        MOZ_ASSERT(false, "A stream/track was removed that wasn't in PCMedia. "
+                          "This is a bug.");
+        continue;
+      }
+
+      mMedia->RemoveRemoteTrack((*i)->GetStreamId(), (*i)->GetTrackId());
+
+      // We might be holding the last ref, but that's ok.
+      if (!info->GetTrackCount()) {
+        pco->OnRemoveStream(*info->GetMediaStream(), jrv);
+      }
     }
 
     pco->OnSetRemoteDescriptionSuccess(jrv);
@@ -1899,6 +1929,20 @@ PeerConnectionImpl::PrincipalChanged(DOMMediaStream* aMediaStream) {
 }
 #endif
 
+#ifdef MOZILLA_INTERNAL_API
+nsresult
+PeerConnectionImpl::GetRemoteTrackId(const std::string streamId,
+                                     TrackID numericTrackId,
+                                     std::string* trackId) const
+{
+  if (IsClosed()) {
+    return NS_ERROR_UNEXPECTED;
+  }
+
+  return mMedia->GetRemoteTrackId(streamId, numericTrackId, trackId);
+}
+#endif
+
 std::string
 PeerConnectionImpl::GetTrackId(const MediaStreamTrack& aTrack)
 {
@@ -1908,6 +1952,18 @@ PeerConnectionImpl::GetTrackId(const MediaStreamTrack& aTrack)
   return NS_ConvertUTF16toUTF8(wideTrackId).get();
 #else
   return aTrack.GetId();
+#endif
+}
+
+std::string
+PeerConnectionImpl::GetStreamId(const DOMMediaStream& aStream)
+{
+#ifdef MOZILLA_INTERNAL_API
+  nsString wideStreamId;
+  aStream.GetId(wideStreamId);
+  return NS_ConvertUTF16toUTF8(wideStreamId).get();
+#else
+  return aStream.GetId();
 #endif
 }
 
@@ -1934,16 +1990,15 @@ PeerConnectionImpl::AddTrack(MediaStreamTrack& aTrack,
   }
   uint32_t num = mMedia->LocalStreamsLength();
 
-  std::string streamId;
+  std::string streamId = PeerConnectionImpl::GetStreamId(aMediaStream);
   std::string trackId = PeerConnectionImpl::GetTrackId(aTrack);
-  // TODO(bug 1089798): streamId should really come from the MS.
-  nsresult res = mMedia->AddTrack(&aMediaStream, &streamId, trackId);
+  nsresult res = mMedia->AddTrack(&aMediaStream, streamId, trackId);
   if (NS_FAILED(res)) {
     return res;
   }
 
-  CSFLogDebug(logTag, "Added track (%s) to stream %p",
-                      trackId.c_str(), &aMediaStream);
+  CSFLogDebug(logTag, "Added track (%s) to stream %s",
+                      trackId.c_str(), streamId.c_str());
 
   if (num != mMedia->LocalStreamsLength()) {
     aMediaStream.AddPrincipalChangeObserver(this);
@@ -1986,12 +2041,46 @@ PeerConnectionImpl::AddTrack(MediaStreamTrack& aTrack,
     }
     mNumVideoStreams++;
   }
+  OnNegotiationNeeded();
   return NS_OK;
 }
 
 NS_IMETHODIMP
 PeerConnectionImpl::RemoveTrack(MediaStreamTrack& aTrack) {
-  MOZ_CRASH(); // TODO(bug 1021647): Implement and expose RemoveTrack
+  PC_AUTO_ENTER_API_CALL(true);
+
+  DOMMediaStream* stream = aTrack.GetStream();
+
+  if (!stream) {
+    CSFLogError(logTag, "%s: Track has no stream", __FUNCTION__);
+    return NS_ERROR_INVALID_ARG;
+  }
+
+  std::string streamId = PeerConnectionImpl::GetStreamId(*stream);
+  nsRefPtr<LocalSourceStreamInfo> info = media()->GetLocalStreamById(streamId);
+
+  if (!info) {
+    CSFLogError(logTag, "%s: Unknown stream", __FUNCTION__);
+    return NS_ERROR_INVALID_ARG;
+  }
+
+  std::string trackId(PeerConnectionImpl::GetTrackId(aTrack));
+
+  nsresult rv =
+    mJsepSession->RemoveTrack(info->GetId(), trackId);
+
+  if (NS_FAILED(rv)) {
+    CSFLogError(logTag, "%s: Unknown stream/track ids %s %s",
+                __FUNCTION__,
+                info->GetId().c_str(),
+                trackId.c_str());
+    return rv;
+  }
+
+  media()->RemoveLocalTrack(info->GetId(), trackId);
+
+  OnNegotiationNeeded();
+
   return NS_OK;
 }
 
@@ -2038,8 +2127,8 @@ PeerConnectionImpl::ReplaceTrack(MediaStreamTrack& aThisTrack,
   //  TrackID thisID = aThisTrack.GetTrackID();
   //
 
-  nsRefPtr<LocalSourceStreamInfo> info =
-    media()->GetLocalStreamByDomStream(aStream);
+  std::string streamId = PeerConnectionImpl::GetStreamId(aStream);
+  nsRefPtr<LocalSourceStreamInfo> info = media()->GetLocalStreamById(streamId);
 
   if (!info || !info->HasTrack(origTrackId)) {
     CSFLogError(logTag, "Track to replace (%s) was never added",
@@ -2331,10 +2420,24 @@ PeerConnectionImpl::SetSignalingState_m(PCImplSignalingState aSignalingState)
     mMedia->UpdateTransports(*mJsepSession);
   }
 
+  bool fireNegotiationNeeded = false;
+
   if (mSignalingState == PCImplSignalingState::SignalingStable) {
     mMedia->UpdateMediaPipelines(*mJsepSession);
     InitializeDataChannel();
     mMedia->StartIceChecks(*mJsepSession);
+    mShouldSuppressNegotiationNeeded = false;
+    if (!mJsepSession->AllLocalTracksAreAssigned()) {
+      CSFLogInfo(logTag, "Not all local tracks were assigned to an "
+                         "m-section, either because the offerer did not offer"
+                         " to receive enough tracks, or because tracks were "
+                         "added after CreateOffer/Answer, but before "
+                         "offer/answer completed. This requires "
+                         "renegotiation.");
+      fireNegotiationNeeded = true;
+    }
+  } else {
+    mShouldSuppressNegotiationNeeded = true;
   }
 
   if (mSignalingState == PCImplSignalingState::SignalingClosed) {
@@ -2347,6 +2450,10 @@ PeerConnectionImpl::SetSignalingState_m(PCImplSignalingState aSignalingState)
   }
   JSErrorResult rv;
   pco->OnStateChange(PCObserverStateType::SignalingState, rv);
+
+  if (fireNegotiationNeeded) {
+    OnNegotiationNeeded();
+  }
 }
 
 void
@@ -2461,7 +2568,11 @@ PeerConnectionImpl::CandidateReady(const std::string& candidate,
   // outparam or something. Bug 1051052.
   std::string mid;
 
-  nsresult res = mJsepSession->AddLocalIceCandidate(candidate, mid, level);
+  bool skipped = false;
+  nsresult res = mJsepSession->AddLocalIceCandidate(candidate,
+                                                    mid,
+                                                    level,
+                                                    &skipped);
 
   if (NS_FAILED(res)) {
     std::string errorString = mJsepSession->GetLastError();
@@ -2472,6 +2583,16 @@ PeerConnectionImpl::CandidateReady(const std::string& candidate,
                         candidate.c_str(),
                         static_cast<unsigned>(level),
                         errorString.c_str());
+  }
+
+  if (skipped) {
+    CSFLogDebug(logTag, "Skipped adding local candidate %s (level %u) to SDP, "
+                        "this typically happens because the m-section is "
+                        "bundled, which means it doesn't make sense for it to "
+                        "have its own transport-related attributes.",
+                        candidate.c_str(),
+                        static_cast<unsigned>(level));
+    return;
   }
 
   CSFLogDebug(logTag, "Passing local candidate to content: %s",
@@ -3123,6 +3244,24 @@ PeerConnectionImpl::RecordLongtermICEStatistics() {
 #ifdef MOZILLA_INTERNAL_API
   WebrtcGlobalInformation::StoreLongTermICEStatistics(*this);
 #endif
+}
+
+void
+PeerConnectionImpl::OnNegotiationNeeded()
+{
+  if (mShouldSuppressNegotiationNeeded) {
+    return;
+  }
+
+  mShouldSuppressNegotiationNeeded = true;
+
+  nsRefPtr<PeerConnectionObserver> pco = do_QueryObjectReferent(mPCObserver);
+  if (!pco) {
+    return;
+  }
+
+  JSErrorResult rv;
+  pco->OnNegotiationNeeded(rv);
 }
 
 void

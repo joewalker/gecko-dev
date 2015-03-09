@@ -21,6 +21,7 @@
 #include "nsCocoaUtils.h"
 #include "WidgetUtils.h"
 #include "nsPrintfCString.h"
+#include "ComplexTextInputPanel.h"
 
 using namespace mozilla;
 using namespace mozilla::widget;
@@ -1523,7 +1524,20 @@ TextInputHandler::HandleKeyDownEvent(NSEvent* aNativeEvent)
   KeyEventState* currentKeyEvent = PushKeyEvent(aNativeEvent);
   AutoKeyEventStateCleaner remover(this);
 
-  if (!IsIMEComposing()) {
+  ComplexTextInputPanel* ctiPanel = ComplexTextInputPanel::GetSharedComplexTextInputPanel();
+  if (ctiPanel && ctiPanel->IsInComposition()) {
+    nsAutoString committed;
+    ctiPanel->InterpretKeyEvent(aNativeEvent, committed);
+    if (!committed.IsEmpty()) {
+      WidgetKeyboardEvent imeEvent(true, NS_KEY_DOWN, mWidget);
+      InitKeyEvent(aNativeEvent, imeEvent);
+      imeEvent.mPluginTextEventString.Assign(committed);
+      DispatchEvent(imeEvent);
+    }
+    return true;
+  }
+
+  if (mWidget->IsPluginFocused() || !IsIMEComposing()) {
     NSResponder* firstResponder = [[mView window] firstResponder];
 
     WidgetKeyboardEvent keydownEvent(true, NS_KEY_DOWN, mWidget);
@@ -1553,6 +1567,14 @@ TextInputHandler::HandleKeyDownEvent(NSEvent* aNativeEvent)
          "keydown event's default is prevented", this));
       return true;
     }
+  }
+
+  // None of what follows is needed for plugin keyboard input.  In fact it
+  // may cause trouble -- for example the call to [mView interpretKeyEvents:]
+  // can, in e10s mode, cause each key typed to appear twice in an IME
+  // composition.
+  if (mWidget->IsPluginFocused()) {
+    return true;
   }
 
   // Let Cocoa interpret the key events, caching IsIMEComposing first.
@@ -3554,7 +3576,7 @@ IMEInputHandler::IsOrWouldBeFocused()
   NS_ENSURE_TRUE(!Destroyed(), false);
   NSWindow* window = [mView window];
   NS_ENSURE_TRUE(window, false);
-  return [window firstResponder] == mView;
+  return [window firstResponder] == mView && ![window attachedSheet];
 
   NS_OBJC_END_TRY_ABORT_BLOCK_RETURN(false);
 }

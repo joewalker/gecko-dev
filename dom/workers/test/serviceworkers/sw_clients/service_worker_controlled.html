@@ -7,7 +7,7 @@
 <head>
   <title>controlled page</title>
   <!--
-    Paged controlled by a service worker for testing getServiced().
+    Paged controlled by a service worker for testing matchAll().
     See bug 982726, 1058311.
   -->
 <script class="testbody" type="text/javascript">
@@ -26,7 +26,7 @@
     });
   }
 
-  window.onmessage = function(msg) {
+  navigator.serviceWorker.onmessage = function(msg) {
     // forward message to the test page.
     parent.postMessage(msg.data, "*");
   };

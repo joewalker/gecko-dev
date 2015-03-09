@@ -3,15 +3,22 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+const { classes: Cc, interfaces: Ci, results: Cr, utils: Cu } = Components;
 
-const Cc = Components.classes;
-const Ci = Components.interfaces;
-const Cr = Components.results;
+Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+Cu.import("resource://gre/modules/Services.jsm");
+Cu.import("resource://gre/modules/PrivateBrowsingUtils.jsm");
+Cu.import("resource://gre/modules/SharedPromptUtils.jsm");
 
-Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
-Components.utils.import("resource://gre/modules/Services.jsm");
-Components.utils.import("resource://gre/modules/PrivateBrowsingUtils.jsm");
-Components.utils.import("resource://gre/modules/SharedPromptUtils.jsm");
+/* Constants for password prompt telemetry.
+ * Mirrored in mobile/android/components/LoginManagerPrompter.js */
+const PROMPT_DISPLAYED = 0;
+
+const PROMPT_ADD = 1;
+const PROMPT_NOTNOW = 2;
+const PROMPT_NEVER = 3;
+
+const PROMPT_UPDATE = 1;
 
 /*
  * LoginManagerPromptFactory
@@ -126,7 +133,7 @@ LoginManagerPromptFactory.prototype = {
         }
         self._doAsyncPrompt();
       }
-    }
+    };
 
     Services.tm.mainThread.dispatch(runnable, Ci.nsIThread.DISPATCH_NORMAL);
     this.log("_doAsyncPrompt:run dispatched");
@@ -231,7 +238,7 @@ LoginManagerPrompter.prototype = {
       this.__strBundle = bunService.createBundle(
                   "chrome://passwordmgr/locale/passwordmgr.properties");
       if (!this.__strBundle)
-        throw "String bundle for Login Manager not present!";
+        throw new Error("String bundle for Login Manager not present!");
     }
 
     return this.__strBundle;
@@ -294,7 +301,8 @@ LoginManagerPrompter.prototype = {
   prompt : function (aDialogTitle, aText, aPasswordRealm,
                      aSavePassword, aDefaultText, aResult) {
     if (aSavePassword != Ci.nsIAuthPrompt.SAVE_PASSWORD_NEVER)
-      throw Components.results.NS_ERROR_NOT_IMPLEMENTED;
+      throw new Components.Exception("prompt only supports SAVE_PASSWORD_NEVER",
+                                     Cr.NS_ERROR_NOT_IMPLEMENTED);
 
     this.log("===== prompt() called =====");
 
@@ -318,7 +326,8 @@ LoginManagerPrompter.prototype = {
     this.log("===== promptUsernameAndPassword() called =====");
 
     if (aSavePassword == Ci.nsIAuthPrompt.SAVE_PASSWORD_FOR_SESSION)
-        throw Components.results.NS_ERROR_NOT_IMPLEMENTED;
+      throw new Components.Exception("promptUsernameAndPassword doesn't support SAVE_PASSWORD_FOR_SESSION",
+                                     Cr.NS_ERROR_NOT_IMPLEMENTED);
 
     var selectedLogin = null;
     var checkBox = { value : false };
@@ -420,7 +429,8 @@ LoginManagerPrompter.prototype = {
     this.log("===== promptPassword called() =====");
 
     if (aSavePassword == Ci.nsIAuthPrompt.SAVE_PASSWORD_FOR_SESSION)
-        throw Components.results.NS_ERROR_NOT_IMPLEMENTED;
+      throw new Components.Exception("promptPassword doesn't support SAVE_PASSWORD_FOR_SESSION",
+                                     Cr.NS_ERROR_NOT_IMPLEMENTED);
 
     var checkBox = { value : false };
     var checkBoxLabel = null;
@@ -679,7 +689,7 @@ LoginManagerPrompter.prototype = {
         level: aLevel,
         inProgress : false,
         prompter: this
-      }
+      };
 
       this._factory._asyncPrompts[hashKey] = asyncPrompt;
       this._factory._doAsyncPrompt();
@@ -732,6 +742,7 @@ LoginManagerPrompter.prototype = {
    */
   promptToSavePassword : function (aLogin) {
     var notifyObj = this._getPopupNote() || this._getNotifyBox();
+    Services.telemetry.getHistogramById("PWMGR_PROMPT_REMEMBER_ACTION").add(PROMPT_DISPLAYED);
 
     if (notifyObj)
       this._showSaveLoginNotification(notifyObj, aLogin);
@@ -772,7 +783,6 @@ LoginManagerPrompter.prototype = {
     }
   },
 
-
   /*
    * _showSaveLoginNotification
    *
@@ -784,7 +794,6 @@ LoginManagerPrompter.prototype = {
    *        A notification box or a popup notification.
    */
   _showSaveLoginNotification : function (aNotifyObj, aLogin) {
-
     // Ugh. We can't use the strings from the popup window, because they
     // have the access key marked in the string (eg "Mo&zilla"), along
     // with some weird rules for handling access keys that do not occur
@@ -815,6 +824,7 @@ LoginManagerPrompter.prototype = {
     // in scope here; set one to |this._pwmgr| so we can get back to pwmgr
     // without a getService() call.
     var pwmgr = this._pwmgr;
+    let promptHistogram = Services.telemetry.getHistogramById("PWMGR_PROMPT_REMEMBER_ACTION");
 
     // Notification is a PopupNotification
     if (aNotifyObj == this._getPopupNote()) {
@@ -823,6 +833,7 @@ LoginManagerPrompter.prototype = {
         label:     rememberButtonText,
         accessKey: rememberButtonAccessKey,
         callback: function(aNotifyObj, aButton) {
+          promptHistogram.add(PROMPT_ADD);
           pwmgr.addLogin(aLogin);
           browser.focus();
         }
@@ -834,6 +845,7 @@ LoginManagerPrompter.prototype = {
           label:     neverButtonText,
           accessKey: neverButtonAccessKey,
           callback: function(aNotifyObj, aButton) {
+            promptHistogram.add(PROMPT_NEVER);
             pwmgr.setLoginSavingEnabled(aLogin.hostname, false);
             browser.focus();
           }
@@ -1023,6 +1035,7 @@ LoginManagerPrompter.prototype = {
     // without a getService() call.
     var self = this;
 
+    let promptHistogram = Services.telemetry.getHistogramById("PWMGR_PROMPT_UPDATE_ACTION");
     // Notification is a PopupNotification
     if (aNotifyObj == this._getPopupNote()) {
       // "Yes" button
@@ -1032,11 +1045,13 @@ LoginManagerPrompter.prototype = {
         popup:     null,
         callback:  function(aNotifyObj, aButton) {
           self._updateLogin(aOldLogin, aNewPassword);
+          promptHistogram.add(PROMPT_UPDATE);
         }
       };
 
       var { browser } = this._getNotifyWindow();
 
+      Services.telemetry.getHistogramById("PWMGR_PROMPT_UPDATE_ACTION").add(PROMPT_DISPLAYED);
       aNotifyObj.show(browser, "password-change", notificationText,
                       "password-notification-icon", mainAction,
                       null, { timeout: Date.now() + 10000,
@@ -1433,11 +1448,11 @@ LoginManagerPrompter.prototype = {
     if (aAuthInfo.flags & Ci.nsIAuthInformation.AUTH_PROXY) {
       this.log("getAuthTarget is for proxy auth");
       if (!(aChannel instanceof Ci.nsIProxiedChannel))
-        throw "proxy auth needs nsIProxiedChannel";
+        throw new Error("proxy auth needs nsIProxiedChannel");
 
       var info = aChannel.proxyInfo;
       if (!info)
-        throw "proxy auth needs nsIProxyInfo";
+        throw new Error("proxy auth needs nsIProxyInfo");
 
       // Proxies don't have a scheme, but we'll use "moz-proxy://"
       // so that it's more obvious what the login is for.
@@ -1520,7 +1535,7 @@ LoginManagerPrompter.prototype = {
         this.callback = null;
         this.context = null;
       }
-    }
+    };
   }
 
 }; // end of LoginManagerPrompter implementation

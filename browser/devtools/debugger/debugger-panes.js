@@ -136,9 +136,8 @@ SourcesView.prototype = Heritage.extend(WidgetMethods, {
    *        - staged: true to stage the item to be appended later
    */
   addSource: function(aSource, aOptions = {}) {
-    if (!(aSource.url || aSource.introductionUrl)) {
-      // These would be most likely eval scripts introduced in inline
-      // JavaScript in HTML, and we don't show those yet (bug 1097873)
+    if (!aSource.url) {
+      // We don't show any unnamed eval scripts yet (see bug 1124106)
       return;
     }
 
@@ -170,21 +169,10 @@ SourcesView.prototype = Heritage.extend(WidgetMethods, {
   },
 
   _parseUrl: function(aSource) {
-    let fullUrl = aSource.url || aSource.introductionUrl;
+    let fullUrl = aSource.url;
     let url = fullUrl.split(" -> ").pop();
     let label = aSource.addonPath ? aSource.addonPath : SourceUtils.getSourceLabel(url);
-    let group;
-
-    if (!aSource.url && aSource.introductionUrl) {
-      label += ' > ' + aSource.introductionType;
-      group = L10N.getStr("evalGroupLabel");
-    }
-    else if(aSource.addonID) {
-      group = aSource.addonID;
-    }
-    else {
-      group = SourceUtils.getSourceGroup(url);
-    }
+    let group = aSource.addonID ? aSource.addonID : SourceUtils.getSourceGroup(url);
 
     return {
       label: label,
@@ -723,7 +711,7 @@ SourcesView.prototype = Heritage.extend(WidgetMethods, {
     lineTextNode.setAttribute("crop", "end");
     lineTextNode.setAttribute("flex", "1");
 
-    let tooltip = text.substr(0, BREAKPOINT_LINE_TOOLTIP_MAX_LENGTH);
+    let tooltip = text ? text.substr(0, BREAKPOINT_LINE_TOOLTIP_MAX_LENGTH) : "";
     lineTextNode.setAttribute("tooltiptext", tooltip);
 
     let container = document.createElement("hbox");
@@ -1004,7 +992,7 @@ SourcesView.prototype = Heritage.extend(WidgetMethods, {
     let attachment = breakpointItem.attachment;
 
     // Check if this is an enabled conditional breakpoint, and if so,
-    // save the current conditional epression.
+    // save the current conditional expression.
     let breakpointPromise = DebuggerController.Breakpoints._getAdded(attachment);
     if (breakpointPromise) {
       let { location } = yield breakpointPromise;

@@ -32,6 +32,8 @@ XPCOMUtils.defineLazyModuleGetter(this, "AboutReader",
   "resource://gre/modules/AboutReader.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "ReaderMode",
   "resource://gre/modules/ReaderMode.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "PageMetadata",
+  "resource://gre/modules/PageMetadata.jsm");
 XPCOMUtils.defineLazyGetter(this, "SimpleServiceDiscovery", function() {
   let ssdp = Cu.import("resource://gre/modules/SimpleServiceDiscovery.jsm", {}).SimpleServiceDiscovery;
   // Register targets
@@ -153,6 +155,12 @@ let handleContentContextMenu = function (event) {
   subject.wrappedJSObject = subject;
   Services.obs.notifyObservers(subject, "content-contextmenu", null);
 
+  let doc = event.target.ownerDocument;
+  let docLocation = doc.location.href;
+  let charSet = doc.characterSet;
+  let baseURI = doc.baseURI;
+  let referrer = doc.referrer;
+
   if (Services.appinfo.processType == Services.appinfo.PROCESS_TYPE_CONTENT) {
     let editFlags = SpellCheckHelper.isEditable(event.target, content);
     let spellInfo;
@@ -163,9 +171,10 @@ let handleContentContextMenu = function (event) {
     }
 
     let customMenuItems = PageMenuChild.build(event.target);
-    let principal = event.target.ownerDocument.nodePrincipal;
+    let principal = doc.nodePrincipal;
     sendSyncMessage("contextmenu",
-                    { editFlags, spellInfo, customMenuItems, addonInfo, principal },
+                    { editFlags, spellInfo, customMenuItems, addonInfo,
+                      principal, docLocation, charSet, baseURI, referrer },
                     { event, popupNode: event.target });
   }
   else {
@@ -178,6 +187,10 @@ let handleContentContextMenu = function (event) {
       popupNode: event.target,
       browser: browser,
       addonInfo: addonInfo,
+      documentURIObject: doc.documentURIObject,
+      docLocation: docLocation,
+      charSet: charSet,
+      referrer: referrer,
     };
   }
 }
@@ -501,8 +514,6 @@ let AboutReaderListener = {
         break;
 
       case "pagehide":
-        // Reader mode is disabled until proven enabled.
-        this._savedArticle = null;
         sendAsyncMessage("Reader:UpdateReaderButton", { isArticle: false });
         break;
 
@@ -510,6 +521,9 @@ let AboutReaderListener = {
         if (!ReaderMode.isEnabledForParseOnLoad || this.isAboutReader) {
           return;
         }
+
+        // Reader mode is disabled until proven enabled.
+        this._savedArticle = null;
 
         ReaderMode.parseDocument(content.document).then(article => {
           // Do nothing if there is no article, or if the content window has been destroyed.
@@ -519,8 +533,8 @@ let AboutReaderListener = {
 
           // The loaded page may have changed while we were parsing the document.
           // Make sure we've got the current one.
-          let currentURL = Services.io.newURI(content.document.documentURI, null, null).specIgnoringRef;
-          if (article.url !== currentURL) {
+          let url = Services.io.newURI(content.document.documentURI, null, null).spec;
+          if (article.url !== url) {
             return;
           }
 
@@ -671,8 +685,8 @@ let ClickEventHandler = {
             event.preventDefault(); // Need to prevent the pageload.
           }
         }
-        json.noReferrer = BrowserUtils.linkHasNoReferrer(node)
       }
+      json.noReferrer = BrowserUtils.linkHasNoReferrer(node)
 
       sendAsyncMessage("Content:Click", json);
       return;
@@ -930,6 +944,13 @@ ContentWebRTC.init();
 addMessageListener("webrtc:Allow", ContentWebRTC);
 addMessageListener("webrtc:Deny", ContentWebRTC);
 addMessageListener("webrtc:StopSharing", ContentWebRTC);
+addMessageListener("webrtc:StartBrowserSharing", () => {
+  let windowID = content.QueryInterface(Ci.nsIInterfaceRequestor)
+                        .getInterface(Ci.nsIDOMWindowUtils).outerWindowID;
+  sendAsyncMessage("webrtc:response:StartBrowserSharing", {
+    windowID: windowID
+  });
+});
 
 function gKeywordURIFixup(fixupInfo) {
   fixupInfo.QueryInterface(Ci.nsIURIFixupInfo);
@@ -992,30 +1013,29 @@ addEventListener("pageshow", function(event) {
   }
 });
 
-let SocialMessenger = {
+let PageMetadataMessenger = {
   init: function() {
-    addMessageListener("Social:GetPageData", this);
-    addMessageListener("Social:GetMicrodata", this);
-
-    XPCOMUtils.defineLazyGetter(this, "og", function() {
-      let tmp = {};
-      Cu.import("resource:///modules/Social.jsm", tmp);
-      return tmp.OpenGraphBuilder;
-    });
+    addMessageListener("PageMetadata:GetPageData", this);
+    addMessageListener("PageMetadata:GetMicrodata", this);
   },
   receiveMessage: function(aMessage) {
     switch(aMessage.name) {
-      case "Social:GetPageData":
-        sendAsyncMessage("Social:PageDataResult", this.og.getData(content.document));
+      case "PageMetadata:GetPageData": {
+        let result = PageMetadata.getData(content.document);
+        sendAsyncMessage("PageMetadata:PageDataResult", result);
         break;
-      case "Social:GetMicrodata":
+      }
+
+      case "PageMetadata:GetMicrodata": {
         let target = aMessage.objects;
-        sendAsyncMessage("Social:PageDataResult", this.og.getMicrodata(content.document, target));
+        let result = PageMetadata.getMicrodata(content.document, target);
+        sendAsyncMessage("PageMetadata:MicrodataResult", result);
         break;
+      }
     }
   }
 }
-SocialMessenger.init();
+PageMetadataMessenger.init();
 
 addEventListener("ActivateSocialFeature", function (aEvent) {
   let document = content.document;
@@ -1063,4 +1083,43 @@ addMessageListener("ContextMenu:SaveVideoFrameAsImage", (message) => {
   sendAsyncMessage("ContextMenu:SaveVideoFrameAsImage:Result", {
     dataURL: canvas.toDataURL("image/jpeg", ""),
   });
+});
+
+addMessageListener("ContextMenu:MediaCommand", (message) => {
+  let media = message.objects.element;
+
+  switch (message.data.command) {
+    case "play":
+      media.play();
+      break;
+    case "pause":
+      media.pause();
+      break;
+    case "mute":
+      media.muted = true;
+      break;
+    case "unmute":
+      media.muted = false;
+      break;
+    case "playbackRate":
+      media.playbackRate = message.data.data;
+      break;
+    case "hidecontrols":
+      media.removeAttribute("controls");
+      break;
+    case "showcontrols":
+      media.setAttribute("controls", "true");
+      break;
+    case "hidestats":
+    case "showstats":
+      let event = media.ownerDocument.createEvent("CustomEvent");
+      event.initCustomEvent("media-showStatistics", false, true,
+                            message.data.command == "showstats");
+      media.dispatchEvent(event);
+      break;
+    case "fullscreen":
+      if (content.document.mozFullScreenEnabled)
+        media.mozRequestFullScreen();
+      break;
+  }
 });

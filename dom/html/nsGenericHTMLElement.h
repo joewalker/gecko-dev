@@ -68,7 +68,7 @@ public:
   // From Element
   nsresult CopyInnerTo(mozilla::dom::Element* aDest);
 
-  void GetTitle(nsString& aTitle)
+  void GetTitle(mozilla::dom::DOMString& aTitle)
   {
     GetHTMLAttr(nsGkAtoms::title, aTitle);
   }
@@ -77,7 +77,7 @@ public:
     SetHTMLAttr(nsGkAtoms::title, aTitle);
     return NS_OK;
   }
-  void GetLang(nsString& aLang)
+  void GetLang(mozilla::dom::DOMString& aLang)
   {
     GetHTMLAttr(nsGkAtoms::lang, aLang);
   }
@@ -86,7 +86,7 @@ public:
     SetHTMLAttr(nsGkAtoms::lang, aLang);
     return NS_OK;
   }
-  void GetDir(nsString& aDir)
+  void GetDir(mozilla::dom::DOMString& aDir)
   {
     GetHTMLEnumAttr(nsGkAtoms::dir, aDir);
   }
@@ -291,12 +291,31 @@ public:
     return rcFrame.height;
   }
 
+  // These methods are already implemented in nsIContent but we want something
+  // faster for HTMLElements ignoring the namespace checking.
+  // This is safe because we already know that we are in the HTML namespace.
+  inline bool IsHTMLElement() const
+  {
+    return true;
+  }
+
+  inline bool IsHTMLElement(nsIAtom* aTag) const
+  {
+    return mNodeInfo->Equals(aTag);
+  }
+
+  template<typename First, typename... Args>
+  inline bool IsAnyOfHTMLElements(First aFirst, Args... aArgs) const
+  {
+    return IsNodeInternal(aFirst, aArgs...);
+  }
+
 protected:
   virtual ~nsGenericHTMLElement() {}
 
   // These methods are used to implement element-specific behavior of Get/SetItemValue
   // when an element has @itemprop but no @itemscope.
-  virtual void GetItemValueText(nsAString& text);
+  virtual void GetItemValueText(mozilla::dom::DOMString& text);
   virtual void SetItemValueText(const nsAString& text);
 public:
   virtual already_AddRefed<mozilla::dom::UndoManager> GetUndoManager() MOZ_OVERRIDE;
@@ -318,21 +337,21 @@ public:
   NS_FORWARD_NSIDOMELEMENT_TO_GENERIC
 
   NS_IMETHOD GetTitle(nsAString& aTitle) MOZ_FINAL MOZ_OVERRIDE {
-    nsString title;
+    mozilla::dom::DOMString title;
     GetTitle(title);
-    aTitle.Assign(title);
+    title.ToString(aTitle);
     return NS_OK;
   }
   NS_IMETHOD GetLang(nsAString& aLang) MOZ_FINAL MOZ_OVERRIDE {
-    nsString lang;
+    mozilla::dom::DOMString lang;
     GetLang(lang);
-    aLang.Assign(lang);
+    lang.ToString(aLang);
     return NS_OK;
   }
   NS_IMETHOD GetDir(nsAString& aDir) MOZ_FINAL MOZ_OVERRIDE {
-    nsString dir;
+    mozilla::dom::DOMString dir;
     GetDir(dir);
-    aDir.Assign(dir);
+    dir.ToString(aDir);
     return NS_OK;
   }
   NS_IMETHOD SetDir(const nsAString& aDir) MOZ_FINAL MOZ_OVERRIDE {
@@ -920,19 +939,16 @@ public:
   static inline bool
   ShouldExposeNameAsHTMLDocumentProperty(Element* aElement)
   {
-    return aElement->IsHTML() && CanHaveName(aElement->Tag());
+    return aElement->IsHTMLElement() &&
+           CanHaveName(aElement->NodeInfo()->NameAtom());
   }
   static inline bool
   ShouldExposeIdAsHTMLDocumentProperty(Element* aElement)
   {
-    if (!aElement->IsHTML()) {
-      return false;
-    }
-    nsIAtom* tag = aElement->Tag();
-    return tag == nsGkAtoms::img ||
-           tag == nsGkAtoms::applet ||
-           tag == nsGkAtoms::embed ||
-           tag == nsGkAtoms::object;
+    return aElement->IsAnyOfHTMLElements(nsGkAtoms::img,
+                                         nsGkAtoms::applet,
+                                         nsGkAtoms::embed,
+                                         nsGkAtoms::object);
   }
 
   static bool

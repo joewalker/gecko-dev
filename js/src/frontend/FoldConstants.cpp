@@ -80,6 +80,13 @@ ContainsHoistedDeclaration(ExclusiveContext *cx, ParseNode *node, bool *result)
         *result = false;
         return true;
 
+      // Similarly to the lexical declarations above, classes cannot add hoisted
+      // declarations
+      case PNK_CLASS:
+        MOZ_ASSERT(node->isArity(PN_TERNARY));
+        *result = false;
+        return true;
+
       // ContainsHoistedDeclaration is only called on nested nodes, so any
       // instance of this can't be function statements at body level.  In
       // SpiderMonkey, a binding induced by a function statement is added when
@@ -322,6 +329,7 @@ ContainsHoistedDeclaration(ExclusiveContext *cx, ParseNode *node, bool *result)
 
       // Grammar sub-components that should never be reached directly by this
       // method, because some parent component should have asserted itself.
+      case PNK_OBJECT_PROPERTY_NAME:
       case PNK_COMPUTED_NAME:
       case PNK_SPREAD:
       case PNK_MUTATEPROTO:
@@ -404,6 +412,9 @@ ContainsHoistedDeclaration(ExclusiveContext *cx, ParseNode *node, bool *result)
       case PNK_FORIN:
       case PNK_FOROF:
       case PNK_FORHEAD:
+      case PNK_CLASSMETHOD:
+      case PNK_CLASSMETHODLIST:
+      case PNK_CLASSNAMES:
         MOZ_CRASH("ContainsHoistedDeclaration should have indicated false on "
                   "some parent node without recurring to test this node");
 
@@ -814,6 +825,7 @@ Fold(ExclusiveContext *cx, ParseNode **pnp,
              * NB: pn must be a PNK_IF as PNK_CONDITIONAL can never have a null
              * kid or an empty statement for a child.
              */
+            handler.prepareNodeForMutation(pn);
             pn->setKind(PNK_STATEMENTLIST);
             pn->setArity(PN_LIST);
             pn->makeEmpty();

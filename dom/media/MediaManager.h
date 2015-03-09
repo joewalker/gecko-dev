@@ -393,29 +393,25 @@ public:
           NS_ASSERTION(!NS_IsMainThread(), "Never call on main thread");
           nsresult rv;
 
-          source->SetPullEnabled(true);
-
-          DOMMediaStream::TrackTypeHints expectedTracks = 0;
           if (mAudioSource) {
             rv = mAudioSource->Start(source, kAudioTrack);
-            if (NS_SUCCEEDED(rv)) {
-              expectedTracks |= DOMMediaStream::HINT_CONTENTS_AUDIO;
-            } else {
+            if (NS_FAILED(rv)) {
               ReturnCallbackError(rv, "Starting audio failed");
               return;
             }
           }
           if (mVideoSource) {
             rv = mVideoSource->Start(source, kVideoTrack);
-            if (NS_SUCCEEDED(rv)) {
-              expectedTracks |= DOMMediaStream::HINT_CONTENTS_VIDEO;
-            } else {
+            if (NS_FAILED(rv)) {
               ReturnCallbackError(rv, "Starting video failed");
               return;
             }
           }
+          // Start() queued the tracks to be added synchronously to avoid races
+          source->FinishAddTracks();
 
-          mOnTracksAvailableCallback->SetExpectedTracks(expectedTracks);
+          source->SetPullEnabled(true);
+          source->AdvanceKnownTracksTime(STREAM_TIME_MAX);
 
           MM_LOG(("started all sources"));
           // Forward mOnTracksAvailableCallback to GetUserMediaNotificationEvent,
@@ -520,7 +516,7 @@ public:
   explicit VideoDevice(Source* aSource);
   NS_IMETHOD GetType(nsAString& aType);
   Source* GetSource();
-  bool SatisfiesConstraintSets(
+  uint32_t GetBestFitnessDistance(
     const nsTArray<const dom::MediaTrackConstraintSet*>& aConstraintSets);
 };
 
@@ -532,7 +528,7 @@ public:
   explicit AudioDevice(Source* aSource);
   NS_IMETHOD GetType(nsAString& aType);
   Source* GetSource();
-  bool SatisfiesConstraintSets(
+  uint32_t GetBestFitnessDistance(
     const nsTArray<const dom::MediaTrackConstraintSet*>& aConstraintSets);
 };
 

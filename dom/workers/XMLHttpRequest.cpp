@@ -32,9 +32,6 @@ using namespace mozilla;
 using namespace mozilla::dom;
 USING_WORKERS_NAMESPACE
 
-// XXX Need to figure this out...
-#define UNCATCHABLE_EXCEPTION NS_ERROR_OUT_OF_MEMORY
-
 /**
  *  XMLHttpRequest in workers
  *
@@ -1907,7 +1904,7 @@ XMLHttpRequest::Open(const nsACString& aMethod, const nsAString& aUrl,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -1944,7 +1941,7 @@ XMLHttpRequest::SetRequestHeader(const nsACString& aHeader,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -1967,7 +1964,7 @@ XMLHttpRequest::SetTimeout(uint32_t aTimeout, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -1993,7 +1990,7 @@ XMLHttpRequest::SetWithCredentials(bool aWithCredentials, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -2020,7 +2017,7 @@ XMLHttpRequest::SetMozBackgroundRequest(bool aBackgroundRequest,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -2047,7 +2044,7 @@ XMLHttpRequest::GetUpload(ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return nullptr;
   }
 
@@ -2069,7 +2066,7 @@ XMLHttpRequest::Send(ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -2091,7 +2088,7 @@ XMLHttpRequest::Send(const nsAString& aBody, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -2117,7 +2114,7 @@ XMLHttpRequest::Send(JS::Handle<JSObject*> aBody, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -2163,7 +2160,7 @@ XMLHttpRequest::Send(File& aBody, ErrorResult& aRv)
   JSContext* cx = mWorkerPrivate->GetJSContext();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -2217,20 +2214,13 @@ XMLHttpRequest::Send(const ArrayBufferView& aBody, ErrorResult& aRv)
 }
 
 void
-XMLHttpRequest::SendAsBinary(const nsAString& aBody, ErrorResult& aRv)
-{
-  NS_NOTYETIMPLEMENTED("Implement me!");
-  aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
-  return;
-}
-
-void
 XMLHttpRequest::Abort(ErrorResult& aRv)
 {
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
+    return;
   }
 
   if (!mProxy) {
@@ -2258,7 +2248,7 @@ XMLHttpRequest::GetResponseHeader(const nsACString& aHeader,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -2285,7 +2275,7 @@ XMLHttpRequest::GetAllResponseHeaders(nsACString& aResponseHeaders,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -2311,7 +2301,7 @@ XMLHttpRequest::OverrideMimeType(const nsAString& aMimeType, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 
@@ -2342,7 +2332,7 @@ XMLHttpRequest::SetResponseType(XMLHttpRequestResponseType aResponseType,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   if (mCanceled) {
-    aRv.Throw(UNCATCHABLE_EXCEPTION);
+    aRv.ThrowUncatchableException();
     return;
   }
 

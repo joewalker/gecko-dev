@@ -42,6 +42,7 @@ public:
   void NPP_Print(NPPrint* aPrintInfo);
   int16_t NPP_HandleEvent(void* aEvent);
   int32_t NPP_WriteReady(NPStream* aStream);
+  NPError NPP_DestroyStream(NPStream* aStream, NPReason aReason);
   void OnInstanceCreated(PluginInstanceParent* aInstance);
   static bool Create(PluginModuleParent* aParent, NPMIMEType aPluginType,
                      NPP aInstance, uint16_t aMode, int16_t aArgc,
@@ -79,6 +80,7 @@ public:
   void AsyncCallArriving();
 
   void NotifyAsyncInitFailed();
+  void DestroyAsyncStream(NPStream* aStream);
 
 private:
   explicit PluginAsyncSurrogate(PluginModuleParent* aParent);
@@ -97,6 +99,8 @@ private:
   static void NPP_Print(NPP aInstance, NPPrint* aPrintInfo);
   static int16_t NPP_HandleEvent(NPP aInstance, void* aEvent);
   static int32_t NPP_WriteReady(NPP aInstance, NPStream* aStream);
+  static NPError NPP_DestroyStream(NPP aInstance, NPStream* aStream,
+                                   NPReason aReason);
 
   static NPObject* ScriptableAllocate(NPP aInstance, NPClass* aClass);
   static void ScriptableInvalidate(NPObject* aObject);
@@ -117,6 +121,7 @@ private:
                                   uint32_t* aCount);
   static bool ScriptableConstruct(NPObject* aObject, const NPVariant* aArgs,
                                   uint32_t aArgCount, NPVariant* aResult);
+  static nsNPAPIPluginStreamListener* GetStreamListener(NPStream* aStream);
 
 private:
   struct PendingNewStreamCall

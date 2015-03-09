@@ -123,9 +123,10 @@ nsHttpTransaction::nsHttpTransaction()
     , mPreserveStream(false)
     , mDispatchedAsBlocking(false)
     , mResponseTimeoutEnabled(true)
-    , mDontRouteViaWildCard(false)
     , mForceRestart(false)
     , mReuseOnRestart(false)
+    , mContentDecoding(false)
+    , mContentDecodingCheck(false)
     , mReportedStart(false)
     , mReportedResponseHeader(false)
     , mForTakeResponseHead(nullptr)
@@ -510,15 +511,20 @@ nsHttpTransaction::OnTransportStatus(nsITransport* transport,
     LOG(("nsHttpTransaction::OnSocketStatus [this=%p status=%x progress=%lld]\n",
         this, status, progress));
 
-    if (TimingEnabled()) {
+    // If the timing is enabled, and we are not using a persistent connection
+    // then the requestStart timestamp will be null, so we mark the timestamps
+    // for domainLookupStart/End and connectStart/End
+    // If we are using a persistent connection they will remain null,
+    // and the correct value will be returned in nsPerformance.
+    if (TimingEnabled() && GetRequestStart().IsNull()) {
         if (status == NS_NET_STATUS_RESOLVING_HOST) {
-            mTimings.domainLookupStart = TimeStamp::Now();
+            SetDomainLookupStart(TimeStamp::Now());
         } else if (status == NS_NET_STATUS_RESOLVED_HOST) {
-            mTimings.domainLookupEnd = TimeStamp::Now();
+            SetDomainLookupEnd(TimeStamp::Now());
         } else if (status == NS_NET_STATUS_CONNECTING_TO) {
-            mTimings.connectStart = TimeStamp::Now();
+            SetConnectStart(TimeStamp::Now());
         } else if (status == NS_NET_STATUS_CONNECTED_TO) {
-            mTimings.connectEnd = TimeStamp::Now();
+            SetConnectEnd(TimeStamp::Now());
         }
     }
 
@@ -633,9 +639,9 @@ nsHttpTransaction::ReadRequestSegment(nsIInputStream *stream,
     nsresult rv = trans->mReader->OnReadSegment(buf, count, countRead);
     if (NS_FAILED(rv)) return rv;
 
-    if (trans->TimingEnabled() && trans->mTimings.requestStart.IsNull()) {
-        // First data we're sending -> this is requestStart
-        trans->mTimings.requestStart = TimeStamp::Now();
+    if (trans->TimingEnabled()) {
+        // Set the timestamp to Now(), only if it null
+        trans->SetRequestStart(TimeStamp::Now(), true);
     }
 
     if (!trans->mSentData) {
@@ -703,8 +709,9 @@ nsHttpTransaction::WritePipeSegment(nsIOutputStream *stream,
     if (trans->mTransactionDone)
         return NS_BASE_STREAM_CLOSED; // stop iterating
 
-    if (trans->TimingEnabled() && trans->mTimings.responseStart.IsNull()) {
-        trans->mTimings.responseStart = TimeStamp::Now();
+    if (trans->TimingEnabled()) {
+        // Set the timestamp to Now(), only if it null
+        trans->SetResponseStart(TimeStamp::Now(), true);
     }
 
     nsresult rv;
@@ -848,6 +855,7 @@ nsHttpTransaction::Close(nsresult reason)
     if (mConnection)
         connReused = mConnection->IsReused();
     mConnected = false;
+    mTunnelProvider = nullptr;
 
     //
     // if the connection was reset or closed before we wrote any part of the
@@ -909,11 +917,17 @@ nsHttpTransaction::Close(nsresult reason)
 
         NS_WARNING("Partial transfer, incomplete HTTP response received");
 
-        if ((mHttpVersion >= NS_HTTP_VERSION_1_1) &&
-            gHttpHandler->GetEnforceH1Framing()) {
-            reason = NS_ERROR_NET_PARTIAL_TRANSFER;
-            LOG(("Partial transfer, incomplete HTTP response received: %s",
-                 mChunkedDecoder ? "broken chunk" : "c-l underrun"));
+        if (mHttpVersion >= NS_HTTP_VERSION_1_1) {
+            FrameCheckLevel clevel = gHttpHandler->GetEnforceH1Framing();
+            if (clevel >= FRAMECHECK_BARELY) {
+                if ((clevel == FRAMECHECK_STRICT) ||
+                    (mChunkedDecoder && mChunkedDecoder->GetChunkRemaining()) ||
+                    (!mChunkedDecoder && !mContentDecoding && mContentDecodingCheck) ) {
+                    reason = NS_ERROR_NET_PARTIAL_TRANSFER;
+                    LOG(("Partial transfer, incomplete HTTP response received: %s",
+                         mChunkedDecoder ? "broken chunk" : "c-l underrun"));
+                }
+            }
         }
 
         if (mConnection) {
@@ -964,9 +978,12 @@ nsHttpTransaction::Close(nsresult reason)
     // mTimings.responseEnd is normally recorded based on the end of a
     // HTTP delimiter such as chunked-encodings or content-length. However,
     // EOF or an error still require an end time be recorded.
-    if (TimingEnabled() &&
-        mTimings.responseEnd.IsNull() && !mTimings.responseStart.IsNull())
-        mTimings.responseEnd = TimeStamp::Now();
+    if (TimingEnabled()) {
+        const TimingStruct timings = Timings();
+        if (timings.responseEnd.IsNull() && !timings.responseStart.IsNull()) {
+            SetResponseEnd(TimeStamp::Now());
+        }
+    }
 
     if (relConn && mConnection) {
         MutexAutoLock lock(mLock);
@@ -1123,7 +1140,7 @@ nsHttpTransaction::Restart()
     }
 
     LOG(("restarting transaction @%p\n", this));
-    SetDontRouteViaWildCard(false);
+    mTunnelProvider = nullptr;
 
     // rewind streams in case we already wrote out the request
     nsCOMPtr<nsISeekableStream> seekable = do_QueryInterface(mRequestStream);
@@ -1647,8 +1664,9 @@ nsHttpTransaction::HandleContent(char *buf,
         mResponseIsComplete = true;
         ReleaseBlockingTransaction();
 
-        if (TimingEnabled())
-            mTimings.responseEnd = TimeStamp::Now();
+        if (TimingEnabled()) {
+            SetResponseEnd(TimeStamp::Now());
+        }
 
         // report the entire response has arrived
         if (mActivityDistributor)
@@ -1736,6 +1754,12 @@ nsHttpTransaction::ProcessData(char *buf, uint32_t count, uint32_t *countRead)
             MOZ_ASSERT(mConnection);
             mConnection->PushBack(buf + *countRead, countRemaining);
         }
+
+        if (!mContentDecodingCheck && mResponseHead) {
+            mContentDecoding =
+                !!mResponseHead->PeekHeader(nsHttp::Content_Encoding);
+            mContentDecodingCheck = true;
+        }
     }
 
     return NS_OK;
@@ -1758,6 +1782,14 @@ nsHttpTransaction::CancelPipeline(uint32_t reason)
     mClassification = CLASS_SOLO;
 }
 
+
+void
+nsHttpTransaction::SetLoadGroupConnectionInfo(nsILoadGroupConnectionInfo *aLoadGroupCI)
+{
+    LOG(("nsHttpTransaction %p SetLoadGroupConnectionInfo %p\n", this, aLoadGroupCI));
+    mLoadGroupCI = aLoadGroupCI;
+}
+
 // Called when the transaction marked for blocking is associated with a connection
 // (i.e. added to a new h1 conn, an idle http connection, or placed into
 // a http pipeline). It is safe to call this multiple times with it only
@@ -1773,7 +1805,7 @@ nsHttpTransaction::DispatchedAsBlocking()
     if (!mLoadGroupCI)
         return;
 
-    LOG(("nsHttpTransaction adding blocking channel %p from "
+    LOG(("nsHttpTransaction adding blocking transaction %p from "
          "loadgroup %p\n", this, mLoadGroupCI.get()));
 
     mLoadGroupCI->AddBlockingTransaction();
@@ -1789,13 +1821,13 @@ nsHttpTransaction::RemoveDispatchedAsBlocking()
     uint32_t blockers = 0;
     nsresult rv = mLoadGroupCI->RemoveBlockingTransaction(&blockers);
 
-    LOG(("nsHttpTransaction removing blocking channel %p from "
+    LOG(("nsHttpTransaction removing blocking transaction %p from "
          "loadgroup %p. %d blockers remain.\n", this,
          mLoadGroupCI.get(), blockers));
 
     if (NS_SUCCEEDED(rv) && !blockers) {
-        LOG(("nsHttpTransaction %p triggering release of blocked channels.\n",
-             this));
+        LOG(("nsHttpTransaction %p triggering release of blocked channels "
+             " with loadgroupci=%p\n", this, mLoadGroupCI.get()));
         gHttpHandler->ConnMgr()->ProcessPendingQ();
     }
 
@@ -1806,6 +1838,8 @@ void
 nsHttpTransaction::ReleaseBlockingTransaction()
 {
     RemoveDispatchedAsBlocking();
+    LOG(("nsHttpTransaction %p loadgroupci set to null "
+         "in ReleaseBlockingTransaction() - was %p\n", this, mLoadGroupCI.get()));
     mLoadGroupCI = nullptr;
 }
 
@@ -1818,6 +1852,133 @@ nsHttpTransaction::DisableSpdy()
         // is owned by the connection manager, so we're safe to change this here
         mConnInfo->SetNoSpdy(true);
     }
+}
+
+const TimingStruct
+nsHttpTransaction::Timings()
+{
+    mozilla::MutexAutoLock lock(mLock);
+    TimingStruct timings = mTimings;
+    return timings;
+}
+
+void
+nsHttpTransaction::SetDomainLookupStart(mozilla::TimeStamp timeStamp, bool onlyIfNull)
+{
+    mozilla::MutexAutoLock lock(mLock);
+    if (onlyIfNull && !mTimings.domainLookupStart.IsNull()) {
+        return; // We only set the timestamp if it was previously null
+    }
+    mTimings.domainLookupStart = timeStamp;
+}
+
+void
+nsHttpTransaction::SetDomainLookupEnd(mozilla::TimeStamp timeStamp, bool onlyIfNull)
+{
+    mozilla::MutexAutoLock lock(mLock);
+    if (onlyIfNull && !mTimings.domainLookupEnd.IsNull()) {
+        return; // We only set the timestamp if it was previously null
+    }
+    mTimings.domainLookupEnd = timeStamp;
+}
+
+void
+nsHttpTransaction::SetConnectStart(mozilla::TimeStamp timeStamp, bool onlyIfNull)
+{
+    mozilla::MutexAutoLock lock(mLock);
+    if (onlyIfNull && !mTimings.connectStart.IsNull()) {
+        return; // We only set the timestamp if it was previously null
+    }
+    mTimings.connectStart = timeStamp;
+}
+
+void
+nsHttpTransaction::SetConnectEnd(mozilla::TimeStamp timeStamp, bool onlyIfNull)
+{
+    mozilla::MutexAutoLock lock(mLock);
+    if (onlyIfNull && !mTimings.connectEnd.IsNull()) {
+        return; // We only set the timestamp if it was previously null
+    }
+    mTimings.connectEnd = timeStamp;
+}
+
+void
+nsHttpTransaction::SetRequestStart(mozilla::TimeStamp timeStamp, bool onlyIfNull)
+{
+    mozilla::MutexAutoLock lock(mLock);
+    if (onlyIfNull && !mTimings.requestStart.IsNull()) {
+        return; // We only set the timestamp if it was previously null
+    }
+    mTimings.requestStart = timeStamp;
+}
+
+void
+nsHttpTransaction::SetResponseStart(mozilla::TimeStamp timeStamp, bool onlyIfNull)
+{
+    mozilla::MutexAutoLock lock(mLock);
+    if (onlyIfNull && !mTimings.responseStart.IsNull()) {
+        return; // We only set the timestamp if it was previously null
+    }
+    mTimings.responseStart = timeStamp;
+}
+
+void
+nsHttpTransaction::SetResponseEnd(mozilla::TimeStamp timeStamp, bool onlyIfNull)
+{
+    mozilla::MutexAutoLock lock(mLock);
+    if (onlyIfNull && !mTimings.responseEnd.IsNull()) {
+        return; // We only set the timestamp if it was previously null
+    }
+    mTimings.responseEnd = timeStamp;
+}
+
+mozilla::TimeStamp
+nsHttpTransaction::GetDomainLookupStart()
+{
+    mozilla::MutexAutoLock lock(mLock);
+    return mTimings.domainLookupStart;
+}
+
+mozilla::TimeStamp
+nsHttpTransaction::GetDomainLookupEnd()
+{
+    mozilla::MutexAutoLock lock(mLock);
+    return mTimings.domainLookupEnd;
+}
+
+mozilla::TimeStamp
+nsHttpTransaction::GetConnectStart()
+{
+    mozilla::MutexAutoLock lock(mLock);
+    return mTimings.connectStart;
+}
+
+mozilla::TimeStamp
+nsHttpTransaction::GetConnectEnd()
+{
+    mozilla::MutexAutoLock lock(mLock);
+    return mTimings.connectEnd;
+}
+
+mozilla::TimeStamp
+nsHttpTransaction::GetRequestStart()
+{
+    mozilla::MutexAutoLock lock(mLock);
+    return mTimings.requestStart;
+}
+
+mozilla::TimeStamp
+nsHttpTransaction::GetResponseStart()
+{
+    mozilla::MutexAutoLock lock(mLock);
+    return mTimings.responseStart;
+}
+
+mozilla::TimeStamp
+nsHttpTransaction::GetResponseEnd()
+{
+    mozilla::MutexAutoLock lock(mLock);
+    return mTimings.responseEnd;
 }
 
 //-----------------------------------------------------------------------------

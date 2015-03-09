@@ -667,8 +667,10 @@ public:
   static const KTableValue kRadialGradientSizeKTable[];
   static const KTableValue kRadialGradientLegacySizeKTable[];
   static const KTableValue kResizeKTable[];
+  static const KTableValue kRubyAlignKTable[];
   static const KTableValue kRubyPositionKTable[];
   static const KTableValue kScrollBehaviorKTable[];
+  static const KTableValue kScrollSnapTypeKTable[];
   static const KTableValue kSpeakKTable[];
   static const KTableValue kSpeakHeaderKTable[];
   static const KTableValue kSpeakNumeralKTable[];

@@ -19,7 +19,9 @@ Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/PrivateBrowsingUtils.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
-Cu.importGlobalProperties(["File"]);
+if (!this.File) {
+    Cu.importGlobalProperties(["File"]);
+}
 
 // Allow stuff from this scope to be accessed from non-privileged scopes. This
 // would crash if used outside of automation.
@@ -301,10 +303,10 @@ SpecialPowersHandler.prototype.doGetPropertyDescriptor = function(name, own) {
   if (typeof desc === 'undefined')
     return undefined;
 
-  // When accessors are implemented as JSPropertyOps rather than JSNatives (ie,
-  // QuickStubs), the js engine does the wrong thing and treats it as a value
-  // descriptor rather than an accessor descriptor. Jorendorff suggested this
-  // little hack to work around it. See bug 520882.
+  // When accessors are implemented as JSGetterOp/JSSetterOps rather than
+  // JSNatives (ie, QuickStubs), the js engine does the wrong thing and treats
+  // it as a value descriptor rather than an accessor descriptor. Jorendorff
+  // suggested this little hack to work around it. See bug 520882.
   if (desc && 'value' in desc && desc.value === undefined)
     desc.value = obj[name];
 

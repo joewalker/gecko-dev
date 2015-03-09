@@ -467,7 +467,7 @@ CanvasFrameAnonymousContentHelper.prototype = {
     try {
       let doc = this.anonymousContentDocument;
       doc.removeAnonymousContent(this._content);
-    } catch (e) {console.error(e)}
+    } catch (e) {}
     events.off(this.tabActor, "navigate", this._onNavigate);
     this.tabActor = this.nodeBuilder = this._content = null;
     this.anonymousContentDocument = null;
@@ -610,7 +610,6 @@ function AutoRefreshHighlighter(tabActor) {
   EventEmitter.decorate(this);
 
   this.tabActor = tabActor;
-  this.browser = tabActor.browser;
   this.win = tabActor.window;
 
   this.currentNode = null;
@@ -759,7 +758,6 @@ AutoRefreshHighlighter.prototype = {
 
     this.tabActor = null;
     this.win = null;
-    this.browser = null;
     this.currentNode = null;
     this.layoutHelpers = null;
   }
@@ -1319,7 +1317,7 @@ BoxModelHighlighter.prototype = Heritage.extend(AutoRefreshHighlighter.prototype
     }
 
     let rect = this.currentQuads.border.bounds;
-    let dim = Math.ceil(rect.width) + " \u00D7 " + Math.ceil(rect.height);
+    let dim = parseFloat(rect.width.toPrecision(6)) + " \u00D7 " + parseFloat(rect.height.toPrecision(6));
 
     let elementId = this.ID_CLASS_PREFIX + "nodeinfobar-";
     this.markup.setTextContentForElement(elementId + "tagname", tagName);

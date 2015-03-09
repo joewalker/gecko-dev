@@ -48,8 +48,6 @@ public:
                       nsIntRegion* aDestRegion = nullptr,
                       gfx::IntPoint* aSrcOffset = nullptr) MOZ_OVERRIDE
   {
-    // XXX - For this to work with IncrementalContentHost we will need to support
-    // the aDestRegion and aSrcOffset parameters properly;
     mSurface = aSurface;
     return true;
   }
@@ -69,11 +67,20 @@ BasicCompositor::BasicCompositor(nsIWidget *aWidget)
 {
   MOZ_COUNT_CTOR(BasicCompositor);
   SetBackend(LayersBackend::LAYERS_BASIC);
+
+  mMaxTextureSize =
+    Factory::GetMaxSurfaceSize(gfxPlatform::GetPlatform()->GetContentBackend());
 }
 
 BasicCompositor::~BasicCompositor()
 {
   MOZ_COUNT_DTOR(BasicCompositor);
+}
+
+int32_t
+BasicCompositor::GetMaxTextureSize() const
+{
+  return mMaxTextureSize;
 }
 
 void
@@ -391,13 +398,18 @@ BasicCompositor::BeginFrame(const nsIntRegion& aInvalidRegion,
                             gfx::Rect *aClipRectOut /* = nullptr */,
                             gfx::Rect *aRenderBoundsOut /* = nullptr */)
 {
-  mWidgetSize = mWidget->GetClientSize();
-  IntRect intRect = gfx::IntRect(IntPoint(), mWidgetSize);
+  nsIntRect intRect;
+  mWidget->GetClientBounds(intRect);
+  mWidgetSize = gfx::ToIntSize(intRect.Size());
+
+  // The result of GetClientBounds is shifted over by the size of the window
+  // manager styling. We want to ignore that.
+  intRect.MoveTo(0, 0);
   Rect rect = Rect(0, 0, intRect.width, intRect.height);
 
   // Sometimes the invalid region is larger than we want to draw.
   nsIntRegion invalidRegionSafe;
-  invalidRegionSafe.And(aInvalidRegion, gfx::ThebesIntRect(intRect));
+  invalidRegionSafe.And(aInvalidRegion, intRect);
 
   nsIntRect invalidRect = invalidRegionSafe.GetBounds();
   mInvalidRect = IntRect(invalidRect.x, invalidRect.y, invalidRect.width, invalidRect.height);

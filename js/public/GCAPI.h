@@ -99,7 +99,8 @@ namespace JS {
     D(REFRESH_FRAME)                            \
     D(FULL_GC_TIMER)                            \
     D(SHUTDOWN_CC)                              \
-    D(FINISH_LARGE_EVALUATE)
+    D(FINISH_LARGE_EVALUATE)                    \
+    D(USER_INACTIVE)
 
 namespace gcreason {
 
@@ -263,9 +264,10 @@ enum GCProgress {
 
 struct JS_PUBLIC_API(GCDescription) {
     bool isCompartment_;
+    JSGCInvocationKind invocationKind_;
 
-    explicit GCDescription(bool isCompartment)
-      : isCompartment_(isCompartment) {}
+    GCDescription(bool isCompartment, JSGCInvocationKind kind)
+      : isCompartment_(isCompartment), invocationKind_(kind) {}
 
     char16_t *formatMessage(JSRuntime *rt) const;
     char16_t *formatJSON(JSRuntime *rt, uint64_t timestamp) const;

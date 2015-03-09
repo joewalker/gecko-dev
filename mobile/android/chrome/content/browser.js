@@ -146,7 +146,7 @@ let lazilyLoadedObserverScripts = [
   ["Feedback", ["Feedback:Show"], "chrome://browser/content/Feedback.js"],
   ["SelectionHandler", ["TextSelection:Get"], "chrome://browser/content/SelectionHandler.js"],
   ["EmbedRT", ["GeckoView:ImportScript"], "chrome://browser/content/EmbedRT.js"],
-  ["Reader", ["Reader:FetchContent", "Reader:Removed", "Gesture:DoubleTap"], "chrome://browser/content/Reader.js"],
+  ["Reader", ["Reader:FetchContent", "Reader:Removed"], "chrome://browser/content/Reader.js"],
 ];
 if (AppConstants.MOZ_WEBRTC) {
   lazilyLoadedObserverScripts.push(
@@ -179,10 +179,11 @@ lazilyLoadedObserverScripts.forEach(function (aScript) {
     "Reader:ListStatusRequest",
     "Reader:RemoveFromList",
     "Reader:Share",
-    "Reader:ShowToast",
-    "Reader:ToolbarVisibility",
+    "Reader:ToolbarHidden",
     "Reader:SystemUIVisibility",
     "Reader:UpdateReaderButton",
+    "Reader:SetIntPref",
+    "Reader:SetCharPref",
   ], "chrome://browser/content/Reader.js"],
 ].forEach(aScript => {
   let [name, messages, script] = aScript;
@@ -322,6 +323,7 @@ let Strings = {
   init: function () {
     XPCOMUtils.defineLazyGetter(Strings, "brand", () => Services.strings.createBundle("chrome://branding/locale/brand.properties"));
     XPCOMUtils.defineLazyGetter(Strings, "browser", () => Services.strings.createBundle("chrome://browser/locale/browser.properties"));
+    XPCOMUtils.defineLazyGetter(Strings, "reader", () => Services.strings.createBundle("chrome://global/locale/aboutReader.properties"));
   },
 
   flush: function () {
@@ -623,6 +625,17 @@ var BrowserApp = {
             callback: () => { BrowserApp.selectTab(tab); },
           }
         });
+      });
+
+    NativeWindow.contextmenus.add(stringGetter("contextmenu.addToReadingList"),
+      NativeWindow.contextmenus.linkOpenableContext,
+      function(aTarget) {
+        let url = NativeWindow.contextmenus._getLinkURL(aTarget);
+        Messaging.sendRequestForResult({
+            type: "Reader:AddToList",
+            title: truncate(url, MAX_TITLE_LENGTH),
+            url: truncate(url, MAX_URI_LENGTH),
+        }).catch(Cu.reportError);
       });
 
     NativeWindow.contextmenus.add(stringGetter("contextmenu.copyLink"),
@@ -4431,7 +4444,11 @@ Tab.prototype = {
     this.clickToPlayPluginsActivated = false;
     // Borrowed from desktop Firefox: http://mxr.mozilla.org/mozilla-central/source/browser/base/content/urlbarBindings.xml#174
     let documentURI = contentWin.document.documentURIObject.spec
-    let matchedURL = documentURI.match(/^((?:[a-z]+:\/\/)?(?:[^\/]+@)?)(.+?)(?::\d+)?(?:\/|$)/);
+
+    // If reader mode, get the base domain for the original url.
+    let strippedURI = this._stripAboutReaderURL(documentURI);
+
+    let matchedURL = strippedURI.match(/^((?:[a-z]+:\/\/)?(?:[^\/]+@)?)(.+?)(?::\d+)?(?:\/|$)/);
     let baseDomain = "";
     if (matchedURL) {
       var domain = "";
@@ -4487,6 +4504,19 @@ Tab.prototype = {
     } else {
       this.sendViewportUpdate();
     }
+  },
+
+  _stripAboutReaderURL: function (url) {
+    if (!url.startsWith("about:reader")) {
+      return url;
+    }
+
+    // From ReaderParent._getOriginalUrl (browser/modules/ReaderParent.jsm).
+    let searchParams = new URLSearchParams(url.substring("about:reader?".length));
+    if (!searchParams.has("url")) {
+        return url;
+    }
+    return decodeURIComponent(searchParams.get("url"));
   },
 
   // Properties used to cache security state used to update the UI
@@ -4892,8 +4922,10 @@ Tab.prototype = {
 
 var BrowserEventHandler = {
   init: function init() {
+    this._clickInZoomedView = false;
     Services.obs.addObserver(this, "Gesture:SingleTap", false);
     Services.obs.addObserver(this, "Gesture:CancelTouch", false);
+    Services.obs.addObserver(this, "Gesture:ClickInZoomedView", false);
     Services.obs.addObserver(this, "Gesture:DoubleTap", false);
     Services.obs.addObserver(this, "Gesture:Scroll", false);
     Services.obs.addObserver(this, "dom-touch-listener-added", false);
@@ -5087,6 +5119,10 @@ var BrowserEventHandler = {
         this._cancelTapHighlight();
         break;
 
+      case "Gesture:ClickInZoomedView":
+        this._clickInZoomedView = true;
+        break;
+
       case "Gesture:SingleTap": {
         try {
           // If the element was previously focused, show the caret attached to it.
@@ -5104,7 +5140,7 @@ var BrowserEventHandler = {
         let data = JSON.parse(aData);
         let {x, y} = data;
 
-        if (this._inCluster) {
+        if (this._inCluster && this._clickInZoomedView != true) {
           this._clusterClicked(x, y);
         } else {
           // The _highlightElement was chosen after fluffing the touch events
@@ -5114,6 +5150,7 @@ var BrowserEventHandler = {
           this._sendMouseEvent("mousedown", x, y);
           this._sendMouseEvent("mouseup",   x, y);
         }
+        this._clickInZoomedView = false;
         // scrollToFocusedInput does its own checks to find out if an element should be zoomed into
         BrowserApp.scrollToFocusedInput(BrowserApp.selectedBrowser);
 
@@ -7011,6 +7048,14 @@ var SearchEngines = {
     }
 
     let engineData = Services.search.getVisibleEngines({});
+
+    // Our Java UI assumes that the default engine is the first item in the array,
+    // so we need to make sure that's the case.
+    if (engineData[0] !== Services.search.defaultEngine) {
+      engineData = engineData.filter(engine => engine !== Services.search.defaultEngine);
+      engineData.unshift(Services.search.defaultEngine);
+    }
+
     let searchEngines = engineData.map(function (engine) {
       return {
         name: engine.name,
@@ -7371,6 +7416,7 @@ var RemoteDebugger = {
         DebuggerServer.init();
         DebuggerServer.addBrowserActors();
         DebuggerServer.registerModule("resource://gre/modules/dbg-browser-actors.js");
+        DebuggerServer.allowChromeProcess = true;
       }
 
       let pathOrPort = this._getPath();
@@ -7665,7 +7711,7 @@ var Distribution = {
     for (let key in localizeablePrefs) {
       try {
         let value = localizeablePrefs[key];
-        value = value.replace("%LOCALE%", locale, "g");
+        value = value.replace(/%LOCALE%/g, locale);
         localizedString.data = "data:text/plain," + key + "=" + value;
         defaults.setComplexValue(key, Ci.nsIPrefLocalizedString, localizedString);
       } catch (e) { /* ignore bad prefs and move on */ }

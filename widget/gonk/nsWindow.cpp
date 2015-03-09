@@ -129,7 +129,7 @@ displayEnabledCallback(bool enabled)
 
 } // anonymous namespace
 
-NS_IMPL_ISUPPORTS_INHERITED(nsWindow, nsBaseWidget, nsISupportsWeakReference)
+NS_IMPL_ISUPPORTS_INHERITED0(nsWindow, nsBaseWidget)
 
 nsWindow::nsWindow()
 {
@@ -326,7 +326,7 @@ nsWindow::DispatchTouchEventForAPZ(const MultiTouchInput& aInput,
     // for "normal" flow. The event might get sent to the child process still,
     // but if it doesn't we need to notify the APZ of various things. All of
     // that happens in DispatchEventForAPZ
-    DispatchEventForAPZ(&event, aGuid, aInputBlockId);
+    ProcessUntransformedAPZEvent(&event, aGuid, aInputBlockId);
 }
 
 class DispatchTouchInputOnControllerThread : public Task

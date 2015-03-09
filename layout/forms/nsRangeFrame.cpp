@@ -50,6 +50,11 @@ nsRangeFrame::nsRangeFrame(nsStyleContext* aContext)
 
 nsRangeFrame::~nsRangeFrame()
 {
+#ifdef DEBUG
+  if (mOuterFocusStyle) {
+    mOuterFocusStyle->FrameRelease();
+  }
+#endif
 }
 
 NS_IMPL_FRAMEARENA_HELPERS(nsRangeFrame)
@@ -445,7 +450,7 @@ nsRangeFrame::AccessibleType()
 double
 nsRangeFrame::GetValueAsFractionOfRange()
 {
-  MOZ_ASSERT(mContent->IsHTML(nsGkAtoms::input), "bad cast");
+  MOZ_ASSERT(mContent->IsHTMLElement(nsGkAtoms::input), "bad cast");
   dom::HTMLInputElement* input = static_cast<dom::HTMLInputElement*>(mContent);
 
   MOZ_ASSERT(input->GetType() == NS_FORM_INPUT_RANGE);
@@ -474,7 +479,7 @@ nsRangeFrame::GetValueAtEventPoint(WidgetGUIEvent* aEvent)
              aEvent->mClass == eTouchEventClass,
              "Unexpected event type - aEvent->refPoint may be meaningless");
 
-  MOZ_ASSERT(mContent->IsHTML(nsGkAtoms::input), "bad cast");
+  MOZ_ASSERT(mContent->IsHTMLElement(nsGkAtoms::input), "bad cast");
   dom::HTMLInputElement* input = static_cast<dom::HTMLInputElement*>(mContent);
 
   MOZ_ASSERT(input->GetType() == NS_FORM_INPUT_RANGE);
@@ -705,7 +710,7 @@ nsRangeFrame::AttributeChanged(int32_t  aNameSpaceID,
       // HTMLInputElement. Given that we're changing away from being a range
       // and this frame will shortly be destroyed, there's no point in calling
       // UpdateForValueChange() anyway.
-      MOZ_ASSERT(mContent->IsHTML(nsGkAtoms::input), "bad cast");
+      MOZ_ASSERT(mContent->IsHTMLElement(nsGkAtoms::input), "bad cast");
       bool typeIsRange = static_cast<dom::HTMLInputElement*>(mContent)->GetType() ==
                            NS_FORM_INPUT_RANGE;
       // If script changed the <input>'s type before setting these attributes
@@ -880,6 +885,18 @@ nsRangeFrame::SetAdditionalStyleContext(int32_t aIndex,
   MOZ_ASSERT(aIndex == 0,
              "GetAdditionalStyleContext is handling other indexes?");
 
+#ifdef DEBUG
+  if (mOuterFocusStyle) {
+    mOuterFocusStyle->FrameRelease();
+  }
+#endif
+
   // The -moz-focus-outer pseudo-element's style has changed.
   mOuterFocusStyle = aStyleContext;
+
+#ifdef DEBUG
+  if (mOuterFocusStyle) {
+    mOuterFocusStyle->FrameAddRef();
+  }
+#endif
 }

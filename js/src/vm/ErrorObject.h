@@ -14,13 +14,13 @@
 
 struct JSExnPrivate;
 
+namespace js {
+
 /*
  * Initialize the exception constructor/prototype hierarchy.
  */
 extern JSObject *
-js_InitExceptionClasses(JSContext *cx, JS::HandleObject obj);
-
-namespace js {
+InitExceptionClasses(JSContext *cx, HandleObject obj);
 
 class ErrorObject : public NativeObject
 {
@@ -32,20 +32,7 @@ class ErrorObject : public NativeObject
 
     /* For access to createProto. */
     friend JSObject *
-    ::js_InitExceptionClasses(JSContext *cx, JS::HandleObject global);
-
-    /* For access to assignInitialShape. */
-    friend bool
-    EmptyShape::ensureInitialCustomShape<ErrorObject>(ExclusiveContext *cx,
-                                                      Handle<ErrorObject*> obj);
-
-    /*
-     * Assign the initial error shape to the empty object.  (This shape does
-     * *not* include .message, which must be added separately if needed; see
-     * ErrorObject::init.)
-     */
-    static Shape *
-    assignInitialShape(ExclusiveContext *cx, Handle<ErrorObject*> obj);
+    js::InitExceptionClasses(JSContext *cx, HandleObject global);
 
     static bool
     init(JSContext *cx, Handle<ErrorObject*> obj, JSExnType type,
@@ -84,6 +71,14 @@ class ErrorObject : public NativeObject
     create(JSContext *cx, JSExnType type, HandleString stack, HandleString fileName,
            uint32_t lineNumber, uint32_t columnNumber, ScopedJSFreePtr<JSErrorReport> *report,
            HandleString message);
+
+    /*
+     * Assign the initial error shape to the empty object.  (This shape does
+     * *not* include .message, which must be added separately if needed; see
+     * ErrorObject::init.)
+     */
+    static Shape *
+    assignInitialShape(ExclusiveContext *cx, Handle<ErrorObject*> obj);
 
     JSExnType type() const {
         return JSExnType(getReservedSlot(EXNTYPE_SLOT).toInt32());

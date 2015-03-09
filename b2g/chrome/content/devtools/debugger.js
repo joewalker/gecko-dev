@@ -178,6 +178,11 @@ let RemoteDebugger = {
     let restrictPrivileges = Services.prefs.getBoolPref("devtools.debugger.forbid-certified-apps");
     DebuggerServer.addBrowserActors("navigator:browser", restrictPrivileges);
 
+    // Allow debugging of chrome for any process
+    if (!restrictPrivileges) {
+      DebuggerServer.allowChromeProcess = true;
+    }
+
     /**
      * Construct a root actor appropriate for use in a server running in B2G.
      * The returned root actor respects the factories registered with
@@ -196,6 +201,7 @@ let RemoteDebugger = {
         globalActorFactories: restrictPrivileges ? {
           webappsActor: DebuggerServer.globalActorFactories.webappsActor,
           deviceActor: DebuggerServer.globalActorFactories.deviceActor,
+          settingsActor: DebuggerServer.globalActorFactories.settingsActor
         } : DebuggerServer.globalActorFactories
       };
       let { RootActor } = devtools.require("devtools/server/actors/root");

@@ -889,6 +889,7 @@ class GCRuntime
     void markGrayReferencesInCurrentGroup(gcstats::Phase phase);
     void markAllWeakReferences(gcstats::Phase phase);
     void markAllGrayReferences(gcstats::Phase phase);
+    void markJitcodeGlobalTable();
 
     void beginSweepPhase(bool lastGC);
     void findZoneGroups();
@@ -908,10 +909,10 @@ class GCRuntime
     void sweepBackgroundThings(ZoneList &zones, LifoAlloc &freeBlocks, ThreadType threadType);
     void assertBackgroundSweepingFinished();
     bool shouldCompact();
-    IncrementalProgress compactPhase(bool lastGC);
+    IncrementalProgress compactPhase(JS::gcreason::Reason reason);
     void sweepTypesAfterCompacting(Zone *zone);
     void sweepZoneAfterCompacting(Zone *zone);
-    ArenaHeader *relocateArenas();
+    ArenaHeader *relocateArenas(JS::gcreason::Reason reason);
     void updateAllCellPointersParallel(MovingTracer *trc);
     void updateAllCellPointersSerial(MovingTracer *trc);
     void updatePointersToRelocatedCells();
@@ -921,7 +922,7 @@ class GCRuntime
     void protectRelocatedArenas(ArenaHeader *relocatedList);
     void unprotectRelocatedArenas(ArenaHeader *relocatedList);
 #endif
-    void finishCollection();
+    void finishCollection(JS::gcreason::Reason reason);
 
     void computeNonIncrementalMarkingForValidation();
     void validateIncrementalMarking();

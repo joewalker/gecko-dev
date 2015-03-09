@@ -40,6 +40,18 @@ loop.panel = (function(_, mozL10n) {
       if (tabChange) {
         this.props.mozLoop.notifyUITour("Loop:PanelTabChanged", nextState.selectedTab);
       }
+
+      if (!tabChange && nextProps.buttonsHidden) {
+        if (nextProps.buttonsHidden.length !== this.props.buttonsHidden.length) {
+          tabChange = true;
+        } else {
+          for (var i = 0, l = nextProps.buttonsHidden.length; i < l && !tabChange; ++i) {
+            if (this.props.buttonsHidden.indexOf(nextProps.buttonsHidden[i]) === -1) {
+              tabChange = true;
+            }
+          }
+        }
+      }
       return tabChange;
     },
 
@@ -329,11 +341,6 @@ loop.panel = (function(_, mozL10n) {
     render: function() {
       var cx = React.addons.classSet;
 
-      // For now all of the menu entries require FxA so hide the whole gear if FxA is disabled.
-      if (!navigator.mozLoop.fxAEnabled) {
-        return null;
-      }
-
       return (
         React.createElement("div", {className: "settings-menu dropdown"}, 
           React.createElement("a", {className: "button-settings", onClick: this.showDropdownMenu, 
@@ -347,7 +354,7 @@ loop.panel = (function(_, mozL10n) {
             React.createElement(SettingsDropdownEntry, {label: mozL10n.get("settings_menu_item_account"), 
                                    onClick: this.handleClickAccountEntry, 
                                    icon: "account", 
-                                   displayed: this._isSignedIn()}), 
+                                   displayed: this._isSignedIn() && navigator.mozLoop.fxAEnabled}), 
             React.createElement(SettingsDropdownEntry, {icon: "tour", 
                                    label: mozL10n.get("tour_label"), 
                                    onClick: this.openGettingStartedTour}), 

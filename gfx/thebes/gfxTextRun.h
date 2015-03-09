@@ -24,6 +24,7 @@
 
 class gfxContext;
 class gfxFontGroup;
+class gfxUserFontEntry;
 class gfxUserFontSet;
 class gfxTextContextPaint;
 class nsIAtom;
@@ -39,10 +40,9 @@ struct gfxTextRunDrawCallbacks {
     /**
      * Constructs a new DrawCallbacks object.
      *
-     * @param aShouldPaintSVGGlyphs If true, SVG glyphs will be
-     *   painted and the NotifyBeforeSVGGlyphPainted/NotifyAfterSVGGlyphPainted
-     *   callbacks will be invoked for each SVG glyph.  If false, SVG glyphs
-     *   will not be painted; fallback plain glyphs are not emitted either.
+     * @param aShouldPaintSVGGlyphs If true, SVG glyphs will be painted.  If
+     *   false, SVG glyphs will not be painted; fallback plain glyphs are not
+     *   emitted either.
      */
     explicit gfxTextRunDrawCallbacks(bool aShouldPaintSVGGlyphs = false)
       : mShouldPaintSVGGlyphs(aShouldPaintSVGGlyphs)
@@ -55,16 +55,6 @@ struct gfxTextRunDrawCallbacks {
      * due to partial ligatures and intervening SVG glyphs.
      */
     virtual void NotifyGlyphPathEmitted() = 0;
-
-    /**
-     * Called just before an SVG glyph has been painted to the gfxContext.
-     */
-    virtual void NotifyBeforeSVGGlyphPainted() { }
-
-    /**
-     * Called just after an SVG glyph has been painted to the gfxContext.
-     */
-    virtual void NotifyAfterSVGGlyphPainted() { }
 
     bool mShouldPaintSVGGlyphs;
 };
@@ -103,38 +93,41 @@ public:
 
     // Public textrun API for general use
 
-    bool IsClusterStart(uint32_t aPos) {
+    bool IsClusterStart(uint32_t aPos) const {
         NS_ASSERTION(aPos < GetLength(), "aPos out of range");
         return mCharacterGlyphs[aPos].IsClusterStart();
     }
-    bool IsLigatureGroupStart(uint32_t aPos) {
+    bool IsLigatureGroupStart(uint32_t aPos) const {
         NS_ASSERTION(aPos < GetLength(), "aPos out of range");
         return mCharacterGlyphs[aPos].IsLigatureGroupStart();
     }
-    bool CanBreakLineBefore(uint32_t aPos) {
-        NS_ASSERTION(aPos < GetLength(), "aPos out of range");
-        return mCharacterGlyphs[aPos].CanBreakBefore() ==
-            CompressedGlyph::FLAG_BREAK_TYPE_NORMAL;
+    bool CanBreakLineBefore(uint32_t aPos) const {
+        return CanBreakBefore(aPos) == CompressedGlyph::FLAG_BREAK_TYPE_NORMAL;
     }
-    bool CanHyphenateBefore(uint32_t aPos) {
-        NS_ASSERTION(aPos < GetLength(), "aPos out of range");
-        return mCharacterGlyphs[aPos].CanBreakBefore() ==
-            CompressedGlyph::FLAG_BREAK_TYPE_HYPHEN;
+    bool CanHyphenateBefore(uint32_t aPos) const {
+        return CanBreakBefore(aPos) == CompressedGlyph::FLAG_BREAK_TYPE_HYPHEN;
     }
 
-    bool CharIsSpace(uint32_t aPos) {
+    // Returns a gfxShapedText::CompressedGlyph::FLAG_BREAK_TYPE_* value
+    // as defined in gfxFont.h (may be NONE, NORMAL or HYPHEN).
+    uint8_t CanBreakBefore(uint32_t aPos) const {
+        NS_ASSERTION(aPos < GetLength(), "aPos out of range");
+        return mCharacterGlyphs[aPos].CanBreakBefore();
+    }
+
+    bool CharIsSpace(uint32_t aPos) const {
         NS_ASSERTION(aPos < GetLength(), "aPos out of range");
         return mCharacterGlyphs[aPos].CharIsSpace();
     }
-    bool CharIsTab(uint32_t aPos) {
+    bool CharIsTab(uint32_t aPos) const {
         NS_ASSERTION(aPos < GetLength(), "aPos out of range");
         return mCharacterGlyphs[aPos].CharIsTab();
     }
-    bool CharIsNewline(uint32_t aPos) {
+    bool CharIsNewline(uint32_t aPos) const {
         NS_ASSERTION(aPos < GetLength(), "aPos out of range");
         return mCharacterGlyphs[aPos].CharIsNewline();
     }
-    bool CharIsLowSurrogate(uint32_t aPos) {
+    bool CharIsLowSurrogate(uint32_t aPos) const {
         NS_ASSERTION(aPos < GetLength(), "aPos out of range");
         return mCharacterGlyphs[aPos].CharIsLowSurrogate();
     }
@@ -872,6 +865,9 @@ public:
     // caches need updating.
     virtual void UpdateUserFonts();
 
+    // search for a specific userfont in the list of fonts
+    bool ContainsUserFont(const gfxUserFontEntry* aUserFont);
+
     bool ShouldSkipDrawing() const {
         return mSkipDrawing;
     }
@@ -1009,6 +1005,8 @@ protected:
             mFontCreated = true;
             mLoading = false;
         }
+
+        bool EqualsUserFont(const gfxUserFontEntry* aUserFont) const;
 
     private:
         nsRefPtr<gfxFontFamily> mFamily;

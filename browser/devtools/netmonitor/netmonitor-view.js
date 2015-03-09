@@ -1178,6 +1178,12 @@ RequestsMenuView.prototype = Heritage.extend(WidgetMethods, {
           case "httpVersion":
             requestItem.attachment.httpVersion = value;
             break;
+          case "remoteAddress":
+            requestItem.attachment.remoteAddress = value;
+            break;
+          case "remotePort":
+            requestItem.attachment.remotePort = value;
+            break;
           case "status":
             requestItem.attachment.status = value;
             this.updateMenuView(requestItem, key, value);
@@ -2271,6 +2277,21 @@ NetworkDetailsView.prototype = {
       $("#headers-summary-method").setAttribute("hidden", "true");
     }
 
+    if (aData.remoteAddress) {
+      let address = aData.remoteAddress;
+      if (address.indexOf(":") != -1) {
+        address = `[${address}]`;
+      }
+      if(aData.remotePort) {
+        address += `:${aData.remotePort}`;
+      }
+      $("#headers-summary-address-value").setAttribute("value", address);
+      $("#headers-summary-address-value").setAttribute("tooltiptext", address);
+      $("#headers-summary-address").removeAttribute("hidden");
+    } else {
+      $("#headers-summary-address").setAttribute("hidden", "true");
+    }
+
     if (aData.status) {
       $("#headers-summary-status-circle").setAttribute("code", aData.status);
       $("#headers-summary-status-value").setAttribute("value", aData.status + " " + aData.statusText);
@@ -2743,21 +2764,22 @@ NetworkDetailsView.prototype = {
     }
 
     /**
-     * A helper that sets label text to specified value.
+     * A helper that sets value and tooltiptext attributes of an element to
+     * specified value.
      *
      * @param string selector
-     *        A selector for the label.
+     *        A selector for the element.
      * @param string value
-     *        The value label should have. If this evaluates to false a
-     *        placeholder string <Not Available> is used instead.
+     *        The value to set. If this evaluates to false a placeholder string
+     *        <Not Available> is used instead.
      */
-    function setLabel(selector, value) {
+    function setValue(selector, value) {
       let label = $(selector);
       if (!value) {
-        label.value = L10N.getStr("netmonitor.security.notAvailable");
-        label.setAttribute("tooltiptext", label.value);
+        label.setAttribute("value", L10N.getStr("netmonitor.security.notAvailable"));
+        label.setAttribute("tooltiptext", label.getAttribute("value"));
       } else {
-        label.value = value;
+        label.setAttribute("value", value);
         label.setAttribute("tooltiptext", value);
       }
     }
@@ -2785,43 +2807,43 @@ NetworkDetailsView.prototype = {
       let disabledLabel = L10N.getStr("netmonitor.security.disabled");
 
       // Connection parameters
-      setLabel("#security-protocol-version-value", securityInfo.protocolVersion);
-      setLabel("#security-ciphersuite-value", securityInfo.cipherSuite);
+      setValue("#security-protocol-version-value", securityInfo.protocolVersion);
+      setValue("#security-ciphersuite-value", securityInfo.cipherSuite);
 
       // Host header
       let domain = NetMonitorView.RequestsMenu._getUriHostPort(url);
       let hostHeader = L10N.getFormatStr("netmonitor.security.hostHeader", domain);
-      setLabel("#security-info-host-header", hostHeader);
+      setValue("#security-info-host-header", hostHeader);
 
       // Parameters related to the domain
-      setLabel("#security-http-strict-transport-security-value",
+      setValue("#security-http-strict-transport-security-value",
                 securityInfo.hsts ? enabledLabel : disabledLabel);
 
-      setLabel("#security-public-key-pinning-value",
+      setValue("#security-public-key-pinning-value",
                 securityInfo.hpkp ? enabledLabel : disabledLabel);
 
       // Certificate parameters
       let cert = securityInfo.cert;
-      setLabel("#security-cert-subject-cn", cert.subject.commonName);
-      setLabel("#security-cert-subject-o", cert.subject.organization);
-      setLabel("#security-cert-subject-ou", cert.subject.organizationalUnit);
+      setValue("#security-cert-subject-cn", cert.subject.commonName);
+      setValue("#security-cert-subject-o", cert.subject.organization);
+      setValue("#security-cert-subject-ou", cert.subject.organizationalUnit);
 
-      setLabel("#security-cert-issuer-cn", cert.issuer.commonName);
-      setLabel("#security-cert-issuer-o", cert.issuer.organization);
-      setLabel("#security-cert-issuer-ou", cert.issuer.organizationalUnit);
+      setValue("#security-cert-issuer-cn", cert.issuer.commonName);
+      setValue("#security-cert-issuer-o", cert.issuer.organization);
+      setValue("#security-cert-issuer-ou", cert.issuer.organizationalUnit);
 
-      setLabel("#security-cert-validity-begins", cert.validity.start);
-      setLabel("#security-cert-validity-expires", cert.validity.end);
+      setValue("#security-cert-validity-begins", cert.validity.start);
+      setValue("#security-cert-validity-expires", cert.validity.end);
 
-      setLabel("#security-cert-sha1-fingerprint", cert.fingerprint.sha1);
-      setLabel("#security-cert-sha256-fingerprint", cert.fingerprint.sha256);
+      setValue("#security-cert-sha1-fingerprint", cert.fingerprint.sha1);
+      setValue("#security-cert-sha256-fingerprint", cert.fingerprint.sha256);
     } else {
       infobox.hidden = true;
       errorbox.hidden = false;
 
       // Strip any HTML from the message.
       let plain = DOMParser.parseFromString(securityInfo.errorMessage, "text/html");
-      $("#security-error-message").textContent = plain.body.textContent;
+      setValue("#security-error-message", plain.body.textContent);
     }
   }),
 

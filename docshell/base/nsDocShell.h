@@ -12,6 +12,7 @@
 #include "nsIDocShell.h"
 #include "nsIDocShellTreeItem.h"
 #include "nsIBaseWindow.h"
+#include "nsINetworkInterceptController.h"
 #include "nsIScrollable.h"
 #include "nsITextScroll.h"
 #include "nsIContentViewerContainer.h"
@@ -152,6 +153,7 @@ class nsDocShell MOZ_FINAL
   , public nsILinkHandler
   , public nsIClipboardCommands
   , public nsIDOMStorageManager
+  , public nsINetworkInterceptController
   , public mozilla::SupportsWeakPtr<nsDocShell>
 {
   friend class nsDSURIContentListener;
@@ -182,6 +184,7 @@ public:
   NS_DECL_NSIAUTHPROMPTPROVIDER
   NS_DECL_NSICLIPBOARDCOMMANDS
   NS_DECL_NSIWEBSHELLSERVICES
+  NS_DECL_NSINETWORKINTERCEPTCONTROLLER
   NS_FORWARD_SAFE_NSIDOMSTORAGEMANAGER(TopSessionStorageManager())
 
   NS_IMETHOD Stop() MOZ_OVERRIDE {
@@ -287,10 +290,10 @@ protected:
   nsresult CreateAboutBlankContentViewer(nsIPrincipal* aPrincipal,
                                          nsIURI* aBaseURI,
                                          bool aTryToSaveOldPresentation = true);
-  nsresult CreateContentViewer(const char* aContentType,
+  nsresult CreateContentViewer(const nsACString& aContentType,
                                nsIRequest* aRequest,
                                nsIStreamListener** aContentHandler);
-  nsresult NewContentViewerObj(const char* aContentType,
+  nsresult NewContentViewerObj(const nsACString& aContentType,
                                nsIRequest* aRequest, nsILoadGroup* aLoadGroup,
                                nsIStreamListener** aContentHandler,
                                nsIContentViewer** aViewer);

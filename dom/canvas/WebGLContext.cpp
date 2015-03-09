@@ -203,6 +203,7 @@ WebGLContextOptions::WebGLContextOptions()
 WebGLContext::WebGLContext()
     : WebGLContextUnchecked(nullptr)
     , mBypassShaderValidation(false)
+    , mGLMaxSamples(1)
     , mNeedsFakeNoAlpha(false)
 {
     mGeneration = 0;
@@ -1721,6 +1722,7 @@ WebGLContext::GetSurfaceSnapshot(bool* out_premultAlpha)
     {
         ScopedBindFramebuffer autoFB(gl, 0);
         ClearBackbufferIfNeeded();
+        // TODO: Save, override, then restore glReadBuffer if present.
         ReadPixelsIntoDataSurface(gl, surf);
     }
 
@@ -1850,6 +1852,12 @@ WebGLContext::TexImageFromVideoElement(const TexImageTarget texImageTarget,
     return ok;
 }
 
+size_t mozilla::RoundUpToMultipleOf(size_t value, size_t multiple)
+{
+    size_t overshoot = value + multiple - 1;
+    return overshoot - (overshoot % multiple);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 WebGLContext::ScopedMaskWorkaround::ScopedMaskWorkaround(WebGLContext& webgl)
@@ -1873,6 +1881,7 @@ WebGLContext::ScopedMaskWorkaround::~ScopedMaskWorkaround()
                               mWebGL.mColorWriteMask[3]);
     }
 }
+
 ////////////////////////////////////////////////////////////////////////////////
 // XPCOM goop
 

@@ -563,6 +563,11 @@ toolbarpaletteitem[place="palette"] > #personal-bookmarks > #bookmarks-toolbar-p
   }
 }
 
+/* #menu_readingList, svg icons don't work in the mac native menubar */
+#BMB_readingList {
+  list-style-image: url("chrome://browser/skin/readinglist/readinglist-icon.svg");
+}
+
 /* ----- PRIMARY TOOLBAR BUTTONS ----- */
 
 toolbar .toolbarbutton-1:not([type="menu-button"]),
@@ -4630,6 +4635,17 @@ window > chatbox {
 
 #eme-notification-icon:hover:active {
   list-style-image: url("chrome://browser/skin/drm-icon.svg#chains-pressed");
+}
+
+#eme-notification-icon[firstplay=true] {
+  animation: emeTeachingMoment 0.2s linear 0s 5 normal;
+}
+
+@keyframes emeTeachingMoment {
+  0% {transform: translateX(0); }
+  25% {transform: translateX(3px) }
+  75% {transform: translateX(-3px) }
+  100% { transform: translateX(0); }
 }
 
 /* Customization mode */

@@ -96,7 +96,8 @@ class BaselineInspector
     typedef Vector<ObjectGroup *, 4, JitAllocPolicy> ObjectGroupVector;
     bool maybeInfoForPropertyOp(jsbytecode *pc,
                                 ShapeVector &nativeShapes,
-                                ObjectGroupVector &unboxedGroups);
+                                ObjectGroupVector &unboxedGroups,
+                                ObjectGroupVector &convertUnboxedGroups);
 
     SetElemICInspector setElemICInspector(jsbytecode *pc) {
         return makeICInspector<SetElemICInspector>(pc, ICStub::SetElem_Fallback);
@@ -125,10 +126,10 @@ class BaselineInspector
 
     bool commonGetPropFunction(jsbytecode *pc, JSObject **holder, Shape **holderShape,
                                JSFunction **commonGetter, Shape **globalShape, bool *isOwnProperty,
-                               ShapeVector &receiverShapes);
+                               ShapeVector &nativeShapes, ObjectGroupVector &unboxedGroups);
     bool commonSetPropFunction(jsbytecode *pc, JSObject **holder, Shape **holderShape,
                                JSFunction **commonSetter, bool *isOwnProperty,
-                               ShapeVector &receiverShapes);
+                               ShapeVector &nativeShapes, ObjectGroupVector &unboxedGroups);
 
     bool instanceOfData(jsbytecode *pc, Shape **shape, uint32_t *slot, JSObject **prototypeObject);
 };

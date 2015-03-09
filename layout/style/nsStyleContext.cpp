@@ -23,6 +23,7 @@
 #include "GeckoProfiler.h"
 #include "nsIDocument.h"
 #include "nsPrintfCString.h"
+#include "mozilla/Preferences.h"
 
 #ifdef DEBUG
 // #define NOISY_DEBUG
@@ -60,6 +61,8 @@ const uint32_t nsStyleContext::sDependencyTable[] = {
 #undef STYLE_STRUCT_END
 };
 
+// Whether to perform expensive assertions in the nsStyleContext destructor.
+static bool sExpensiveStyleStructAssertionsEnabled;
 #endif
 
 nsStyleContext::nsStyleContext(nsStyleContext* aParent,
@@ -76,6 +79,7 @@ nsStyleContext::nsStyleContext(nsStyleContext* aParent,
   , mBits(((uint64_t)aPseudoType) << NS_STYLE_CONTEXT_TYPE_SHIFT)
   , mRefCnt(0)
 #ifdef DEBUG
+  , mFrameRefCnt(0)
   , mComputingStruct(nsStyleStructID_None)
 #endif
 {
@@ -130,21 +134,21 @@ nsStyleContext::~nsStyleContext()
                "destroying style context from old rule tree too late");
 
 #ifdef DEBUG
-#if 0
-  // Assert that the style structs we are about to destroy are not referenced
-  // anywhere else in the style context tree.  These checks are expensive,
-  // which is why they are not enabled even #ifdef DEBUG.
-  nsStyleContext* root = this;
-  while (root->mParent) {
-    root = root->mParent;
+  if (sExpensiveStyleStructAssertionsEnabled) {
+    // Assert that the style structs we are about to destroy are not referenced
+    // anywhere else in the style context tree.  These checks are expensive,
+    // which is why they are not enabled by default.
+    nsStyleContext* root = this;
+    while (root->mParent) {
+      root = root->mParent;
+    }
+    root->AssertStructsNotUsedElsewhere(this,
+                                        std::numeric_limits<int32_t>::max());
+  } else {
+    // In DEBUG builds when the pref is not enabled, we perform a more limited
+    // check just of the children of this style context.
+    AssertStructsNotUsedElsewhere(this, 2);
   }
-  root->AssertStructsNotUsedElsewhere(this,
-                                      std::numeric_limits<int32_t>::max());
-#else
-  // In DEBUG builds we perform a more limited check just of the children
-  // of this style context.
-  AssertStructsNotUsedElsewhere(this, 2);
-#endif
 #endif
 
   mRuleNode->Release();
@@ -436,11 +440,7 @@ nsStyleContext::GetUniqueStyleData(const nsStyleStructID& aSID)
     break;
 
   UNIQUE_CASE(Display)
-  UNIQUE_CASE(Background)
-  UNIQUE_CASE(Border)
-  UNIQUE_CASE(Padding)
   UNIQUE_CASE(Text)
-  UNIQUE_CASE(TextReset)
 
 #undef UNIQUE_CASE
 
@@ -452,6 +452,41 @@ nsStyleContext::GetUniqueStyleData(const nsStyleStructID& aSID)
   SetStyle(aSID, result);
   mBits &= ~static_cast<uint64_t>(nsCachedStyleData::GetBitForSID(aSID));
 
+  return result;
+}
+
+// This is an evil function, but less evil than GetUniqueStyleData. It
+// creates an empty style struct for this nsStyleContext.
+void*
+nsStyleContext::CreateEmptyStyleData(const nsStyleStructID& aSID)
+{
+  MOZ_ASSERT(!mChild && !mEmptyChild &&
+             !(mBits & nsCachedStyleData::GetBitForSID(aSID)) &&
+             !GetCachedStyleData(aSID),
+             "This style should not have been computed");
+
+  void* result;
+  nsPresContext* presContext = PresContext();
+  switch (aSID) {
+#define UNIQUE_CASE(c_, ...) \
+    case eStyleStruct_##c_: \
+      result = new (presContext) nsStyle##c_(__VA_ARGS__); \
+      break;
+
+  UNIQUE_CASE(Border, presContext)
+  UNIQUE_CASE(Padding)
+
+#undef UNIQUE_CASE
+
+  default:
+    NS_ERROR("Struct type not supported.");
+    return nullptr;
+  }
+
+  // The new struct is owned by this style context, but that we don't
+  // need to clear the bit in mBits because we've asserted that at the
+  // top of this function.
+  SetStyle(aSID, result);
   return result;
 }
 
@@ -527,7 +562,14 @@ nsStyleContext::ApplyStyleFixups(bool aSkipParentDisplayBasedStyleFixup)
   // doesn't get confused by looking at the style data.
   if (!mParent) {
     uint8_t displayVal = disp->mDisplay;
-    nsRuleNode::EnsureBlockDisplay(displayVal, true);
+    if (displayVal != NS_STYLE_DISPLAY_CONTENTS) {
+      nsRuleNode::EnsureBlockDisplay(displayVal, true);
+    } else {
+      // http://dev.w3.org/csswg/css-display/#transformations
+      // "... a display-outside of 'contents' computes to block-level
+      //  on the root element."
+      displayVal = NS_STYLE_DISPLAY_BLOCK;
+    }
     if (displayVal != disp->mDisplay) {
       nsStyleDisplay *mutable_display =
         static_cast<nsStyleDisplay*>(GetUniqueStyleData(eStyleStruct_Display));
@@ -619,25 +661,8 @@ nsStyleContext::ApplyStyleFixups(bool aSkipParentDisplayBasedStyleFixup)
   // Suppress border/padding of ruby level containers
   if (disp->mDisplay == NS_STYLE_DISPLAY_RUBY_BASE_CONTAINER ||
       disp->mDisplay == NS_STYLE_DISPLAY_RUBY_TEXT_CONTAINER) {
-    if (StyleBorder()->GetComputedBorder() != nsMargin(0, 0, 0, 0)) {
-      nsStyleBorder* border =
-        static_cast<nsStyleBorder*>(GetUniqueStyleData(eStyleStruct_Border));
-      NS_FOR_CSS_SIDES(side) {
-        border->SetBorderWidth(side, 0);
-      }
-    }
-
-    nsMargin computedPadding;
-    if (!StylePadding()->GetPadding(computedPadding) ||
-        computedPadding != nsMargin(0, 0, 0, 0)) {
-      const nsStyleCoord zero(0, nsStyleCoord::CoordConstructor);
-      nsStylePadding* padding =
-        static_cast<nsStylePadding*>(GetUniqueStyleData(eStyleStruct_Padding));
-      NS_FOR_CSS_SIDES(side) {
-        padding->mPadding.Set(side, zero);
-      }
-      padding->RecalcData();
-    }
+    CreateEmptyStyleData(eStyleStruct_Border);
+    CreateEmptyStyleData(eStyleStruct_Padding);
   }
 
   // Compute User Interface style, to trigger loads of cursors
@@ -1244,6 +1269,7 @@ nsStyleContext::ClearCachedInheritedStyleDataOnDescendants(uint32_t aStructs)
 void
 nsStyleContext::DoClearCachedInheritedStyleDataOnDescendants(uint32_t aStructs)
 {
+  NS_ASSERTION(mFrameRefCnt == 0, "frame still referencing style context");
   for (nsStyleStructID i = nsStyleStructID_Inherited_Start;
        i < nsStyleStructID_Inherited_Start + nsStyleStructID_Inherited_Count;
        i = nsStyleStructID(i + 1)) {
@@ -1369,5 +1395,15 @@ nsStyleContext::LogStyleContextTree(bool aFirst, uint32_t aStructs)
       child = child->mNextSibling;
     } while (mEmptyChild != child);
   }
+}
+#endif
+
+#ifdef DEBUG
+/* static */ void
+nsStyleContext::Initialize()
+{
+  Preferences::AddBoolVarCache(
+      &sExpensiveStyleStructAssertionsEnabled,
+      "layout.css.expensive-style-struct-assertions.enabled");
 }
 #endif

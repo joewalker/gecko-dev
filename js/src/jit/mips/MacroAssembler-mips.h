@@ -687,6 +687,7 @@ class MacroAssemblerMIPSCompat : public MacroAssemblerMIPS
     void branchTestObject(Condition cond, const ValueOperand &value, Label *label);
     void branchTestObject(Condition cond, Register tag, Label *label);
     void branchTestObject(Condition cond, const BaseIndex &src, Label *label);
+    void branchTestObject(Condition cond, const Address &src, Label *label);
     void testObjectSet(Condition cond, const ValueOperand &value, Register dest);
 
     void branchTestString(Condition cond, const ValueOperand &value, Label *label);
@@ -1258,12 +1259,16 @@ public:
     void loadAlignedInt32x4(const Address &addr, FloatRegister dest) { MOZ_CRASH("NYI"); }
     void storeAlignedInt32x4(FloatRegister src, Address addr) { MOZ_CRASH("NYI"); }
     void loadUnalignedInt32x4(const Address &addr, FloatRegister dest) { MOZ_CRASH("NYI"); }
+    void loadUnalignedInt32x4(const BaseIndex &addr, FloatRegister dest) { MOZ_CRASH("NYI"); }
     void storeUnalignedInt32x4(FloatRegister src, Address addr) { MOZ_CRASH("NYI"); }
+    void storeUnalignedInt32x4(FloatRegister src, BaseIndex addr) { MOZ_CRASH("NYI"); }
 
     void loadAlignedFloat32x4(const Address &addr, FloatRegister dest) { MOZ_CRASH("NYI"); }
     void storeAlignedFloat32x4(FloatRegister src, Address addr) { MOZ_CRASH("NYI"); }
     void loadUnalignedFloat32x4(const Address &addr, FloatRegister dest) { MOZ_CRASH("NYI"); }
+    void loadUnalignedFloat32x4(const BaseIndex &addr, FloatRegister dest) { MOZ_CRASH("NYI"); }
     void storeUnalignedFloat32x4(FloatRegister src, Address addr) { MOZ_CRASH("NYI"); }
+    void storeUnalignedFloat32x4(FloatRegister src, BaseIndex addr) { MOZ_CRASH("NYI"); }
 
     void loadDouble(const Address &addr, FloatRegister dest);
     void loadDouble(const BaseIndex &src, FloatRegister dest);

@@ -104,7 +104,7 @@ AdvanceToActiveCallLinear(JSContext *cx, NonBuiltinScriptFrameIter &iter, Handle
 static void
 ThrowTypeErrorBehavior(JSContext *cx)
 {
-    JS_ReportErrorFlagsAndNumber(cx, JSREPORT_ERROR, js_GetErrorMessage, nullptr,
+    JS_ReportErrorFlagsAndNumber(cx, JSREPORT_ERROR, GetErrorMessage, nullptr,
                                  JSMSG_THROW_TYPE_ERROR);
 }
 
@@ -131,14 +131,14 @@ ArgumentsRestrictions(JSContext *cx, HandleFunction fun)
     // Functions with rest arguments don't include a local |arguments| binding.
     // Similarly, "arguments" shouldn't work on them.
     if (fun->hasRest()) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr,
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr,
                              JSMSG_FUNCTION_ARGUMENTS_AND_REST);
         return false;
     }
 
     // Otherwise emit a strict warning about |f.arguments| to discourage use of
     // this non-standard, performance-harmful feature.
-    if (!JS_ReportErrorFlagsAndNumber(cx, JSREPORT_WARNING | JSREPORT_STRICT, js_GetErrorMessage,
+    if (!JS_ReportErrorFlagsAndNumber(cx, JSREPORT_WARNING | JSREPORT_STRICT, GetErrorMessage,
                                       nullptr, JSMSG_DEPRECATED_USAGE, js_arguments_str))
     {
         return false;
@@ -227,7 +227,7 @@ CallerRestrictions(JSContext *cx, HandleFunction fun)
 
     // Otherwise emit a strict warning about |f.caller| to discourage use of
     // this non-standard, performance-harmful feature.
-    if (!JS_ReportErrorFlagsAndNumber(cx, JSREPORT_WARNING | JSREPORT_STRICT, js_GetErrorMessage,
+    if (!JS_ReportErrorFlagsAndNumber(cx, JSREPORT_WARNING | JSREPORT_STRICT, GetErrorMessage,
                                       nullptr, JSMSG_DEPRECATED_USAGE, js_caller_str))
     {
         return false;
@@ -280,7 +280,7 @@ CallerGetterImpl(JSContext *cx, CallArgs args)
         MOZ_ASSERT(!callerFun->isBuiltin(), "non-builtin iterator returned a builtin?");
 
         if (callerFun->strict()) {
-            JS_ReportErrorFlagsAndNumber(cx, JSREPORT_ERROR, js_GetErrorMessage, nullptr,
+            JS_ReportErrorFlagsAndNumber(cx, JSREPORT_ERROR, GetErrorMessage, nullptr,
                                          JSMSG_CALLER_IS_STRICT);
             return false;
         }
@@ -342,7 +342,7 @@ CallerSetterImpl(JSContext *cx, CallArgs args)
     MOZ_ASSERT(!callerFun->isBuiltin(), "non-builtin iterator returned a builtin?");
 
     if (callerFun->strict()) {
-        JS_ReportErrorFlagsAndNumber(cx, JSREPORT_ERROR, js_GetErrorMessage, nullptr,
+        JS_ReportErrorFlagsAndNumber(cx, JSREPORT_ERROR, GetErrorMessage, nullptr,
                                      JSMSG_CALLER_IS_STRICT);
         return false;
     }
@@ -540,7 +540,7 @@ js::XDRInterpretedFunction(XDRState<mode> *xdr, HandleObject enclosingScope, Han
         if (!fun->isInterpreted()) {
             JSAutoByteString funNameBytes;
             if (const char *name = GetFunctionNameBytes(cx, fun, &funNameBytes)) {
-                JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr,
+                JS_ReportErrorNumber(cx, GetErrorMessage, nullptr,
                                      JSMSG_NOT_SCRIPTED_FUNCTION, name);
             }
             return false;
@@ -704,7 +704,7 @@ fun_hasInstance(JSContext *cx, HandleObject objArg, MutableHandleValue v, bool *
          * has a non-object as its .prototype value.
          */
         RootedValue val(cx, ObjectValue(*obj));
-        js_ReportValueError(cx, JSMSG_BAD_PROTOTYPE, -1, val, js::NullPtr());
+        ReportValueError(cx, JSMSG_BAD_PROTOTYPE, -1, val, js::NullPtr());
         return false;
     }
 
@@ -879,15 +879,10 @@ CreateFunctionPrototype(JSContext *cx, JSProtoKey key)
     if (!tte)
         return nullptr;
 
-    bool succeeded;
     RootedFunction throwTypeError(cx, NewFunction(cx, tte, ThrowTypeError, 0,
                                                   JSFunction::NATIVE_FUN, self, js::NullPtr()));
-    if (!throwTypeError || !PreventExtensions(cx, throwTypeError, &succeeded))
+    if (!throwTypeError || !PreventExtensions(cx, throwTypeError))
         return nullptr;
-    if (!succeeded) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_CANT_CHANGE_EXTENSIBILITY);
-        return nullptr;
-    }
 
     self->setThrowTypeError(throwTypeError);
 
@@ -1170,7 +1165,7 @@ fun_toStringHelper(JSContext *cx, HandleObject obj, unsigned indent)
     if (!obj->is<JSFunction>()) {
         if (obj->is<ProxyObject>())
             return Proxy::fun_toString(cx, obj, indent);
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr,
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr,
                              JSMSG_INCOMPATIBLE_PROTO,
                              js_Function_str, js_toString_str,
                              "object");
@@ -1229,7 +1224,7 @@ fun_toSource(JSContext *cx, unsigned argc, Value *vp)
 #endif
 
 bool
-js_fun_call(JSContext *cx, unsigned argc, Value *vp)
+js::fun_call(JSContext *cx, unsigned argc, Value *vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
 
@@ -1253,7 +1248,7 @@ js_fun_call(JSContext *cx, unsigned argc, Value *vp)
 
 // ES5 15.3.4.3
 bool
-js_fun_apply(JSContext *cx, unsigned argc, Value *vp)
+js::fun_apply(JSContext *cx, unsigned argc, Value *vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
 
@@ -1266,7 +1261,7 @@ js_fun_apply(JSContext *cx, unsigned argc, Value *vp)
 
     // Step 2.
     if (args.length() < 2 || args[1].isNullOrUndefined())
-        return js_fun_call(cx, (args.length() > 0) ? 1 : 0, vp);
+        return fun_call(cx, (args.length() > 0) ? 1 : 0, vp);
 
     InvokeArgs args2(cx);
 
@@ -1289,7 +1284,7 @@ js_fun_apply(JSContext *cx, unsigned argc, Value *vp)
     } else {
         // Step 3.
         if (!args[1].isObject()) {
-            JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr,
+            JS_ReportErrorNumber(cx, GetErrorMessage, nullptr,
                                  JSMSG_BAD_APPLY_ARGS, js_apply_str);
             return false;
         }
@@ -1303,7 +1298,7 @@ js_fun_apply(JSContext *cx, unsigned argc, Value *vp)
 
         // Step 6.
         if (length > ARGS_LENGTH_MAX) {
-            JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_TOO_MANY_FUN_APPLY_ARGS);
+            JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_TOO_MANY_FUN_APPLY_ARGS);
             return false;
         }
 
@@ -1347,10 +1342,10 @@ JSFunction::initBoundFunction(JSContext *cx, HandleObject target, HandleValue th
     if (!self->toDictionaryMode(cx))
         return false;
 
-    if (!self->setFlag(cx, BaseShape::BOUND_FUNCTION))
+    if (!self->JSObject::setFlags(cx, BaseShape::BOUND_FUNCTION))
         return false;
 
-    if (!NativeObject::setSlotSpan(cx, self, BOUND_FUNCTION_RESERVED_SLOTS + argslen))
+    if (!self->setSlotSpan(cx, BOUND_FUNCTION_RESERVED_SLOTS + argslen))
         return false;
 
     self->setSlot(JSSLOT_BOUND_FUNCTION_TARGET, ObjectValue(*target));
@@ -1571,7 +1566,7 @@ js::CallOrConstructBoundFunction(JSContext *cx, unsigned argc, Value *vp)
     unsigned argslen = fun->getBoundFunctionArgumentCount();
 
     if (args.length() + argslen > ARGS_LENGTH_MAX) {
-        js_ReportAllocationOverflow(cx);
+        ReportAllocationOverflow(cx);
         return false;
     }
 
@@ -1644,7 +1639,7 @@ js::fun_bind(JSContext *cx, unsigned argc, Value *vp)
     // Steps 4-14.
     RootedValue thisArg(cx, args.length() >= 1 ? args[0] : UndefinedValue());
     RootedObject target(cx, &thisv.toObject());
-    JSObject *boundFunction = js_fun_bind(cx, target, thisArg, boundArgs, argslen);
+    JSObject *boundFunction = fun_bind(cx, target, thisArg, boundArgs, argslen);
     if (!boundFunction)
         return false;
 
@@ -1654,8 +1649,8 @@ js::fun_bind(JSContext *cx, unsigned argc, Value *vp)
 }
 
 JSObject*
-js_fun_bind(JSContext *cx, HandleObject target, HandleValue thisArg,
-            Value *boundArgs, unsigned argslen)
+js::fun_bind(JSContext *cx, HandleObject target, HandleValue thisArg,
+             Value *boundArgs, unsigned argslen)
 {
     double length = 0.0;
     // Try to avoid invoking the resolve hook.
@@ -1741,7 +1736,7 @@ js_fun_bind(JSContext *cx, HandleObject target, HandleValue thisArg,
 static bool
 OnBadFormal(JSContext *cx)
 {
-    JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_BAD_FORMAL);
+    JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_BAD_FORMAL);
     return false;
 }
 
@@ -1750,8 +1745,8 @@ const JSFunctionSpec js::function_methods[] = {
     JS_FN(js_toSource_str,   fun_toSource,   0,0),
 #endif
     JS_FN(js_toString_str,   fun_toString,   0,0),
-    JS_FN(js_apply_str,      js_fun_apply,   2,0),
-    JS_FN(js_call_str,       js_fun_call,    1,0),
+    JS_FN(js_apply_str,      fun_apply,      2,0),
+    JS_FN(js_call_str,       fun_call,       1,0),
     JS_FN("bind",            fun_bind,       1,0),
     JS_FN("isGenerator",     fun_isGenerator,0,0),
     JS_FS_END
@@ -1766,7 +1761,7 @@ FunctionConstructor(JSContext *cx, unsigned argc, Value *vp, GeneratorKind gener
     /* Block this call if security callbacks forbid it. */
     Rooted<GlobalObject*> global(cx, &args.callee().global());
     if (!GlobalObject::isRuntimeCodeGenEnabled(cx, global)) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_CSP_BLOCKED_FUNCTION);
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_CSP_BLOCKED_FUNCTION);
         return false;
     }
 
@@ -1828,7 +1823,7 @@ FunctionConstructor(JSContext *cx, unsigned argc, Value *vp, GeneratorKind gener
             size_t old_args_length = args_length;
             args_length = old_args_length + arg->length();
             if (args_length < old_args_length) {
-                js_ReportAllocationOverflow(cx);
+                ReportAllocationOverflow(cx);
                 return false;
             }
         }
@@ -1838,7 +1833,7 @@ FunctionConstructor(JSContext *cx, unsigned argc, Value *vp, GeneratorKind gener
         args_length = old_args_length + n - 1;
         if (args_length < old_args_length ||
             args_length >= ~(size_t)0 / sizeof(char16_t)) {
-            js_ReportAllocationOverflow(cx);
+            ReportAllocationOverflow(cx);
             return false;
         }
 
@@ -1850,7 +1845,7 @@ FunctionConstructor(JSContext *cx, unsigned argc, Value *vp, GeneratorKind gener
         LifoAllocScope las(&cx->tempLifoAlloc());
         char16_t *cp = cx->tempLifoAlloc().newArray<char16_t>(args_length + 1);
         if (!cp) {
-            js_ReportOutOfMemory(cx);
+            ReportOutOfMemory(cx);
             return false;
         }
         ConstTwoByteChars collected_args(cp, args_length + 1);
@@ -2188,8 +2183,8 @@ js::DefineFunction(JSContext *cx, HandleObject obj, HandleId id, Native native,
                    unsigned nargs, unsigned flags, AllocKind allocKind /* = FinalizeKind */,
                    NewObjectKind newKind /* = GenericObject */)
 {
-    PropertyOp gop;
-    StrictPropertyOp sop;
+    GetterOp gop;
+    SetterOp sop;
     if (flags & JSFUN_STUB_GSOPS) {
         /*
          * JSFUN_STUB_GSOPS is a request flag only, not stored in fun->flags or
@@ -2256,7 +2251,7 @@ js::ReportIncompatibleMethod(JSContext *cx, CallReceiver call, const Class *clas
     if (JSFunction *fun = ReportIfNotFunction(cx, call.calleev())) {
         JSAutoByteString funNameBytes;
         if (const char *funName = GetFunctionNameBytes(cx, fun, &funNameBytes)) {
-            JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_PROTO,
+            JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_PROTO,
                                  clasp->name, funName, InformalValueTypeName(thisv));
         }
     }
@@ -2268,7 +2263,7 @@ js::ReportIncompatible(JSContext *cx, CallReceiver call)
     if (JSFunction *fun = ReportIfNotFunction(cx, call.calleev())) {
         JSAutoByteString funNameBytes;
         if (const char *funName = GetFunctionNameBytes(cx, fun, &funNameBytes)) {
-            JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_METHOD,
+            JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_METHOD,
                                  funName, "method", InformalValueTypeName(call.thisv()));
         }
     }

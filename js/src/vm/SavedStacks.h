@@ -35,6 +35,8 @@ class SavedFrame : public NativeObject {
     static bool lineProperty(JSContext *cx, unsigned argc, Value *vp);
     static bool columnProperty(JSContext *cx, unsigned argc, Value *vp);
     static bool functionDisplayNameProperty(JSContext *cx, unsigned argc, Value *vp);
+    static bool asyncCauseProperty(JSContext *cx, unsigned argc, Value *vp);
+    static bool asyncParentProperty(JSContext *cx, unsigned argc, Value *vp);
     static bool parentProperty(JSContext *cx, unsigned argc, Value *vp);
     static bool toStringMethod(JSContext *cx, unsigned argc, Value *vp);
 
@@ -43,10 +45,16 @@ class SavedFrame : public NativeObject {
     uint32_t     getLine();
     uint32_t     getColumn();
     JSAtom       *getFunctionDisplayName();
+    JSAtom       *getAsyncCause();
     SavedFrame   *getParent();
     JSPrincipals *getPrincipals();
 
     bool         isSelfHosted();
+
+    static bool isSavedFrameAndNotProto(JSObject &obj) {
+        return obj.is<SavedFrame>() &&
+               !obj.as<SavedFrame>().getReservedSlot(JSSLOT_SOURCE).isNull();
+    }
 
     struct Lookup;
     struct HashPolicy;
@@ -55,8 +63,19 @@ class SavedFrame : public NativeObject {
                     HashPolicy,
                     SystemAllocPolicy> Set;
 
-    class AutoLookupRooter;
-    class HandleLookup;
+    class AutoLookupVector;
+
+    class MOZ_STACK_CLASS HandleLookup {
+        friend class AutoLookupVector;
+
+        Lookup &lookup;
+
+        explicit HandleLookup(Lookup &lookup) : lookup(lookup) { }
+
+      public:
+        inline Lookup &get() { return lookup; }
+        inline Lookup *operator->() { return &lookup; }
+    };
 
   private:
     static bool finishSavedFrameInit(JSContext *cx, HandleObject ctor, HandleObject proto);
@@ -68,6 +87,7 @@ class SavedFrame : public NativeObject {
         JSSLOT_LINE,
         JSSLOT_COLUMN,
         JSSLOT_FUNCTIONDISPLAYNAME,
+        JSSLOT_ASYNCCAUSE,
         JSSLOT_PARENT,
         JSSLOT_PRINCIPALS,
         JSSLOT_PRIVATE_PARENT,
@@ -88,7 +108,7 @@ class SavedFrame : public NativeObject {
     void updatePrivateParent();
 
     static bool checkThis(JSContext *cx, CallArgs &args, const char *fnName,
-                          MutableHandleSavedFrame frame);
+                          MutableHandleObject frame);
 };
 
 struct SavedFrame::HashPolicy
@@ -138,6 +158,10 @@ class SavedStacks {
 
     bool       insertFrames(JSContext *cx, FrameIter &iter, MutableHandleSavedFrame frame,
                             unsigned maxFrameCount = 0);
+    bool       adoptAsyncStack(JSContext *cx, HandleSavedFrame asyncStack,
+                               HandleString asyncCause,
+                               MutableHandleSavedFrame adoptedStack,
+                               unsigned maxFrameCount);
     SavedFrame *getOrCreateSavedFrame(JSContext *cx, SavedFrame::HandleLookup lookup);
     SavedFrame *createFrameFromLookup(JSContext *cx, SavedFrame::HandleLookup lookup);
     void       chooseSamplingProbability(JSContext* cx);
@@ -221,44 +245,6 @@ class SavedStacks {
 
     void sweepPCLocationMap();
     bool getLocation(JSContext *cx, const FrameIter &iter, MutableHandleLocationValue locationp);
-
-    struct FrameState
-    {
-        FrameState() : principals(nullptr), name(nullptr), location() { }
-        explicit FrameState(const FrameIter &iter);
-        FrameState(const FrameState &fs);
-
-        ~FrameState();
-
-        void trace(JSTracer *trc);
-
-        // Note: we don't have to hold/drop principals, because we're
-        // only alive while the stack is being walked and during this
-        // time the principals are kept alive by the stack itself.
-        JSPrincipals  *principals;
-        JSAtom        *name;
-        LocationValue location;
-    };
-
-    class MOZ_STACK_CLASS AutoFrameStateVector : public JS::CustomAutoRooter {
-      public:
-        explicit AutoFrameStateVector(JSContext *cx)
-          : JS::CustomAutoRooter(cx),
-            frames(cx)
-        { }
-
-        typedef Vector<FrameState, 20> FrameStateVector;
-        inline FrameStateVector *operator->() { return &frames; }
-        inline FrameState &operator[](size_t i) { return frames[i]; }
-
-      private:
-        FrameStateVector frames;
-
-        virtual void trace(JSTracer *trc) {
-            for (size_t i = 0; i < frames.length(); i++)
-                frames[i].trace(trc);
-        }
-    };
 };
 
 bool SavedStacksMetadataCallback(JSContext *cx, JSObject **pmetadata);

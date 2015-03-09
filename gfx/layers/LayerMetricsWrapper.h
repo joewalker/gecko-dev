@@ -309,6 +309,16 @@ public:
     return EventRegions();
   }
 
+  bool HasTransformAnimation() const
+  {
+    MOZ_ASSERT(IsValid());
+
+    if (AtBottomLayer()) {
+      return mLayer->HasTransformAnimation();
+    }
+    return false;
+  }
+
   RefLayer* AsRefLayer() const
   {
     MOZ_ASSERT(IsValid());
@@ -338,13 +348,14 @@ public:
     return mLayer->GetClipRect();
   }
 
-  bool GetForceDispatchToContentRegion() const {
+  EventRegionsOverride GetEventRegionsOverride() const
+  {
     MOZ_ASSERT(IsValid());
 
     if (mLayer->AsContainerLayer()) {
-      return mLayer->AsContainerLayer()->GetForceDispatchToContentRegion();
+      return mLayer->AsContainerLayer()->GetEventRegionsOverride();
     }
-    return false;
+    return EventRegionsOverride::NoOverride;
   }
 
   // Expose an opaque pointer to the layer. Mostly used for printf

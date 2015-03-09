@@ -62,6 +62,7 @@ var ecmaGlobals =
     {name: "Atomics", nightly: true},
     "StopIteration",
     "String",
+    "Symbol",
     "SyntaxError",
     {name: "TypedObject", nightly: true},
     "TypeError",
@@ -76,12 +77,6 @@ var ecmaGlobals =
 // IMPORTANT: Do not change the list above without review from
 //            a JavaScript Engine peer!
 
-// Symbol is conditionally defined.
-// If it's defined, insert "Symbol" before "SyntaxError".
-if (typeof Symbol === "function") {
-  ecmaGlobals.splice(ecmaGlobals.indexOf("SyntaxError"), 0, "Symbol");
-}
-
 // IMPORTANT: Do not change the list below without review from a DOM peer!
 var interfaceNamesInGlobalScope =
   [
@@ -89,6 +84,10 @@ var interfaceNamesInGlobalScope =
     "Blob",
 // IMPORTANT: Do not change this list without review from a DOM peer!
     { name: "BroadcastChannel", pref: "dom.broadcastChannel.enabled" },
+// IMPORTANT: Do not change this list without review from a DOM peer!
+    { name: "Cache", pref: "dom.caches.enabled" },
+// IMPORTANT: Do not change this list without review from a DOM peer!
+    { name: "CacheStorage", pref: "dom.caches.enabled" },
 // IMPORTANT: Do not change this list without review from a DOM peer!
     "DedicatedWorkerGlobalScope",
 // IMPORTANT: Do not change this list without review from a DOM peer!
@@ -110,7 +109,7 @@ var interfaceNamesInGlobalScope =
 // IMPORTANT: Do not change this list without review from a DOM peer!
     "FileReaderSync",
 // IMPORTANT: Do not change this list without review from a DOM peer!
-    { name: "Headers", pref: "dom.fetch.enabled" },
+    "Headers",
 // IMPORTANT: Do not change this list without review from a DOM peer!
     "IDBCursor",
 // IMPORTANT: Do not change this list without review from a DOM peer!
@@ -141,6 +140,10 @@ var interfaceNamesInGlobalScope =
     "Performance",
 // IMPORTANT: Do not change this list without review from a DOM peer!
     "Promise",
+// IMPORTANT: Do not change this list without review from a DOM peer!
+    "Request",
+// IMPORTANT: Do not change this list without review from a DOM peer!
+    "Response",
 // IMPORTANT: Do not change this list without review from a DOM peer!
     "TextDecoder",
 // IMPORTANT: Do not change this list without review from a DOM peer!

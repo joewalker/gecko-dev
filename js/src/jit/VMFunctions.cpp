@@ -36,10 +36,9 @@ namespace jit {
 // run before the constructors for static VMFunctions.
 /* static */ VMFunction *VMFunction::functions;
 
-AutoDetectInvalidation::AutoDetectInvalidation(JSContext *cx, MutableHandleValue rval,
-                                               IonScript *ionScript)
+AutoDetectInvalidation::AutoDetectInvalidation(JSContext *cx, MutableHandleValue rval)
   : cx_(cx),
-    ionScript_(ionScript ? ionScript : GetTopJitJSScript(cx)->ionScript()),
+    ionScript_(GetTopJitJSScript(cx)->ionScript()),
     rval_(rval),
     disabled_(false)
 { }
@@ -91,7 +90,7 @@ JSObject *
 NewGCObject(JSContext *cx, gc::AllocKind allocKind, gc::InitialHeap initialHeap,
             const js::Class *clasp)
 {
-    return js::NewGCObject<CanGC>(cx, allocKind, 0, initialHeap, clasp);
+    return js::Allocate<JSObject>(cx, allocKind, 0, initialHeap, clasp);
 }
 
 bool
@@ -184,19 +183,15 @@ MutatePrototype(JSContext *cx, HandlePlainObject obj, HandleValue value)
         return true;
 
     RootedObject newProto(cx, value.toObjectOrNull());
-
-    bool succeeded;
-    if (!SetPrototype(cx, obj, newProto, &succeeded))
-        return false;
-    MOZ_ASSERT(succeeded);
-    return true;
+    return SetPrototype(cx, obj, newProto);
 }
 
 bool
-InitProp(JSContext *cx, HandleNativeObject obj, HandlePropertyName name, HandleValue value)
+InitProp(JSContext *cx, HandleObject obj, HandlePropertyName name, HandleValue value,
+         jsbytecode *pc)
 {
     RootedId id(cx, NameToId(name));
-    return NativeDefineProperty(cx, obj, id, value, nullptr, nullptr, JSPROP_ENUMERATE);
+    return InitPropertyOperation(cx, JSOp(*pc), obj, id, value);
 }
 
 template<bool Equal>
@@ -264,23 +259,6 @@ StringsEqual(JSContext *cx, HandleString lhs, HandleString rhs, bool *res)
 
 template bool StringsEqual<true>(JSContext *cx, HandleString lhs, HandleString rhs, bool *res);
 template bool StringsEqual<false>(JSContext *cx, HandleString lhs, HandleString rhs, bool *res);
-
-JSObject*
-NewInitObject(JSContext *cx, HandlePlainObject templateObject)
-{
-    NewObjectKind newKind = templateObject->isSingleton() ? SingletonObject : GenericObject;
-    if (!templateObject->hasLazyGroup() && templateObject->group()->shouldPreTenure())
-        newKind = TenuredObject;
-    RootedObject obj(cx, CopyInitializerObject(cx, templateObject, newKind));
-
-    if (!obj)
-        return nullptr;
-
-    if (!templateObject->isSingleton())
-        obj->setGroup(templateObject->group());
-
-    return obj;
-}
 
 bool
 ArraySpliceDense(JSContext *cx, HandleObject obj, uint32_t start, uint32_t deleteCount)
@@ -465,18 +443,24 @@ SetProperty(JSContext *cx, HandleObject obj, HandlePropertyName name, HandleValu
         return true;
     }
 
+    ObjectOpResult result;
     if (MOZ_LIKELY(!obj->getOps()->setProperty)) {
-        return NativeSetProperty(
-            cx, obj.as<NativeObject>(), obj.as<NativeObject>(), id,
-            (op == JSOP_SETNAME || op == JSOP_STRICTSETNAME ||
-             op == JSOP_SETGNAME || op == JSOP_STRICTSETGNAME)
-            ? Unqualified
-            : Qualified,
-            &v,
-            strict);
+        if (!NativeSetProperty(
+                cx, obj.as<NativeObject>(), obj.as<NativeObject>(), id,
+                (op == JSOP_SETNAME || op == JSOP_STRICTSETNAME ||
+                 op == JSOP_SETGNAME || op == JSOP_STRICTSETGNAME)
+                ? Unqualified
+                : Qualified,
+                &v,
+                result))
+        {
+            return false;
+        }
+    } else {
+        if (!SetProperty(cx, obj, obj, id, &v, result))
+            return false;
     }
-
-    return SetProperty(cx, obj, obj, id, &v, strict);
+    return result.checkStrictErrorOrWarning(cx, obj, id, strict);
 }
 
 bool
@@ -1160,8 +1144,8 @@ AssertValidObjectPtr(JSContext *cx, JSObject *obj)
     MOZ_ASSERT(obj->compartment() == cx->compartment());
     MOZ_ASSERT(obj->runtimeFromMainThread() == cx->runtime());
 
-    MOZ_ASSERT_IF(!obj->hasLazyGroup(),
-                  obj->group()->clasp() == obj->lastProperty()->getObjectClass());
+    MOZ_ASSERT_IF(!obj->hasLazyGroup() && obj->maybeShape(),
+                  obj->group()->clasp() == obj->maybeShape()->getObjectClass());
 
     if (obj->isTenured()) {
         MOZ_ASSERT(obj->isAligned());

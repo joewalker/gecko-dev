@@ -129,6 +129,7 @@ nsInProcessTabChildGlobal::~nsInProcessTabChildGlobal()
 NS_IMETHODIMP_(bool)
 nsInProcessTabChildGlobal::MarkForCC()
 {
+  MarkScopesForCC();
   return mMessageManager ? mMessageManager->MarkForCC() : false;
 }
 
@@ -203,27 +204,6 @@ nsInProcessTabChildGlobal::GetDocShell(nsIDocShell** aDocShell)
 {
   NS_IF_ADDREF(*aDocShell = mDocShell);
   return NS_OK;
-}
-
-NS_IMETHODIMP
-nsInProcessTabChildGlobal::Btoa(const nsAString& aBinaryData,
-                            nsAString& aAsciiBase64String)
-{
-  return nsContentUtils::Btoa(aBinaryData, aAsciiBase64String);
-}
-
-NS_IMETHODIMP
-nsInProcessTabChildGlobal::Atob(const nsAString& aAsciiString,
-                            nsAString& aBinaryData)
-{
-  return nsContentUtils::Atob(aAsciiString, aBinaryData);
-}
-
-
-NS_IMETHODIMP
-nsInProcessTabChildGlobal::PrivateNoteIntentionalCrash()
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 void
@@ -318,7 +298,7 @@ nsInProcessTabChildGlobal::InitTabChildGlobal()
     id.Append(u);
   }
   nsISupports* scopeSupports = NS_ISUPPORTS_CAST(EventTarget*, this);
-  NS_ENSURE_STATE(InitTabChildGlobalInternal(scopeSupports, id));
+  NS_ENSURE_STATE(InitChildGlobalInternal(scopeSupports, id));
   return NS_OK;
 }
 
@@ -352,6 +332,6 @@ nsInProcessTabChildGlobal::LoadFrameScript(const nsAString& aURL, bool aRunInGlo
   }
   bool tmp = mLoadingScript;
   mLoadingScript = true;
-  LoadFrameScriptInternal(aURL, aRunInGlobalScope);
+  LoadScriptInternal(aURL, aRunInGlobalScope);
   mLoadingScript = tmp;
 }

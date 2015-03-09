@@ -88,7 +88,7 @@ class MessageChannel : HasResultCodes
 
     void SetAbortOnError(bool abort)
     {
-        mAbortOnError = true;
+        mAbortOnError = abort;
     }
 
     // Misc. behavioral traits consumers can request for this channel
@@ -451,7 +451,7 @@ class MessageChannel : HasResultCodes
         explicit DequeueTask(RefCountedTask* aTask)
           : mTask(aTask)
         { }
-        void Run() { mTask->Run(); }
+        void Run() MOZ_OVERRIDE { mTask->Run(); }
 
       private:
         nsRefPtr<RefCountedTask> mTask;

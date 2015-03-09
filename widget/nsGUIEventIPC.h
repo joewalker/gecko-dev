@@ -116,6 +116,7 @@ struct ParamTraits<mozilla::WidgetMouseEventBase>
     WriteParam(aMsg, aParam.button);
     WriteParam(aMsg, aParam.buttons);
     WriteParam(aMsg, aParam.pressure);
+    WriteParam(aMsg, aParam.hitCluster);
     WriteParam(aMsg, aParam.inputSource);
   }
 
@@ -126,6 +127,7 @@ struct ParamTraits<mozilla::WidgetMouseEventBase>
            ReadParam(aMsg, aIter, &aResult->button) &&
            ReadParam(aMsg, aIter, &aResult->buttons) &&
            ReadParam(aMsg, aIter, &aResult->pressure) &&
+           ReadParam(aMsg, aIter, &aResult->hitCluster) &&
            ReadParam(aMsg, aIter, &aResult->inputSource);
   }
 };
@@ -150,6 +152,7 @@ struct ParamTraits<mozilla::WidgetWheelEvent>
     WriteParam(aMsg, static_cast<int32_t>(aParam.scrollType));
     WriteParam(aMsg, aParam.overflowDeltaX);
     WriteParam(aMsg, aParam.overflowDeltaY);
+    WriteParam(aMsg, aParam.mViewPortIsOverscrolled);
   }
 
   static bool Read(const Message* aMsg, void** aIter, paramType* aResult)
@@ -169,7 +172,8 @@ struct ParamTraits<mozilla::WidgetWheelEvent>
       ReadParam(aMsg, aIter, &aResult->lineOrPageDeltaY) &&
       ReadParam(aMsg, aIter, &scrollType) &&
       ReadParam(aMsg, aIter, &aResult->overflowDeltaX) &&
-      ReadParam(aMsg, aIter, &aResult->overflowDeltaY);
+      ReadParam(aMsg, aIter, &aResult->overflowDeltaY) &&
+      ReadParam(aMsg, aIter, &aResult->mViewPortIsOverscrolled);
     aResult->scrollType =
       static_cast<mozilla::WidgetWheelEvent::ScrollType>(scrollType);
     return rv;
@@ -335,6 +339,7 @@ struct ParamTraits<mozilla::WidgetKeyboardEvent>
     WriteParam(aMsg, aParam.mNativeModifierFlags);
     WriteParam(aMsg, aParam.mNativeCharacters);
     WriteParam(aMsg, aParam.mNativeCharactersIgnoringModifiers);
+    WriteParam(aMsg, aParam.mPluginTextEventString);
 #endif
     // An OS-specific native event might be attached in |mNativeKeyEvent|,  but
     // that cannot be copied across process boundaries.
@@ -361,6 +366,7 @@ struct ParamTraits<mozilla::WidgetKeyboardEvent>
         && ReadParam(aMsg, aIter, &aResult->mNativeModifierFlags)
         && ReadParam(aMsg, aIter, &aResult->mNativeCharacters)
         && ReadParam(aMsg, aIter, &aResult->mNativeCharactersIgnoringModifiers)
+        && ReadParam(aMsg, aIter, &aResult->mPluginTextEventString)
 #endif
         )
     {

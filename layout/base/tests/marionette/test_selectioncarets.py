@@ -3,12 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from by import By
-from marionette import Actions
-from marionette_test import MarionetteTestCase
+from marionette_driver.by import By
+from marionette_driver.marionette import Actions
+from marionette import MarionetteTestCase
+from marionette_driver.selection import SelectionManager
+from marionette_driver.gestures import long_press_without_contextmenu
+
 from math import ceil, floor
-from selection import SelectionManager
-from gestures import long_press_without_contextmenu
 
 
 class SelectionCaretsTest(MarionetteTestCase):
@@ -18,7 +19,9 @@ class SelectionCaretsTest(MarionetteTestCase):
     _textarea_rtl_selector = (By.ID, 'textarea_rtl')
     _contenteditable_selector = (By.ID, 'contenteditable')
     _content_selector = (By.ID, 'content')
+    _textarea2_selector = (By.ID, 'textarea2')
     _contenteditable2_selector = (By.ID, 'contenteditable2')
+    _content2_selector = (By.ID, 'content2')
 
     def setUp(self):
         # Code to execute before a tests are run.
@@ -28,10 +31,9 @@ class SelectionCaretsTest(MarionetteTestCase):
     def openTestHtml(self, enabled=True):
         '''Open html for testing and locate elements, and enable/disable touch
         caret.'''
-        self.marionette.execute_script(
-            'SpecialPowers.setBoolPref("selectioncaret.enabled", %s);' %
+        self.marionette.execute_async_script(
+            'SpecialPowers.pushPrefEnv({"set": [["selectioncaret.enabled", %s]]}, marionetteScriptFinished);' %
             ('true' if enabled else 'false'))
-
         test_html = self.marionette.absolute_url('test_selectioncarets.html')
         self.marionette.navigate(test_html)
 
@@ -40,7 +42,20 @@ class SelectionCaretsTest(MarionetteTestCase):
         self._textarea_rtl = self.marionette.find_element(*self._textarea_rtl_selector)
         self._contenteditable = self.marionette.find_element(*self._contenteditable_selector)
         self._content = self.marionette.find_element(*self._content_selector)
+
+    def openTestHtml2(self, enabled=True):
+        '''Open html for testing and locate elements, and enable/disable touch
+        caret.'''
+        self.marionette.execute_script(
+            'SpecialPowers.setBoolPref("selectioncaret.enabled", %s);' %
+            ('true' if enabled else 'false'))
+
+        test_html2 = self.marionette.absolute_url('test_selectioncarets_multipleline.html')
+        self.marionette.navigate(test_html2)
+
+        self._textarea2 = self.marionette.find_element(*self._textarea2_selector)
         self._contenteditable2 = self.marionette.find_element(*self._contenteditable2_selector)
+        self._content2 = self.marionette.find_element(*self._content2_selector)
 
     def _first_word_location(self, el):
         '''Get the location (x, y) of the first word in el.
@@ -365,6 +380,14 @@ class SelectionCaretsTest(MarionetteTestCase):
     ########################################################################
     # <div> non-editable test cases with selection carets enabled
     ########################################################################
+    def test_content_non_editable_long_press_to_select_a_word(self):
+        self.openTestHtml(enabled=True)
+        self._test_long_press_to_select_a_word(self._content, self.assertEqual)
+
+    def test_content_non_editable_move_selection_carets(self):
+        self.openTestHtml(enabled=True)
+        self._test_move_selection_carets(self._content, self.assertEqual)
+
     def test_content_non_editable_minimum_select_one_character_by_selection(self):
         self.openTestHtml(enabled=True)
         self._test_minimum_select_one_character(self._content, self.assertEqual)
@@ -386,8 +409,22 @@ class SelectionCaretsTest(MarionetteTestCase):
         self._test_handle_tilt_when_carets_overlap_to_each_other(self._content, self.assertEqual)
 
     ########################################################################
-    # <div> contenteditable2 test cases with selection carets enabled
+    # <textarea> (multi-lines) test cases with selection carets enabled
+    ########################################################################
+    def test_textarea2_minimum_select_one_character(self):
+        self.openTestHtml2(enabled=True)
+        self._test_minimum_select_one_character(self._textarea2, self.assertEqual)
+
+    ########################################################################
+    # <div> contenteditable2 (multi-lines) test cases with selection carets enabled
     ########################################################################
     def test_contenteditable2_minimum_select_one_character(self):
-        self.openTestHtml(enabled=True)
+        self.openTestHtml2(enabled=True)
         self._test_minimum_select_one_character(self._contenteditable2, self.assertEqual)
+
+    ########################################################################
+    # <div> non-editable2 (multi-lines) test cases with selection carets enabled
+    ########################################################################
+    def test_content_non_editable2_minimum_select_one_character(self):
+        self.openTestHtml2(enabled=True)
+        self._test_minimum_select_one_character(self._content2, self.assertEqual)

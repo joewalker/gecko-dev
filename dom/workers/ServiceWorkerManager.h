@@ -43,12 +43,14 @@ class ServiceWorkerRegistration;
 namespace workers {
 
 class ServiceWorker;
+class ServiceWorkerClientInfo;
 class ServiceWorkerInfo;
 
 class ServiceWorkerJobQueue;
 
 class ServiceWorkerJob : public nsISupports
 {
+protected:
   // The queue keeps the jobs alive, so they can hold a rawptr back to the
   // queue.
   ServiceWorkerJobQueue* mQueue;
@@ -151,7 +153,6 @@ public:
   // removed since documents may be controlled. It is marked as
   // pendingUninstall and when all controlling documents go away, removed.
   bool mPendingUninstall;
-  bool mWaitingToActivate;
 
   explicit ServiceWorkerRegistrationInfo(const nsACString& aScope,
                                          nsIPrincipal* aPrincipal);
@@ -201,9 +202,6 @@ public:
   void
   FinishActivate(bool aSuccess);
 
-  void
-  QueueStateChangeEvent(ServiceWorkerInfo* aInfo,
-                        ServiceWorkerState aState) const;
 };
 
 /*
@@ -218,6 +216,11 @@ private:
   const ServiceWorkerRegistrationInfo* mRegistration;
   nsCString mScriptSpec;
   ServiceWorkerState mState;
+  // We hold rawptrs since the ServiceWorker constructor and destructor ensure
+  // addition and removal.
+  // There is a high chance of there being at least one ServiceWorker
+  // associated with this all the time.
+  nsAutoTArray<ServiceWorker*, 1> mInstances;
 
   ~ServiceWorkerInfo()
   { }
@@ -229,6 +232,12 @@ public:
   ScriptSpec() const
   {
     return mScriptSpec;
+  }
+
+  const nsCString&
+  Scope() const
+  {
+    return mRegistration->mScope;
   }
 
   void SetScriptSpec(const nsCString& aSpec)
@@ -253,23 +262,20 @@ public:
   }
 
   void
-  UpdateState(ServiceWorkerState aState)
+  UpdateState(ServiceWorkerState aState);
+
+  // Only used to set initial state when loading from disk!
+  void
+  SetActivateStateUncheckedWithoutEvent(ServiceWorkerState aState)
   {
-#ifdef DEBUG
-    // Any state can directly transition to redundant, but everything else is
-    // ordered.
-    if (aState != ServiceWorkerState::Redundant) {
-      MOZ_ASSERT_IF(mState == ServiceWorkerState::EndGuard_, aState == ServiceWorkerState::Installing);
-      MOZ_ASSERT_IF(mState == ServiceWorkerState::Installing, aState == ServiceWorkerState::Installed);
-      MOZ_ASSERT_IF(mState == ServiceWorkerState::Installed, aState == ServiceWorkerState::Activating);
-      MOZ_ASSERT_IF(mState == ServiceWorkerState::Activating, aState == ServiceWorkerState::Activated);
-    }
-    // Activated can only go to redundant.
-    MOZ_ASSERT_IF(mState == ServiceWorkerState::Activated, aState == ServiceWorkerState::Redundant);
-#endif
     mState = aState;
-    mRegistration->QueueStateChangeEvent(this, mState);
   }
+
+  void
+  AppendWorker(ServiceWorker* aWorker);
+
+  void
+  RemoveWorker(ServiceWorker* aWorker);
 };
 
 #define NS_SERVICEWORKERMANAGER_IMPL_IID                 \
@@ -289,13 +295,11 @@ class ServiceWorkerManager MOZ_FINAL
   : public nsIServiceWorkerManager
   , public nsIIPCBackgroundChildCreateCallback
 {
-  friend class ActivationRunnable;
-  friend class ServiceWorkerRegistrationInfo;
-  friend class ServiceWorkerRegisterJob;
   friend class GetReadyPromiseRunnable;
   friend class GetRegistrationsRunnable;
   friend class GetRegistrationRunnable;
-  friend class QueueFireUpdateFoundRunnable;
+  friend class ServiceWorkerRegisterJob;
+  friend class ServiceWorkerRegistrationInfo;
   friend class ServiceWorkerUnregisterJob;
 
 public:
@@ -347,12 +351,7 @@ public:
   CreateNewRegistration(const nsCString& aScope, nsIPrincipal* aPrincipal);
 
   void
-  RemoveRegistration(ServiceWorkerRegistrationInfo* aRegistration)
-  {
-    MOZ_ASSERT(mServiceWorkerRegistrationInfos.Contains(aRegistration->mScope));
-    ServiceWorkerManager::RemoveScope(mOrderedScopes, aRegistration->mScope);
-    mServiceWorkerRegistrationInfos.Remove(aRegistration->mScope);
-  }
+  RemoveRegistration(ServiceWorkerRegistrationInfo* aRegistration);
 
   ServiceWorkerJobQueue*
   GetOrCreateJobQueue(const nsCString& aScope)
@@ -380,8 +379,8 @@ public:
               uint32_t aFlags);
 
   void
-  GetServicedClients(const nsCString& aScope,
-                     nsTArray<uint64_t>* aControlledDocuments);
+  GetAllClients(const nsCString& aScope,
+                nsTArray<ServiceWorkerClientInfo>& aControlledDocuments);
 
   static already_AddRefed<ServiceWorkerManager>
   GetInstance();
@@ -399,15 +398,17 @@ private:
   nsresult
   Update(ServiceWorkerRegistrationInfo* aRegistration);
 
+  nsresult
+  GetDocumentRegistration(nsIDocument* aDoc, ServiceWorkerRegistrationInfo** aRegistrationInfo);
+
   NS_IMETHOD
   CreateServiceWorkerForWindow(nsPIDOMWindow* aWindow,
-                               const nsACString& aScriptSpec,
-                               const nsACString& aScope,
+                               ServiceWorkerInfo* aInfo,
                                ServiceWorker** aServiceWorker);
 
   NS_IMETHOD
-  CreateServiceWorker(const nsACString& aScriptSpec,
-                      const nsACString& aScope,
+  CreateServiceWorker(nsIPrincipal* aPrincipal,
+                      ServiceWorkerInfo* aInfo,
                       ServiceWorker** aServiceWorker);
 
   NS_IMETHODIMP
@@ -490,6 +491,9 @@ private:
                                       void* aUnused);
 
   nsClassHashtable<nsISupportsHashKey, PendingReadyPromise> mPendingReadyPromises;
+ 
+  void
+  MaybeRemoveRegistration(ServiceWorkerRegistrationInfo* aRegistration);
 
   mozilla::ipc::PBackgroundChild* mActor;
 

@@ -23,8 +23,6 @@
  */
 
 #include "pkixgtest.h"
-#include "pkix/pkixtypes.h"
-#include "pkixtestutil.h"
 
 using namespace mozilla::pkix;
 using namespace mozilla::pkix::test;
@@ -70,7 +68,7 @@ TEST_F(pkixcheck_CheckValidity, BothEmptyNull)
     0x17/*UTCTime*/, 0/*length*/,
   };
   static const Input validity(DER);
-  ASSERT_EQ(Result::ERROR_EXPIRED_CERTIFICATE, CheckValidity(validity, NOW));
+  ASSERT_EQ(Result::ERROR_INVALID_DER_TIME, CheckValidity(validity, NOW));
 }
 
 TEST_F(pkixcheck_CheckValidity, NotBeforeEmptyNull)
@@ -80,7 +78,7 @@ TEST_F(pkixcheck_CheckValidity, NotBeforeEmptyNull)
     NEWER_UTCTIME
   };
   static const Input validity(DER);
-  ASSERT_EQ(Result::ERROR_EXPIRED_CERTIFICATE, CheckValidity(validity, NOW));
+  ASSERT_EQ(Result::ERROR_INVALID_DER_TIME, CheckValidity(validity, NOW));
 }
 
 TEST_F(pkixcheck_CheckValidity, NotAfterEmptyNull)
@@ -90,8 +88,7 @@ TEST_F(pkixcheck_CheckValidity, NotAfterEmptyNull)
     0x17/*UTCTime*/, 0x00/*length*/,
   };
   static const Input validity(DER);
-  ASSERT_EQ(Result::ERROR_NOT_YET_VALID_CERTIFICATE,
-            CheckValidity(validity, NOW));
+  ASSERT_EQ(Result::ERROR_INVALID_DER_TIME, CheckValidity(validity, NOW));
 }
 
 static const uint8_t OLDER_UTCTIME_NEWER_UTCTIME_DATA[] = {
@@ -155,6 +152,5 @@ TEST_F(pkixcheck_CheckValidity, InvalidNotAfterBeforeNotBefore)
     OLDER_UTCTIME,
   };
   static const Input validity(DER);
-  ASSERT_EQ(Result::ERROR_NOT_YET_VALID_CERTIFICATE,
-            CheckValidity(validity, NOW));
+  ASSERT_EQ(Result::ERROR_INVALID_DER_TIME, CheckValidity(validity, NOW));
 }

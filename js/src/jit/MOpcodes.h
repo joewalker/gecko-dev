@@ -24,6 +24,7 @@ namespace jit {
     _(SimdInsertElement)                                                    \
     _(SimdSignMask)                                                         \
     _(SimdSwizzle)                                                          \
+    _(SimdGeneralSwizzle)                                                   \
     _(SimdShuffle)                                                          \
     _(SimdUnaryArith)                                                       \
     _(SimdBinaryComp)                                                       \
@@ -159,7 +160,7 @@ namespace jit {
     _(SetElementCache)                                                      \
     _(BindNameCache)                                                        \
     _(GuardShape)                                                           \
-    _(GuardShapePolymorphic)                                                \
+    _(GuardReceiverPolymorphic)                                             \
     _(GuardObjectGroup)                                                     \
     _(GuardObjectIdentity)                                                  \
     _(GuardClass)                                                           \
@@ -184,6 +185,7 @@ namespace jit {
     _(StoreElementHole)                                                     \
     _(StoreUnboxedObjectOrNull)                                             \
     _(StoreUnboxedString)                                                   \
+    _(ConvertUnboxedObjectToNative)                                         \
     _(ArrayPopShift)                                                        \
     _(ArrayPush)                                                            \
     _(ArrayConcat)                                                          \

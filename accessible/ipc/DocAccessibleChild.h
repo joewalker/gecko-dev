@@ -63,6 +63,17 @@ public:
 
   virtual bool RecvAttributes(const uint64_t& aID,
                               nsTArray<Attribute> *aAttributes) MOZ_OVERRIDE;
+
+  virtual bool RecvCaretOffset(const uint64_t& aID, int32_t* aOffset)
+    MOZ_OVERRIDE;
+  virtual bool RecvSetCaretOffset(const uint64_t& aID, const int32_t& aOffset,
+                                  bool* aValid) MOZ_OVERRIDE;
+
+  virtual bool RecvCharacterCount(const uint64_t& aID, int32_t* aCount)
+     MOZ_OVERRIDE;
+  virtual bool RecvSelectionCount(const uint64_t& aID, int32_t* aCount)
+     MOZ_OVERRIDE;
+
   virtual bool RecvTextSubstring(const uint64_t& aID,
                                  const int32_t& aStartOffset,
                                  const int32_t& aEndOffset, nsString* aText)
@@ -70,21 +81,56 @@ public:
 
   virtual bool RecvGetTextAfterOffset(const uint64_t& aID,
                                       const int32_t& aOffset,
-                                      const AccessibleTextBoundary& aBoundaryType,
+                                      const int32_t& aBoundaryType,
                                       nsString* aText, int32_t* aStartOffset,
                                       int32_t* aEndOffset) MOZ_OVERRIDE;
   virtual bool RecvGetTextAtOffset(const uint64_t& aID,
                                    const int32_t& aOffset,
-                                   const AccessibleTextBoundary& aBoundaryType,
+                                   const int32_t& aBoundaryType,
                                    nsString* aText, int32_t* aStartOffset,
                                    int32_t* aEndOffset) MOZ_OVERRIDE;
   virtual bool RecvGetTextBeforeOffset(const uint64_t& aID,
                                        const int32_t& aOffset,
-                                       const AccessibleTextBoundary& aBoundaryType,
+                                       const int32_t& aBoundaryType,
                                        nsString* aText, int32_t* aStartOffset,
                                        int32_t* aEndOffset) MOZ_OVERRIDE;
 
+  virtual bool RecvCharAt(const uint64_t& aID,
+                          const int32_t& aOffset,
+                          uint16_t* aChar) MOZ_OVERRIDE;
+
+  virtual bool RecvTextAttributes(const uint64_t& aID,
+                                  const bool& aIncludeDefAttrs,
+                                  const int32_t& aOffset,
+                                  nsTArray<Attribute>* aAttributes,
+                                  int32_t* aStartOffset,
+                                  int32_t* aEndOffset)
+    MOZ_OVERRIDE;
+
+  virtual bool RecvDefaultTextAttributes(const uint64_t& aID,
+                                         nsTArray<Attribute>* aAttributes)
+    MOZ_OVERRIDE;
+
+  virtual bool RecvTextBounds(const uint64_t& aID,
+                              const int32_t& aStartOffset,
+                              const int32_t& aEndOffset,
+                              const uint32_t& aCoordType,
+                              nsIntRect* aRetVal) MOZ_OVERRIDE;
+
+  virtual bool RecvCharBounds(const uint64_t& aID,
+                              const int32_t& aOffset,
+                              const uint32_t& aCoordType,
+                              nsIntRect* aRetVal) MOZ_OVERRIDE;
+
+  virtual bool RecvOffsetAtPoint(const uint64_t& aID,
+                                 const int32_t& aX,
+                                 const int32_t& aY,
+                                 const uint32_t& aCoordType,
+                                 int32_t* aRetVal) MOZ_OVERRIDE;
 private:
+  bool PersistentPropertiesToArray(nsIPersistentProperties* aProps,
+                                   nsTArray<Attribute>* aAttributes);
+
   DocAccessible* mDoc;
 };
 

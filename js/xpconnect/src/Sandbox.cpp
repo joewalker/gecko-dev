@@ -30,11 +30,11 @@
 #include "Crypto.h"
 #include "mozilla/dom/BindingUtils.h"
 #include "mozilla/dom/BlobBinding.h"
-#include "mozilla/dom/CryptoBinding.h"
 #include "mozilla/dom/CSSBinding.h"
 #include "mozilla/dom/indexedDB/IndexedDatabaseManager.h"
 #include "mozilla/dom/FileBinding.h"
 #include "mozilla/dom/PromiseBinding.h"
+#include "mozilla/dom/RTCIdentityProviderRegistrar.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/TextDecoderBinding.h"
 #include "mozilla/dom/TextEncoderBinding.h"
@@ -195,31 +195,6 @@ SandboxImport(JSContext *cx, unsigned argc, Value *vp)
 }
 
 static bool
-SandboxCreateXMLHttpRequest(JSContext *cx, unsigned argc, jsval *vp)
-{
-    CallArgs args = CallArgsFromVp(argc, vp);
-
-    RootedObject global(cx, JS::CurrentGlobalOrNull(cx));
-    MOZ_ASSERT(global);
-
-    nsIScriptObjectPrincipal *sop =
-        static_cast<nsIScriptObjectPrincipal *>(xpc_GetJSPrivate(global));
-    nsCOMPtr<nsIGlobalObject> iglobal = do_QueryInterface(sop);
-
-    nsCOMPtr<nsIXMLHttpRequest> xhr = new nsXMLHttpRequest();
-    nsresult rv = xhr->Init(nsContentUtils::SubjectPrincipal(), nullptr,
-                            iglobal, nullptr, nullptr);
-    if (NS_FAILED(rv))
-        return false;
-
-    rv = nsContentUtils::WrapNative(cx, xhr, args.rval());
-    if (NS_FAILED(rv))
-        return false;
-
-    return true;
-}
-
-static bool
 SandboxCreateCrypto(JSContext *cx, JS::HandleObject obj)
 {
     MOZ_ASSERT(JS_IsGlobalObject(obj));
@@ -229,8 +204,22 @@ SandboxCreateCrypto(JSContext *cx, JS::HandleObject obj)
 
     dom::Crypto* crypto = new dom::Crypto();
     crypto->Init(native);
-    JS::RootedObject wrapped(cx, dom::CryptoBinding::Wrap(cx, crypto));
+    JS::RootedObject wrapped(cx, crypto->WrapObject(cx));
     return JS_DefineProperty(cx, obj, "crypto", wrapped, JSPROP_ENUMERATE);
+}
+
+static bool
+SandboxCreateRTCIdentityProvider(JSContext *cx, JS::HandleObject obj)
+{
+    MOZ_ASSERT(JS_IsGlobalObject(obj));
+
+    nsCOMPtr<nsIGlobalObject> nativeGlobal = xpc::NativeGlobal(obj);
+    MOZ_ASSERT(nativeGlobal);
+
+    dom::RTCIdentityProviderRegistrar* registrar =
+            new dom::RTCIdentityProviderRegistrar(nativeGlobal);
+    JS::RootedObject wrapped(cx, registrar->WrapObject(cx));
+    return JS_DefineProperty(cx, obj, "rtcIdentityProvider", wrapped, JSPROP_ENUMERATE);
 }
 
 static bool
@@ -364,13 +353,14 @@ sandbox_convert(JSContext *cx, HandleObject obj, JSType type, MutableHandleValue
 
 static bool
 writeToProto_setProperty(JSContext *cx, JS::HandleObject obj, JS::HandleId id,
-                    bool strict, JS::MutableHandleValue vp)
+                         JS::MutableHandleValue vp, JS::ObjectOpResult &result)
 {
     RootedObject proto(cx);
     if (!JS_GetPrototype(cx, obj, &proto))
         return false;
 
-    return JS_SetPropertyById(cx, proto, id, vp);
+    RootedValue receiver(cx, ObjectValue(*proto));
+    return JS_ForwardSetPropertyTo(cx, proto, id, vp, receiver, result);
 }
 
 static bool
@@ -564,14 +554,15 @@ xpc::SandboxCallableProxyHandler::call(JSContext *cx, JS::Handle<JSObject*> prox
 {
     // We forward the call to our underlying callable.
 
-    // The parent of our proxy is the SandboxProxyHandler proxy
-    RootedObject sandboxProxy(cx, JS_GetParent(proxy));
+    // Get our SandboxProxyHandler proxy.
+    RootedObject sandboxProxy(cx, getSandboxProxy(proxy));
     MOZ_ASSERT(js::IsProxy(sandboxProxy) &&
                js::GetProxyHandler(sandboxProxy) == &xpc::sandboxProxyHandler);
 
-    // The parent of the sandboxProxy is the sandbox global, and the
+    // The global of the sandboxProxy is the sandbox global, and the
     // target object is the original proto.
-    RootedObject sandboxGlobal(cx, JS_GetParent(sandboxProxy));
+    RootedObject sandboxGlobal(cx,
+      js::GetGlobalForObjectCrossCompartment(sandboxProxy));
     MOZ_ASSERT(IsSandbox(sandboxGlobal));
 
     // If our this object is the sandbox global, we call with this set to the
@@ -624,16 +615,21 @@ WrapCallable(JSContext *cx, HandleObject callable, HandleObject sandboxProtoProx
 {
     MOZ_ASSERT(JS::IsCallable(callable));
     // Our proxy is wrapping the callable.  So we need to use the
-    // callable as the private.  We use the given sandboxProtoProxy as
-    // the parent, and our call() hook depends on that.
+    // callable as the private.  We put the given sandboxProtoProxy in
+    // an extra slot, and our call() hook depends on that.
     MOZ_ASSERT(js::IsProxy(sandboxProtoProxy) &&
                js::GetProxyHandler(sandboxProtoProxy) ==
                  &xpc::sandboxProxyHandler);
 
     RootedValue priv(cx, ObjectValue(*callable));
-    return js::NewProxyObject(cx, &xpc::sandboxCallableProxyHandler,
-                              priv, nullptr,
-                              sandboxProtoProxy);
+    JSObject *obj = js::NewProxyObject(cx, &xpc::sandboxCallableProxyHandler,
+                                       priv, nullptr);
+    if (obj) {
+        js::SetProxyExtra(obj, SandboxCallableProxyHandler::SandboxProxySlot,
+                          ObjectValue(*sandboxProtoProxy));
+    }
+
+    return obj;
 }
 
 template<typename Op>
@@ -739,10 +735,10 @@ bool
 xpc::SandboxProxyHandler::set(JSContext *cx, JS::Handle<JSObject*> proxy,
                               JS::Handle<JSObject*> receiver,
                               JS::Handle<jsid> id,
-                              bool strict,
-                              JS::MutableHandle<Value> vp) const
+                              JS::MutableHandle<Value> vp,
+                              JS::ObjectOpResult &result) const
 {
-    return BaseProxyHandler::set(cx, proxy, receiver, id, strict, vp);
+    return BaseProxyHandler::set(cx, proxy, receiver, id, vp, result);
 }
 
 bool
@@ -802,6 +798,8 @@ xpc::GlobalProperties::Parse(JSContext *cx, JS::HandleObject obj)
             File = true;
         } else if (!strcmp(name.ptr(), "crypto")) {
             crypto = true;
+        } else if (!strcmp(name.ptr(), "rtcIdentityProvider")) {
+            rtcIdentityProvider = true;
         } else {
             JS_ReportError(cx, "Unknown property name: %s", name.ptr());
             return false;
@@ -821,7 +819,7 @@ xpc::GlobalProperties::Define(JSContext *cx, JS::HandleObject obj)
         return false;
 
     if (XMLHttpRequest &&
-        !JS_DefineFunction(cx, obj, "XMLHttpRequest", SandboxCreateXMLHttpRequest, 0, JSFUN_CONSTRUCTOR))
+        !dom::XMLHttpRequestBinding::GetConstructorObject(cx, obj))
         return false;
 
     if (TextEncoder &&
@@ -857,6 +855,9 @@ xpc::GlobalProperties::Define(JSContext *cx, JS::HandleObject obj)
         return false;
 
     if (crypto && !SandboxCreateCrypto(cx, obj))
+        return false;
+
+    if (rtcIdentityProvider && !SandboxCreateRTCIdentityProvider(cx, obj))
         return false;
 
     return true;
@@ -947,7 +948,7 @@ xpc::CreateSandboxObject(JSContext *cx, MutableHandleValue vp, nsISupports *prin
                 // of this-binding for methods.
                 RootedValue priv(cx, ObjectValue(*options.proto));
                 options.proto = js::NewProxyObject(cx, &xpc::sandboxProxyHandler,
-                                                   priv, nullptr, sandbox);
+                                                   priv, nullptr);
                 if (!options.proto)
                     return NS_ERROR_OUT_OF_MEMORY;
             }

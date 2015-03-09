@@ -147,9 +147,6 @@ class AsmJSNumLit
     static AsmJSNumLit Create(Which w, Value v) {
         AsmJSNumLit lit;
         lit.which_ = w;
-        // Force float32 coercion, as the caller may have not done it.
-        if (w == Float)
-            v = Float32Value(v.toNumber());
         lit.value.scalar_ = v;
         MOZ_ASSERT(!lit.isSimd());
         return lit;
@@ -456,6 +453,7 @@ class AsmJSModule
             name_ = name;
             maybeFieldName_ = maybeFieldName;
             argCoercions_ = mozilla::Move(argCoercions);
+            mozilla::PodZero(&pod);  // zero padding for Valgrind
             pod.isChangeHeap_ = false;
             pod.returnType_ = returnType;
             pod.codeOffset_ = UINT32_MAX;
@@ -471,6 +469,7 @@ class AsmJSModule
             MOZ_ASSERT_IF(maybeFieldName, maybeFieldName->isTenured());
             name_ = name;
             maybeFieldName_ = maybeFieldName;
+            mozilla::PodZero(&pod);  // zero padding for Valgrind
             pod.isChangeHeap_ = true;
             pod.startOffsetInModule_ = startOffsetInModule;
             pod.endOffsetInModule_ = endOffsetInModule;
@@ -488,6 +487,7 @@ class AsmJSModule
             name_ = rhs.name_;
             maybeFieldName_ = rhs.maybeFieldName_;
             argCoercions_ = mozilla::Move(rhs.argCoercions_);
+            mozilla::PodZero(&pod);  // zero padding for Valgrind
             pod = rhs.pod;
         }
 

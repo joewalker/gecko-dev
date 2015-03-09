@@ -860,11 +860,7 @@ pref("browser.preferences.instantApply", true);
 #endif
 
 // Toggles between the two Preferences implementations, pop-up window and in-content
-#ifdef EARLY_BETA_OR_EARLIER
 pref("browser.preferences.inContent", true);
-#else
-pref("browser.preferences.inContent", false);
-#endif
 
 pref("browser.download.show_plugins_in_list", true);
 pref("browser.download.hide_plugins_without_extensions", true);
@@ -971,7 +967,7 @@ pref("browser.safebrowsing.enabled", true);
 pref("browser.safebrowsing.malware.enabled", true);
 pref("browser.safebrowsing.downloads.enabled", true);
 // Remote lookups are only enabled for Windows in Nightly and Aurora
-#if defined(XP_WIN) && !defined(RELEASE_BUILD)
+#if defined(XP_WIN)
 pref("browser.safebrowsing.downloads.remote.enabled", true);
 #else
 pref("browser.safebrowsing.downloads.remote.enabled", false);
@@ -1031,6 +1027,8 @@ pref("browser.rights.3.shown", false);
 // Don't show the about:rights notification in debug builds.
 pref("browser.rights.override", true);
 #endif
+
+pref("browser.selfsupport.url", "https://self-repair.mozilla.org/%LOCALE%/repair");
 
 pref("browser.sessionstore.resume_from_crash", true);
 pref("browser.sessionstore.resume_session_once", false);
@@ -1165,8 +1163,13 @@ pref("toolbar.customization.usesheet", true);
 pref("toolbar.customization.usesheet", false);
 #endif
 
-// Disable Flash protected mode to reduce hang/crash rates.
-pref("dom.ipc.plugins.flash.disable-protected-mode", true);
+pref("dom.ipc.plugins.flash.disable-protected-mode", false);
+
+// Feature-disable the protected-mode auto-flip
+pref("browser.flash-protected-mode-flip.enable", false);
+
+// Whether we've already flipped protected mode automatically
+pref("browser.flash-protected-mode-flip.done", false);
 
 #ifdef XP_MACOSX
 // On mac, the default pref is per-architecture
@@ -1197,7 +1200,6 @@ pref("security.sandbox.windows.log", false);
 // 3 - the strongest settings we seem to be able to use without breaking
 //     everything, but will definitely cause some functionality restrictions
 pref("dom.ipc.plugins.sandbox-level.default", 0);
-pref("dom.ipc.plugins.sandbox-level.flash", 1);
 
 #if defined(MOZ_CONTENT_SANDBOX)
 // This controls whether the Windows content process sandbox is using a more
@@ -1212,6 +1214,18 @@ pref("security.sandbox.windows.content.moreStrict", false);
 pref("security.sandbox.windows.log.stackTraceDepth", 0);
 #endif
 #endif
+#endif
+
+#if defined(XP_MACOSX) && defined(MOZ_SANDBOX) && defined(MOZ_CONTENT_SANDBOX)
+// This pref is discussed in bug 1083344, the naming is inspired from its Windows
+// counterpart, but on Mac it's an integer which means:
+// 0 -> "no sandbox"
+// 1 -> "an imperfect sandbox designed to allow firefox to run reasonably well"
+// 2 -> "an ideal sandbox which may break many things"
+// This setting is read when the content process is started. On Mac the content
+// process is killed when all windows are closed, so a change will take effect
+// when the 1st window is opened.
+pref("security.sandbox.macos.content.level", 0);
 #endif
 
 // This pref governs whether we attempt to work around problems caused by
@@ -1320,7 +1334,7 @@ pref("browser.devedition.theme.showCustomizeButton", false);
 
 // Developer edition promo preferences
 pref("devtools.devedition.promo.shown", false);
-pref("devtools.devedition.promo.url", "https://mozilla.org/firefox/developer");
+pref("devtools.devedition.promo.url", "https://www.mozilla.org/firefox/developer/?utm_source=firefox-dev-tools&utm_medium=firefox-browser&utm_content=betadoorhanger");
 
 // Only potentially show in beta release
 #if MOZ_UPDATE_CHANNEL == beta
@@ -1422,6 +1436,9 @@ pref("devtools.timeline.enabled", true);
 #else
 pref("devtools.timeline.enabled", false);
 #endif
+
+// TODO remove `devtools.timeline.hiddenMarkers.` branches when performance
+// tool lands (bug 1075567)
 pref("devtools.timeline.hiddenMarkers", "[]");
 
 // Enable perftools via build command
@@ -1439,6 +1456,7 @@ pref("devtools.profiler.ui.show-platform-data", false);
 pref("devtools.profiler.ui.show-idle-blocks", true);
 
 // The default Performance UI settings
+pref("devtools.performance.timeline.hidden-markers", "[]");
 pref("devtools.performance.ui.invert-call-tree", true);
 pref("devtools.performance.ui.invert-flame-graph", false);
 pref("devtools.performance.ui.flatten-tree-recursion", true);
@@ -1497,6 +1515,9 @@ pref("devtools.canvasdebugger.enabled", false);
 // Enable the Web Audio Editor
 pref("devtools.webaudioeditor.enabled", false);
 
+// Web Audio Editor Inspector Width should be a preference
+pref("devtools.webaudioeditor.inspectorWidth", 300);
+
 // Default theme ("dark" or "light")
 #ifdef MOZ_DEV_EDITION
 pref("devtools.theme", "dark");
@@ -1554,6 +1575,9 @@ pref("devtools.browserconsole.filter.secwarn", true);
 // Text size in the Web Console. Use 0 for the system default size.
 pref("devtools.webconsole.fontSize", 0);
 
+// Max number of inputs to store in web console history.
+pref("devtools.webconsole.inputHistoryCount", 50);
+
 // Persistent logging: |true| if you want the Web Console to keep all of the
 // logged messages after reloading the page, |false| if you want the output to
 // be cleared each time page navigation happens.
@@ -1595,6 +1619,11 @@ pref("devtools.fontinspector.enabled", true);
 // opened developer tool. This allows us to ping telemetry just once per browser
 // version for each user.
 pref("devtools.telemetry.tools.opened.version", "{}");
+
+// Set imgur upload client ID
+pref("devtools.gcli.imgurClientID", '0df414e888d7240');
+// Imgur's upload URL
+pref("devtools.gcli.imgurUploadURL", "https://api.imgur.com/3/image");
 
 // Whether the character encoding menu is under the main Firefox button. This
 // preference is a string so that localizers can alter it.
@@ -1660,7 +1689,7 @@ pref("pdfjs.previousHandler.alwaysAskBeforeHandling", false);
 pref("shumway.disabled", true);
 #else
 pref("shumway.disabled", false);
-pref("shumway.swf.whitelist", "http://g-ecx.images-amazon.com/*/AiryBasicRenderer*.swf");
+pref("shumway.swf.whitelist", "http://g-ecx.images-amazon.com/*/AiryBasicRenderer*.swf,http://z-ecx.images-amazon.com/*/AiryFlashlsRenderer._TTW_.swf,http://ia.media-imdb.com/*/AiryFlashlsRenderer._TTW_.swf");
 #endif
 #endif
 
@@ -1692,15 +1721,17 @@ pref("loop.debug.dispatcher", false);
 pref("loop.debug.websocket", false);
 pref("loop.debug.sdk", false);
 #ifdef DEBUG
-pref("loop.CSP", "default-src 'self' about: file: chrome: http://localhost:*; img-src 'self' data: http://www.gravatar.com/ about: file: chrome:; font-src 'none'; connect-src wss://*.tokbox.com https://*.opentok.com https://*.tokbox.com wss://*.mozilla.com https://*.mozilla.org wss://*.mozaws.net http://localhost:* ws://localhost:*; media-src blob:");
+pref("loop.CSP", "default-src 'self' about: file: chrome: http://localhost:*; img-src 'self' data: https://www.gravatar.com/ about: file: chrome:; font-src 'none'; connect-src wss://*.tokbox.com https://*.opentok.com https://*.tokbox.com wss://*.mozilla.com https://*.mozilla.org wss://*.mozaws.net http://localhost:* ws://localhost:*; media-src blob:");
 #else
-pref("loop.CSP", "default-src 'self' about: file: chrome:; img-src 'self' data: http://www.gravatar.com/ about: file: chrome:; font-src 'none'; connect-src wss://*.tokbox.com https://*.opentok.com https://*.tokbox.com wss://*.mozilla.com https://*.mozilla.org wss://*.mozaws.net; media-src blob:");
+pref("loop.CSP", "default-src 'self' about: file: chrome:; img-src 'self' data: https://www.gravatar.com/ about: file: chrome:; font-src 'none'; connect-src wss://*.tokbox.com https://*.opentok.com https://*.tokbox.com wss://*.mozilla.com https://*.mozilla.org wss://*.mozaws.net; media-src blob:");
 #endif
 pref("loop.oauth.google.redirect_uri", "urn:ietf:wg:oauth:2.0:oob:auto");
 pref("loop.oauth.google.scope", "https://www.google.com/m8/feeds");
 pref("loop.fxa_oauth.tokendata", "");
 pref("loop.fxa_oauth.profile", "");
 pref("loop.support_url", "https://support.mozilla.org/kb/group-conversations-firefox-hello-webrtc");
+pref("loop.contacts.gravatars.show", false);
+pref("loop.contacts.gravatars.promo", true);
 
 // serverURL to be assigned by services team
 pref("services.push.serverURL", "wss://push.services.mozilla.com/");
@@ -1732,11 +1763,18 @@ pref("plain_text.wrap_long_lines", true);
 pref("dom.debug.propagate_gesture_events_through_content", false);
 
 // The request URL of the GeoLocation backend.
+#ifdef RELEASE_BUILD
+pref("geo.wifi.uri", "https://www.googleapis.com/geolocation/v1/geolocate?key=%GOOGLE_API_KEY%");
+#else
 pref("geo.wifi.uri", "https://location.services.mozilla.com/v1/geolocate?key=%MOZILLA_API_KEY%");
+#endif
 
-// On Mac, the default geo provider is corelocation.
 #ifdef XP_MACOSX
+#ifdef RELEASE_BUILD
+pref("geo.provider.use_corelocation", false);
+#else
 pref("geo.provider.use_corelocation", true);
+#endif
 #endif
 
 // Necko IPC security checks only needed for app isolation for cookies/cache/etc:
@@ -1809,8 +1847,8 @@ pref("experiments.manifest.uri", "https://telemetry-experiment.cdn.mozilla.net/m
 // Whether experiments are supported by the current application profile.
 pref("experiments.supported", true);
 
-// Enable the OpenH264 plugin support in the addon manager.
-pref("media.gmp-gmpopenh264.provider.enabled", true);
+// Enable GMP support in the addon manager.
+pref("media.gmp-provider.enabled", true);
 
 pref("browser.apps.URL", "https://marketplace.firefox.com/discovery/");
 
@@ -1856,3 +1894,6 @@ pref("dom.ipc.reportProcessHangs", true);
 
 // Disable reader mode by default.
 pref("reader.parse-on-load.enabled", false);
+
+// Disable ReadingList by default.
+pref("browser.readinglist.enabled", false);

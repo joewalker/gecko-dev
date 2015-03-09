@@ -60,6 +60,7 @@ const BLANK_URL_FOR_CLEARING = "data:text/html;charset=UTF-8,%3C%21%2D%2DCLEAR%2
 var gBrowser;
 // Are we testing web content loaded in a separate process?
 var gBrowserIsRemote;           // bool
+var gB2GisMulet;                // bool
 // Are we using <iframe mozbrowser>?
 var gBrowserIsIframe;           // bool
 var gBrowserMessageManager;
@@ -249,6 +250,12 @@ this.OnRefTestLoad = function OnRefTestLoad(win)
     }
 
     try {
+        gB2GisMulet = prefs.getBoolPref("b2g.is_mulet");
+    } catch (e) {
+        gB2GisMulet = false;
+    }
+
+    try {
       gBrowserIsIframe = prefs.getBoolPref("reftest.browser.iframe.enabled");
     } catch (e) {
       gBrowserIsIframe = false;
@@ -271,7 +278,6 @@ this.OnRefTestLoad = function OnRefTestLoad(win)
     gBrowser.setAttribute("id", "browser");
     gBrowser.setAttribute("type", "content-primary");
     gBrowser.setAttribute("remote", gBrowserIsRemote ? "true" : "false");
-    gBrowser.setAttribute("mozasyncpanzoom", "true");
     // Make sure the browser element is exactly 800x1000, no matter
     // what size our window is
     gBrowser.setAttribute("style", "padding: 0px; margin: 0px; border:none; min-width: 800px; min-height: 1000px; max-width: 800px; max-height: 1000px");
@@ -731,6 +737,7 @@ function BuildConditionSandbox(aURL) {
     // Tests shouldn't care about this except for when they need to
     // crash the content process
     sandbox.browserIsRemote = gBrowserIsRemote;
+    sandbox.Mulet = gB2GisMulet;
 
     try {
         sandbox.asyncPanZoom = prefs.getBoolPref("layers.async-pan-zoom.enabled");

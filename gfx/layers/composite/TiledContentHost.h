@@ -164,9 +164,9 @@ public:
   static void RecycleCallback(TextureHost* textureHost, void* aClosure);
 
 protected:
-  void ValidateTile(TileHost& aTile,
-                    const nsIntPoint& aTileRect,
-                    const nsIntRegion& dirtyRect);
+  TileHost ValidateTile(TileHost aTile,
+                        const nsIntPoint& aTileRect,
+                        const nsIntRegion& dirtyRect);
 
   // do nothing, the desctructor in the texture host takes care of releasing resources
   void ReleaseTile(TileHost aTile) {}
@@ -229,6 +229,11 @@ public:
   const nsIntRegion& GetValidLowPrecisionRegion() const MOZ_OVERRIDE
   {
     return mLowPrecisionTiledBuffer.GetValidRegion();
+  }
+
+  const nsIntRegion& GetValidRegion() const MOZ_OVERRIDE
+  {
+    return mTiledBuffer.GetValidRegion();
   }
 
   virtual void SetCompositor(Compositor* aCompositor) MOZ_OVERRIDE

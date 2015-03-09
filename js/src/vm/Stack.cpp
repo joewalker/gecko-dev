@@ -1714,19 +1714,24 @@ ActivationIterator::settle()
         activation_ = activation_->prev();
 }
 
-JS::ProfilingFrameIterator::ProfilingFrameIterator(JSRuntime *rt, const RegisterState &state)
+JS::ProfilingFrameIterator::ProfilingFrameIterator(JSRuntime *rt, const RegisterState &state,
+                                                   uint32_t sampleBufferGen)
   : rt_(rt),
-    activation_(rt->profilingActivation()),
+    sampleBufferGen_(sampleBufferGen),
+    activation_(nullptr),
     savedPrevJitTop_(nullptr)
 {
-    if (!activation_)
+    if (!rt->spsProfiler.enabled())
+        MOZ_CRASH("ProfilingFrameIterator called when spsProfiler not enabled for runtime.");
+
+    if (!rt->profilingActivation())
         return;
 
     // If profiler sampling is not enabled, skip.
-    if (!rt_->isProfilerSamplingEnabled()) {
-        activation_ = nullptr;
+    if (!rt_->isProfilerSamplingEnabled())
         return;
-    }
+
+    activation_ = rt->profilingActivation();
 
     MOZ_ASSERT(activation_->isProfiling());
 
@@ -1877,6 +1882,10 @@ JS::ProfilingFrameIterator::extractStack(Frame *frames, uint32_t offset, uint32_
     jit::JitcodeGlobalTable *table = rt_->jitRuntime()->getJitcodeGlobalTable();
     jit::JitcodeGlobalEntry entry;
     table->lookupInfallible(returnAddr, &entry, rt_);
+    if (hasSampleBufferGen())
+        table->lookupForSampler(returnAddr, &entry, rt_, sampleBufferGen_);
+    else
+        table->lookup(returnAddr, &entry, rt_);
 
     MOZ_ASSERT(entry.isIon() || entry.isIonCache() || entry.isBaseline() || entry.isDummy());
 

@@ -234,10 +234,14 @@ WindowsOSVersion()
 
   if (winVersion == UNINITIALIZED_VALUE) {
     vinfo.dwOSVersionInfoSize = sizeof (vinfo);
+#ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable:4996)
+#endif
     if (!GetVersionEx(&vinfo)) {
+#ifdef _MSC_VER
 #pragma warning(pop)
+#endif
       winVersion = kWindowsUnknown;
     } else {
       winVersion = int32_t(vinfo.dwMajorVersion << 16) + vinfo.dwMinorVersion;
@@ -823,7 +827,7 @@ GfxInfo::GetCountryCode()
   }
   // Now get the string for real
   mCountryCode.SetLength(numChars);
-  numChars = GetGeoInfoW(geoid, GEO_ISO2, mCountryCode.BeginWriting(),
+  numChars = GetGeoInfoW(geoid, GEO_ISO2, wwc(mCountryCode.BeginWriting()),
                          mCountryCode.Length(), 0);
   if (numChars) {
     // numChars includes null terminator

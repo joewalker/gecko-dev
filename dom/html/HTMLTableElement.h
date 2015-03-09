@@ -54,7 +54,7 @@ public:
   }
   void SetTHead(HTMLTableSectionElement* aTHead, ErrorResult& aError)
   {
-    if (aTHead && !aTHead->IsHTML(nsGkAtoms::thead)) {
+    if (aTHead && !aTHead->IsHTMLElement(nsGkAtoms::thead)) {
       aError.Throw(NS_ERROR_DOM_HIERARCHY_REQUEST_ERR);
       return;
     }
@@ -74,7 +74,7 @@ public:
   }
   void SetTFoot(HTMLTableSectionElement* aTFoot, ErrorResult& aError)
   {
-    if (aTFoot && !aTFoot->IsHTML(nsGkAtoms::tfoot)) {
+    if (aTFoot && !aTFoot->IsHTMLElement(nsGkAtoms::tfoot)) {
       aError.Throw(NS_ERROR_DOM_HIERARCHY_REQUEST_ERR);
       return;
     }
@@ -96,7 +96,7 @@ public:
                                                    ErrorResult& aError);
   void DeleteRow(int32_t aIndex, ErrorResult& aError);
 
-  void GetAlign(nsString& aAlign)
+  void GetAlign(DOMString& aAlign)
   {
     GetHTMLAttr(nsGkAtoms::align, aAlign);
   }
@@ -104,7 +104,7 @@ public:
   {
     SetHTMLAttr(nsGkAtoms::align, aAlign, aError);
   }
-  void GetBorder(nsString& aBorder)
+  void GetBorder(DOMString& aBorder)
   {
     GetHTMLAttr(nsGkAtoms::border, aBorder);
   }
@@ -112,7 +112,7 @@ public:
   {
     SetHTMLAttr(nsGkAtoms::border, aBorder, aError);
   }
-  void GetFrame(nsString& aFrame)
+  void GetFrame(DOMString& aFrame)
   {
     GetHTMLAttr(nsGkAtoms::frame, aFrame);
   }
@@ -120,7 +120,7 @@ public:
   {
     SetHTMLAttr(nsGkAtoms::frame, aFrame, aError);
   }
-  void GetRules(nsString& aRules)
+  void GetRules(DOMString& aRules)
   {
     GetHTMLAttr(nsGkAtoms::rules, aRules);
   }
@@ -132,11 +132,15 @@ public:
   {
     GetHTMLAttr(nsGkAtoms::summary, aSummary);
   }
+  void GetSummary(DOMString& aSummary)
+  {
+    GetHTMLAttr(nsGkAtoms::summary, aSummary);
+  }
   void SetSummary(const nsAString& aSummary, ErrorResult& aError)
   {
     SetHTMLAttr(nsGkAtoms::summary, aSummary, aError);
   }
-  void GetWidth(nsString& aWidth)
+  void GetWidth(DOMString& aWidth)
   {
     GetHTMLAttr(nsGkAtoms::width, aWidth);
   }
@@ -144,7 +148,7 @@ public:
   {
     SetHTMLAttr(nsGkAtoms::width, aWidth, aError);
   }
-  void GetBgColor(nsString& aBgColor)
+  void GetBgColor(DOMString& aBgColor)
   {
     GetHTMLAttr(nsGkAtoms::bgcolor, aBgColor);
   }
@@ -152,7 +156,7 @@ public:
   {
     SetHTMLAttr(nsGkAtoms::bgcolor, aBgColor, aError);
   }
-  void GetCellPadding(nsString& aCellPadding)
+  void GetCellPadding(DOMString& aCellPadding)
   {
     GetHTMLAttr(nsGkAtoms::cellpadding, aCellPadding);
   }
@@ -160,7 +164,7 @@ public:
   {
     SetHTMLAttr(nsGkAtoms::cellpadding, aCellPadding, aError);
   }
-  void GetCellSpacing(nsString& aCellSpacing)
+  void GetCellSpacing(DOMString& aCellSpacing)
   {
     GetHTMLAttr(nsGkAtoms::cellspacing, aCellSpacing);
   }
@@ -208,7 +212,7 @@ protected:
   {
     for (nsIContent* cur = nsINode::GetFirstChild(); cur;
          cur = cur->GetNextSibling()) {
-      if (cur->IsHTML(aTag)) {
+      if (cur->IsHTMLElement(aTag)) {
         return cur;
       }
     }

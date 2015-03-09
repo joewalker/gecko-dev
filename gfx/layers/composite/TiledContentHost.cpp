@@ -168,14 +168,14 @@ TiledLayerBufferComposite::Upload()
   ClearPaintedRegion();
 }
 
-void
-TiledLayerBufferComposite::ValidateTile(TileHost& aTile,
+TileHost
+TiledLayerBufferComposite::ValidateTile(TileHost aTile,
                                         const nsIntPoint& aTileOrigin,
                                         const nsIntRegion& aDirtyRect)
 {
   if (aTile.IsPlaceholderTile()) {
     NS_WARNING("Placeholder tile encountered in painted region");
-    return;
+    return aTile;
   }
 
 #ifdef GFX_TILEDLAYER_PREF_WARNINGS
@@ -205,6 +205,7 @@ TiledLayerBufferComposite::ValidateTile(TileHost& aTile,
     printf_stderr("Tile Time to upload %i\n", PR_IntervalNow() - start);
   }
 #endif
+  return aTile;
 }
 
 void
@@ -531,7 +532,11 @@ TiledContentHost::RenderTile(const TileHost& aTile,
                                   textureRect.height / aTextureBounds.height);
     mCompositor->DrawQuad(graphicsRect, aClipRect, aEffectChain, aOpacity, aTransform);
   }
-  mCompositor->DrawDiagnostics(DiagnosticFlags::CONTENT | DiagnosticFlags::TILE,
+  DiagnosticFlags flags = DiagnosticFlags::CONTENT | DiagnosticFlags::TILE;
+  if (aTile.mTextureHostOnWhite) {
+    flags |= DiagnosticFlags::COMPONENT_ALPHA;
+  }
+  mCompositor->DrawDiagnostics(flags,
                                aScreenRegion, aClipRect, aTransform, mFlashCounter);
 }
 
@@ -578,6 +583,8 @@ TiledContentHost::RenderLayerBuffer(TiledLayerBufferComposite& aLayerBuffer,
   aTransform.PreScale(1/(resolution * layerScale.width),
                       1/(resolution * layerScale.height), 1);
 
+  DiagnosticFlags componentAlphaDiagnostic = DiagnosticFlags::NO_DIAGNOSTIC;
+
   uint32_t rowCount = 0;
   uint32_t tileX = 0;
   nsIntRect visibleRect = aVisibleRegion.GetBounds();
@@ -614,6 +621,9 @@ TiledContentHost::RenderLayerBuffer(TiledLayerBufferComposite& aLayerBuffer,
           RenderTile(tileTexture, aBackgroundColor, aEffectChain, aOpacity, aTransform,
                      aFilter, aClipRect, tileDrawRegion, tileOffset,
                      nsIntSize(tileSize.width, tileSize.height));
+          if (tileTexture.mTextureHostOnWhite) {
+            componentAlphaDiagnostic = DiagnosticFlags::COMPONENT_ALPHA;
+          }
         }
       }
       tileY++;
@@ -624,7 +634,7 @@ TiledContentHost::RenderLayerBuffer(TiledLayerBufferComposite& aLayerBuffer,
   }
   gfx::Rect rect(visibleRect.x, visibleRect.y,
                  visibleRect.width, visibleRect.height);
-  GetCompositor()->DrawDiagnostics(DiagnosticFlags::CONTENT,
+  GetCompositor()->DrawDiagnostics(DiagnosticFlags::CONTENT | componentAlphaDiagnostic,
                                    rect, aClipRect, aTransform, mFlashCounter);
 }
 

@@ -789,6 +789,7 @@ NPBool nsPluginInstanceOwner::ConvertPointPuppet(PuppetWidget *widget,
   tabContentBounds.ScaleInverseRoundOut(scaleFactor);
   int32_t windowH = tabContentBounds.height + int(chromeSize.y);
 
+  // This is actually relative to window-chrome.
   nsPoint pluginPosition = AsNsPoint(pluginFrame->GetScreenRect().TopLeft());
 
   // Convert (sourceX, sourceY) to 'real' (not PuppetWidget) screen space.
@@ -798,8 +799,8 @@ NPBool nsPluginInstanceOwner::ConvertPointPuppet(PuppetWidget *widget,
   nsPoint screenPoint;
   switch (sourceSpace) {
     case NPCoordinateSpacePlugin:
-      screenPoint = sourcePoint + pluginPosition +
-        pluginFrame->GetContentRectRelativeToSelf().TopLeft() / nsPresContext::AppUnitsPerCSSPixel();
+      screenPoint = sourcePoint + pluginFrame->GetContentRectRelativeToSelf().TopLeft() +
+        chromeSize + pluginPosition + windowPosition;
       break;
     case NPCoordinateSpaceWindow:
       screenPoint = nsPoint(sourcePoint.x, windowH-sourcePoint.y) +
@@ -822,8 +823,8 @@ NPBool nsPluginInstanceOwner::ConvertPointPuppet(PuppetWidget *widget,
   nsPoint destPoint;
   switch (destSpace) {
     case NPCoordinateSpacePlugin:
-      destPoint = screenPoint - pluginPosition -
-        pluginFrame->GetContentRectRelativeToSelf().TopLeft() / nsPresContext::AppUnitsPerCSSPixel();
+      destPoint = screenPoint - pluginFrame->GetContentRectRelativeToSelf().TopLeft() -
+        chromeSize - pluginPosition - windowPosition;
       break;
     case NPCoordinateSpaceWindow:
       destPoint = screenPoint - windowPosition;
@@ -993,13 +994,11 @@ NS_IMETHODIMP nsPluginInstanceOwner::GetTagType(nsPluginTagType *result)
 
   *result = nsPluginTagType_Unknown;
 
-  nsIAtom *atom = mContent->Tag();
-
-  if (atom == nsGkAtoms::applet)
+  if (mContent->IsHTMLElement(nsGkAtoms::applet))
     *result = nsPluginTagType_Applet;
-  else if (atom == nsGkAtoms::embed)
+  else if (mContent->IsHTMLElement(nsGkAtoms::embed))
     *result = nsPluginTagType_Embed;
-  else if (atom == nsGkAtoms::object)
+  else if (mContent->IsHTMLElement(nsGkAtoms::object))
     *result = nsPluginTagType_Object;
 
   return NS_OK;
@@ -1836,19 +1835,30 @@ TranslateToNPCocoaEvent(WidgetGUIEvent* anEvent, nsIFrame* aObjectFrame)
     {
       WidgetKeyboardEvent* keyEvent = anEvent->AsKeyboardEvent();
 
-      cocoaEvent.data.key.keyCode = keyEvent->mNativeKeyCode;
-      cocoaEvent.data.key.isARepeat = keyEvent->mIsRepeat;
-      cocoaEvent.data.key.modifierFlags = keyEvent->mNativeModifierFlags;
-      const char16_t* nativeChars = keyEvent->mNativeCharacters.get();
-      cocoaEvent.data.key.characters =
-        (NPNSString*)::CFStringCreateWithCharacters(NULL,
-                                                    reinterpret_cast<const UniChar*>(nativeChars),
-                                                    keyEvent->mNativeCharacters.Length());
-      const char16_t* nativeCharsIgnoringModifiers = keyEvent->mNativeCharactersIgnoringModifiers.get();
-      cocoaEvent.data.key.charactersIgnoringModifiers =
-        (NPNSString*)::CFStringCreateWithCharacters(NULL,
-                                                    reinterpret_cast<const UniChar*>(nativeCharsIgnoringModifiers),
-                                                    keyEvent->mNativeCharactersIgnoringModifiers.Length());
+      // That keyEvent->mPluginTextEventString is non-empty is a signal that we should
+      // create a text event for the plugin, instead of a key event.
+      if ((anEvent->message == NS_KEY_DOWN) && !keyEvent->mPluginTextEventString.IsEmpty()) {
+        cocoaEvent.type = NPCocoaEventTextInput;
+        const char16_t* pluginTextEventString = keyEvent->mPluginTextEventString.get();
+        cocoaEvent.data.text.text = (NPNSString*)
+          ::CFStringCreateWithCharacters(NULL,
+                                         reinterpret_cast<const UniChar*>(pluginTextEventString),
+                                         keyEvent->mPluginTextEventString.Length());
+      } else {
+        cocoaEvent.data.key.keyCode = keyEvent->mNativeKeyCode;
+        cocoaEvent.data.key.isARepeat = keyEvent->mIsRepeat;
+        cocoaEvent.data.key.modifierFlags = keyEvent->mNativeModifierFlags;
+        const char16_t* nativeChars = keyEvent->mNativeCharacters.get();
+        cocoaEvent.data.key.characters = (NPNSString*)
+          ::CFStringCreateWithCharacters(NULL,
+                                         reinterpret_cast<const UniChar*>(nativeChars),
+                                         keyEvent->mNativeCharacters.Length());
+        const char16_t* nativeCharsIgnoringModifiers = keyEvent->mNativeCharactersIgnoringModifiers.get();
+        cocoaEvent.data.key.charactersIgnoringModifiers = (NPNSString*)
+          ::CFStringCreateWithCharacters(NULL,
+                                         reinterpret_cast<const UniChar*>(nativeCharsIgnoringModifiers),
+                                         keyEvent->mNativeCharactersIgnoringModifiers.Length());
+      }
       break;
     }
     case NS_FOCUS_CONTENT:
@@ -1920,56 +1930,37 @@ nsEventStatus nsPluginInstanceOwner::ProcessEvent(const WidgetGUIEvent& anEvent)
     return nsEventStatus_eIgnore;
   }
 
-  if (cocoaEvent.type == NPCocoaEventKeyDown) {
-    ComplexTextInputPanel* ctiPanel = ComplexTextInputPanel::GetSharedComplexTextInputPanel();
-    if (ctiPanel && ctiPanel->IsInComposition()) {
-      nsAutoString outText;
-      ctiPanel->InterpretKeyEvent(&cocoaEvent, outText);
-      if (!outText.IsEmpty()) {
-        CFStringRef cfString = ::CFStringCreateWithCharacters(kCFAllocatorDefault,
-                                                              reinterpret_cast<const UniChar*>(outText.get()),
-                                                              outText.Length());
-
-        NPCocoaEvent textEvent;
-        InitializeNPCocoaEvent(&textEvent);
-        textEvent.type = NPCocoaEventTextInput;
-        textEvent.data.text.text = (NPNSString*)cfString;
-
-        mInstance->HandleEvent(&textEvent, nullptr);
-      }
-      return nsEventStatus_eConsumeNoDefault;
-    }
+  if (cocoaEvent.type == NPCocoaEventTextInput) {
+    mInstance->HandleEvent(&cocoaEvent, nullptr);
+    return nsEventStatus_eConsumeNoDefault;
   }
 
   int16_t response = kNPEventNotHandled;
   mInstance->HandleEvent(&cocoaEvent,
                          &response,
                          NS_PLUGIN_CALL_SAFE_TO_REENTER_GECKO);
-  if (response == kNPEventStartIME) {
-    nsAutoString outText;
-    ComplexTextInputPanel* ctiPanel = ComplexTextInputPanel::GetSharedComplexTextInputPanel();
-
-    // Place ctiPanel by passing the coordinates of the bottom-left of the plugin,
-    // in screen-coordinates.
-    double screenX, screenY;
-    ConvertPoint(0.0, mPluginFrame->GetScreenRect().height, NPCoordinateSpacePlugin,
-                 &screenX, &screenY, NPCoordinateSpaceScreen);
-
-    ctiPanel->PlacePanel(screenX, screenY);
-    ctiPanel->InterpretKeyEvent(&cocoaEvent, outText);
-
-    if (!outText.IsEmpty()) {
-      CFStringRef cfString = ::CFStringCreateWithCharacters(kCFAllocatorDefault,
-                                                            reinterpret_cast<const UniChar*>(outText.get()),
-                                                            outText.Length());
-
-      NPCocoaEvent textEvent;
-      InitializeNPCocoaEvent(&textEvent);
-      textEvent.type = NPCocoaEventTextInput;
-      textEvent.data.text.text = (NPNSString*)cfString;
-
-      mInstance->HandleEvent(&textEvent, nullptr);
-     }
+  if ((response == kNPEventStartIME) && (cocoaEvent.type == NPCocoaEventKeyDown)) {
+    nsIWidget* widget = mPluginFrame->GetNearestWidget();
+    if (widget) {
+      const WidgetKeyboardEvent* keyEvent = anEvent.AsKeyboardEvent();
+      double screenX, screenY;
+      ConvertPoint(0.0, mPluginFrame->GetScreenRect().height,
+                   NPCoordinateSpacePlugin, &screenX, &screenY,
+                   NPCoordinateSpaceScreen);
+      nsAutoString outText;
+      if (NS_SUCCEEDED(widget->StartPluginIME(*keyEvent, screenX, screenY, outText)) &&
+          !outText.IsEmpty()) {
+        CFStringRef cfString =
+          ::CFStringCreateWithCharacters(kCFAllocatorDefault,
+                                         reinterpret_cast<const UniChar*>(outText.get()),
+                                         outText.Length());
+        NPCocoaEvent textEvent;
+        InitializeNPCocoaEvent(&textEvent);
+        textEvent.type = NPCocoaEventTextInput;
+        textEvent.data.text.text = (NPNSString*)cfString;
+        mInstance->HandleEvent(&textEvent, nullptr);
+      }
+    }
   }
 
   bool handled = (response == kNPEventHandled || response == kNPEventStartIME);

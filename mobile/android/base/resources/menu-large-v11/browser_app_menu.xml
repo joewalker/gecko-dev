@@ -6,7 +6,7 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item android:id="@+id/reload"
-          android:icon="@drawable/ic_menu_reload"
+          android:icon="@drawable/new_tablet_ic_menu_reload"
           android:title="@string/reload"
           android:showAsAction="always"/>
 
@@ -85,6 +85,9 @@
             <item android:id="@+id/addons"
                   android:icon="@drawable/ic_menu_addons"
                   android:title="@string/addons"/>
+
+            <item android:id="@+id/logins"
+                  android:title="@string/logins"/>
 
             <item android:id="@+id/apps"
                   android:icon="@drawable/ic_menu_apps"

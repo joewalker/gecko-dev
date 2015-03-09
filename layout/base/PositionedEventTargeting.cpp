@@ -10,6 +10,7 @@
 #include "mozilla/Preferences.h"
 #include "nsLayoutUtils.h"
 #include "nsGkAtoms.h"
+#include "nsFontMetrics.h"
 #include "nsPrintfCString.h"
 #include "mozilla/dom/Element.h"
 #include "nsRegion.h"
@@ -76,6 +77,7 @@ struct EventRadiusPrefs
   bool mTouchOnly;
   bool mRepositionEventCoords;
   bool mTouchClusterDetection;
+  uint32_t mLimitReadableSize;
 };
 
 static EventRadiusPrefs sMouseEventRadiusPrefs;
@@ -125,6 +127,9 @@ GetPrefsFor(EventClassID aEventClassID)
 
     nsPrintfCString touchClusterPref("ui.zoomedview.enabled", prefBranch);
     Preferences::AddBoolVarCache(&prefs->mTouchClusterDetection, touchClusterPref.get(), false);
+
+    nsPrintfCString limitReadableSizePref("ui.zoomedview.limitReadableSize", prefBranch);
+    Preferences::AddUintVarCache(&prefs->mLimitReadableSize, limitReadableSizePref.get(), 8);
   }
 
   return prefs;
@@ -174,48 +179,46 @@ IsElementClickable(nsIFrame* aFrame, nsIAtom* stopAt = nullptr)
   // ancestors to look for elements accepting the click.
   for (nsIContent* content = aFrame->GetContent(); content;
        content = content->GetFlattenedTreeParent()) {
-    nsIAtom* tag = content->Tag();
-    if (content->IsHTML() && stopAt && tag == stopAt) {
+    if (stopAt && content->IsHTMLElement(stopAt)) {
       break;
     }
     if (HasTouchListener(content) || HasMouseListener(content)) {
       return true;
     }
-    if (content->IsHTML()) {
-      if (tag == nsGkAtoms::button ||
-          tag == nsGkAtoms::input ||
-          tag == nsGkAtoms::select ||
-          tag == nsGkAtoms::textarea ||
-          tag == nsGkAtoms::label) {
-        return true;
-      }
-      // Bug 921928: we don't have access to the content of remote iframe.
-      // So fluffing won't go there. We do an optimistic assumption here:
-      // that the content of the remote iframe needs to be a target.
-      if (tag == nsGkAtoms::iframe &&
-          content->AttrValueIs(kNameSpaceID_None, nsGkAtoms::mozbrowser,
-                               nsGkAtoms::_true, eIgnoreCase) &&
-          content->AttrValueIs(kNameSpaceID_None, nsGkAtoms::Remote,
-                               nsGkAtoms::_true, eIgnoreCase)) {
-        return true;
-      }
-    } else if (content->IsXUL()) {
-      nsIAtom* tag = content->Tag();
-      // See nsCSSFrameConstructor::FindXULTagData. This code is not
-      // really intended to be used with XUL, though.
-      if (tag == nsGkAtoms::button ||
-          tag == nsGkAtoms::checkbox ||
-          tag == nsGkAtoms::radio ||
-          tag == nsGkAtoms::autorepeatbutton ||
-          tag == nsGkAtoms::menu ||
-          tag == nsGkAtoms::menubutton ||
-          tag == nsGkAtoms::menuitem ||
-          tag == nsGkAtoms::menulist ||
-          tag == nsGkAtoms::scrollbarbutton ||
-          tag == nsGkAtoms::resizer) {
-        return true;
-      }
+    if (content->IsAnyOfHTMLElements(nsGkAtoms::button,
+                                     nsGkAtoms::input,
+                                     nsGkAtoms::select,
+                                     nsGkAtoms::textarea,
+                                     nsGkAtoms::label)) {
+      return true;
     }
+
+    // Bug 921928: we don't have access to the content of remote iframe.
+    // So fluffing won't go there. We do an optimistic assumption here:
+    // that the content of the remote iframe needs to be a target.
+    if (content->IsHTMLElement(nsGkAtoms::iframe) &&
+        content->AttrValueIs(kNameSpaceID_None, nsGkAtoms::mozbrowser,
+                             nsGkAtoms::_true, eIgnoreCase) &&
+        content->AttrValueIs(kNameSpaceID_None, nsGkAtoms::Remote,
+                             nsGkAtoms::_true, eIgnoreCase)) {
+      return true;
+    }
+
+    // See nsCSSFrameConstructor::FindXULTagData. This code is not
+    // really intended to be used with XUL, though.
+    if (content->IsAnyOfXULElements(nsGkAtoms::button,
+                                    nsGkAtoms::checkbox,
+                                    nsGkAtoms::radio,
+                                    nsGkAtoms::autorepeatbutton,
+                                    nsGkAtoms::menu,
+                                    nsGkAtoms::menubutton,
+                                    nsGkAtoms::menuitem,
+                                    nsGkAtoms::menulist,
+                                    nsGkAtoms::scrollbarbutton,
+                                    nsGkAtoms::resizer)) {
+      return true;
+    }
+
     static nsIContent::AttrValuesArray clickableRoles[] =
       { &nsGkAtoms::button, &nsGkAtoms::key, nullptr };
     if (content->FindAttrValueIn(kNameSpaceID_None, nsGkAtoms::role,
@@ -382,6 +385,46 @@ GetClosest(nsIFrame* aRoot, const nsPoint& aPointRelativeToRootFrame,
   return bestTarget;
 }
 
+/*
+ * Return always true when touch cluster detection is OFF.
+ * When cluster detection is ON, return true if the text inside
+ * the frame is readable (by human eyes):
+ *   in this case, the frame is really clickable.
+ * Frames with a too small size will return false:
+ *   in this case, the frame is considered not clickable.
+ */
+static bool
+IsElementClickableAndReadable(nsIFrame* aFrame, WidgetGUIEvent* aEvent, const EventRadiusPrefs* aPrefs)
+{
+  if (!aPrefs->mTouchClusterDetection) {
+    return true;
+  }
+
+  if (aEvent->mClass != eMouseEventClass) {
+    return true;
+  }
+
+  uint32_t limitReadableSize = aPrefs->mLimitReadableSize;
+  nsSize frameSize = aFrame->GetSize();
+  nsPresContext* pc = aFrame->PresContext();
+  nsIPresShell* presShell = pc->PresShell();
+  gfxSize cumulativeResolution = presShell->GetCumulativeResolution();
+  if ((pc->AppUnitsToGfxUnits(frameSize.height) * cumulativeResolution.height) < limitReadableSize ||
+      (pc->AppUnitsToGfxUnits(frameSize.width) * cumulativeResolution.width) < limitReadableSize) {
+    return false;
+  }
+  nsRefPtr<nsFontMetrics> fm;
+  nsLayoutUtils::GetFontMetricsForFrame(aFrame, getter_AddRefs(fm),
+    nsLayoutUtils::FontSizeInflationFor(aFrame));
+  if (fm) {
+    if ((pc->AppUnitsToGfxUnits(fm->EmHeight()) * cumulativeResolution.height) < limitReadableSize) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 nsIFrame*
 FindFrameTargetedByInputEvent(WidgetGUIEvent* aEvent,
                               nsIFrame* aRootFrame,
@@ -398,8 +441,15 @@ FindFrameTargetedByInputEvent(WidgetGUIEvent* aEvent,
     mozilla::layers::Stringify(aPointRelativeToRootFrame).c_str(), aRootFrame);
 
   const EventRadiusPrefs* prefs = GetPrefsFor(aEvent->mClass);
-  if (!prefs || !prefs->mEnabled || (target && IsElementClickable(target, nsGkAtoms::body))) {
-    PET_LOG("Retargeting disabled or target %p is clickable\n", target);
+  if (!prefs || !prefs->mEnabled) {
+    PET_LOG("Retargeting disabled\n");
+    return target;
+  }
+  if (target && IsElementClickable(target, nsGkAtoms::body)) {
+    if (!IsElementClickableAndReadable(target, aEvent, prefs)) {
+      aEvent->AsMouseEventBase()->hitCluster = true;
+    }
+    PET_LOG("Target %p is clickable\n", target);
     return target;
   }
 
@@ -437,7 +487,8 @@ FindFrameTargetedByInputEvent(WidgetGUIEvent* aEvent,
     GetClosest(aRootFrame, aPointRelativeToRootFrame, targetRect, prefs,
                restrictToDescendants, candidates, &elementsInCluster);
   if (closestClickable) {
-    if (prefs->mTouchClusterDetection && elementsInCluster > 1) {
+    if ((prefs->mTouchClusterDetection && elementsInCluster > 1) ||
+        (!IsElementClickableAndReadable(closestClickable, aEvent, prefs))) {
       if (aEvent->mClass == eMouseEventClass) {
         WidgetMouseEventBase* mouseEventBase = aEvent->AsMouseEventBase();
         mouseEventBase->hitCluster = true;

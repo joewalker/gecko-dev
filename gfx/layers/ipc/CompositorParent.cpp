@@ -74,10 +74,12 @@
 namespace mozilla {
 namespace layers {
 
-using namespace base;
 using namespace mozilla::ipc;
 using namespace mozilla::gfx;
 using namespace std;
+
+using base::ProcessHandle;
+using base::Thread;
 
 CompositorParent::LayerTreeState::LayerTreeState()
   : mParent(nullptr)
@@ -230,7 +232,7 @@ CompositorVsyncObserver::CompositorVsyncObserver(CompositorParent* aCompositorPa
   MOZ_ASSERT(aWidget != nullptr);
   mCompositorVsyncDispatcher = aWidget->GetCompositorVsyncDispatcher();
 #ifdef MOZ_WIDGET_GONK
-  GeckoTouchDispatcher::SetCompositorVsyncObserver(this);
+  GeckoTouchDispatcher::GetInstance()->SetCompositorVsyncObserver(this);
 #endif
 }
 
@@ -341,6 +343,23 @@ CompositorVsyncObserver::Composite(TimeStamp aVsyncTimestamp)
   DispatchTouchEvents(aVsyncTimestamp);
 }
 
+void
+CompositorVsyncObserver::OnForceComposeToTarget()
+{
+  /**
+   * bug 1138502 - There are cases such as during long-running window resizing events
+   * where we receive many sync RecvFlushComposites. We also get vsync notifications which
+   * will increment mVsyncNotificationsSkipped because a composite just occurred. After
+   * enough vsyncs and RecvFlushComposites occurred, we will disable vsync. Then at the next
+   * ScheduleComposite, we will enable vsync, then get a RecvFlushComposite, which will
+   * force us to unobserve vsync again. On some platforms, enabling/disabling vsync is not
+   * free and this oscillating behavior causes a performance hit. In order to avoid this problem,
+   * we reset the mVsyncNotificationsSkipped counter to keep vsync enabled.
+   */
+  MOZ_ASSERT(CompositorParent::IsInCompositorThread());
+  mVsyncNotificationsSkipped = 0;
+}
+
 bool
 CompositorVsyncObserver::NeedsComposite()
 {
@@ -368,7 +387,7 @@ void
 CompositorVsyncObserver::DispatchTouchEvents(TimeStamp aVsyncTimestamp)
 {
 #ifdef MOZ_WIDGET_GONK
-  GeckoTouchDispatcher::NotifyVsync(aVsyncTimestamp);
+  GeckoTouchDispatcher::GetInstance()->NotifyVsync(aVsyncTimestamp);
 #endif
 }
 
@@ -399,6 +418,24 @@ void CompositorParent::ShutDown()
 MessageLoop* CompositorParent::CompositorLoop()
 {
   return CompositorThread() ? CompositorThread()->message_loop() : nullptr;
+}
+
+static bool
+IsInCompositorAsapMode()
+{
+  // Returns true if the compositor is allowed to be in ASAP mode
+  // and layout is not in ASAP mode
+  return gfxPrefs::LayersCompositionFrameRate() == 0 &&
+            !gfxPlatform::IsInLayoutAsapMode();
+}
+
+static bool
+UseVsyncComposition()
+{
+  return gfxPrefs::VsyncAlignedCompositor()
+          && gfxPrefs::HardwareVsyncEnabled()
+          && !IsInCompositorAsapMode()
+          && !gfxPlatform::IsInLayoutAsapMode();
 }
 
 CompositorParent::CompositorParent(nsIWidget* aWidget,
@@ -443,7 +480,8 @@ CompositorParent::CompositorParent(nsIWidget* aWidget,
     mApzcTreeManager = new APZCTreeManager();
   }
 
-  if (gfxPrefs::VsyncAlignedCompositor()) {
+  if (UseVsyncComposition()) {
+    NS_WARNING("Enabling vsync compositor\n");
     mCompositorVsyncObserver = new CompositorVsyncObserver(this, aWidget);
   }
 
@@ -1019,6 +1057,10 @@ CompositorParent::ForceComposeToTarget(DrawTarget* aTarget, const nsIntRect* aRe
   PROFILER_LABEL("CompositorParent", "ForceComposeToTarget",
     js::ProfileEntry::Category::GRAPHICS);
 
+  if (mCompositorVsyncObserver) {
+    mCompositorVsyncObserver->OnForceComposeToTarget();
+  }
+
   AutoRestore<bool> override(mOverrideComposeReadiness);
   mOverrideComposeReadiness = true;
 
@@ -1428,6 +1470,22 @@ CompositorParent::PostInsertVsyncProfilerMarker(TimeStamp aVsyncTimestamp)
   }
 }
 
+/* static */ void
+CompositorParent::RequestNotifyLayerTreeReady(uint64_t aLayersId, CompositorUpdateObserver* aObserver)
+{
+  EnsureLayerTreeMapReady();
+  MonitorAutoLock lock(*sIndirectLayerTreesLock);
+  sIndirectLayerTrees[aLayersId].mLayerTreeReadyObserver = aObserver;
+}
+
+/* static */ void
+CompositorParent::RequestNotifyLayerTreeCleared(uint64_t aLayersId, CompositorUpdateObserver* aObserver)
+{
+  EnsureLayerTreeMapReady();
+  MonitorAutoLock lock(*sIndirectLayerTreesLock);
+  sIndirectLayerTrees[aLayersId].mLayerTreeClearedObserver = aObserver;
+}
+
 /**
  * This class handles layer updates pushed directly from child
  * processes to the compositor thread.  It's associated with a
@@ -1506,6 +1564,7 @@ public:
                                    uint32_t aPaintSequenceNumber,
                                    bool aIsRepeatTransaction) MOZ_OVERRIDE;
   virtual void ForceComposite(LayerTransactionParent* aLayerTree) MOZ_OVERRIDE;
+  virtual void NotifyClearCachedResources(LayerTransactionParent* aLayerTree) MOZ_OVERRIDE;
   virtual bool SetTestSampleTime(LayerTransactionParent* aLayerTree,
                                  const TimeStamp& aTime) MOZ_OVERRIDE;
   virtual void LeaveTestMode(LayerTransactionParent* aLayerTree) MOZ_OVERRIDE;
@@ -1728,7 +1787,7 @@ CrossProcessCompositorParent::ShadowLayersUpdated(
 
   // Cache the plugin data for this remote layer tree
   state->mPluginData = aPlugins;
-  state->mUpdatedPluginDataAvailable = !!state->mPluginData.Length();
+  state->mUpdatedPluginDataAvailable = true;
 
   state->mParent->NotifyShadowTreeTransaction(id, aIsFirstPaint, aScheduleComposite,
       aPaintSequenceNumber, aIsRepeatTransaction);
@@ -1739,27 +1798,43 @@ CrossProcessCompositorParent::ShadowLayersUpdated(
     mNotifyAfterRemotePaint = false;
   }
 
+  if (state->mLayerTreeReadyObserver) {
+    nsRefPtr<CompositorUpdateObserver> observer = state->mLayerTreeReadyObserver;
+    state->mLayerTreeReadyObserver = nullptr;
+    observer->ObserveUpdate(id, true);
+  }
+
   aLayerTree->SetPendingTransactionId(aTransactionId);
 }
 
+#if defined(XP_WIN) || defined(MOZ_WIDGET_GTK)
 // Sends plugin window state changes to the main thread
 static void
 UpdatePluginWindowState(uint64_t aId)
 {
   CompositorParent::LayerTreeState& lts = sIndirectLayerTrees[aId];
-  if (!lts.mPluginData.Length()) {
+  if (!lts.mPluginData.Length() && !lts.mUpdatedPluginDataAvailable) {
     return;
   }
 
   bool shouldComposePlugin = !!lts.mRoot &&
-                             !!lts.mRoot->GetParent() &&
-                             lts.mUpdatedPluginDataAvailable;
+                             !!lts.mRoot->GetParent();
 
   bool shouldHidePlugin = (!lts.mRoot ||
                            !lts.mRoot->GetParent()) &&
                           !lts.mUpdatedPluginDataAvailable;
-
   if (shouldComposePlugin) {
+    if (!lts.mPluginData.Length()) {
+      // We will pass through here in cases where the previous shadow layer
+      // tree contained visible plugins and the new tree does not. All we need
+      // to do here is hide the plugins for the old tree, so don't waste time
+      // calculating clipping.
+      nsTArray<uintptr_t> aVisibleIdList;
+      unused << lts.mParent->SendUpdatePluginVisibility(aVisibleIdList);
+      lts.mUpdatedPluginDataAvailable = false;
+      return;
+    }
+
     // Retrieve the offset and visible region of the layer that hosts
     // the plugins, CompositorChild needs these in calculating proper
     // plugin clipping.
@@ -1797,6 +1872,7 @@ UpdatePluginWindowState(uint64_t aId)
     lts.mPluginData.Clear();
   }
 }
+#endif // #if defined(XP_WIN) || defined(MOZ_WIDGET_GTK)
 
 void
 CrossProcessCompositorParent::DidComposite(uint64_t aId)
@@ -1807,7 +1883,9 @@ CrossProcessCompositorParent::DidComposite(uint64_t aId)
     unused << SendDidComposite(aId, layerTree->GetPendingTransactionId());
     layerTree->SetPendingTransactionId(0);
   }
+#if defined(XP_WIN) || defined(MOZ_WIDGET_GTK)
   UpdatePluginWindowState(aId);
+#endif
 }
 
 void
@@ -1822,6 +1900,23 @@ CrossProcessCompositorParent::ForceComposite(LayerTransactionParent* aLayerTree)
   }
   if (parent) {
     parent->ForceComposite(aLayerTree);
+  }
+}
+
+void
+CrossProcessCompositorParent::NotifyClearCachedResources(LayerTransactionParent* aLayerTree)
+{
+  uint64_t id = aLayerTree->GetId();
+  MOZ_ASSERT(id != 0);
+
+  nsRefPtr<CompositorUpdateObserver> observer;
+  { // scope lock
+    MonitorAutoLock lock(*sIndirectLayerTreesLock);
+    observer = sIndirectLayerTrees[id].mLayerTreeClearedObserver;
+    sIndirectLayerTrees[id].mLayerTreeClearedObserver = nullptr;
+  }
+  if (observer) {
+    observer->ObserveUpdate(id, false);
   }
 }
 

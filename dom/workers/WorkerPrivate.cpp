@@ -15,16 +15,19 @@
 #include "nsIDOMMessageEvent.h"
 #include "nsIDocument.h"
 #include "nsIDocShell.h"
+#include "nsIInterfaceRequestor.h"
 #include "nsIMemoryReporter.h"
 #include "nsIPermissionManager.h"
 #include "nsIScriptError.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsIScriptSecurityManager.h"
+#include "nsITabChild.h"
 #include "nsITextToSubURI.h"
 #include "nsIThreadInternal.h"
 #include "nsITimer.h"
 #include "nsIURI.h"
 #include "nsIURL.h"
+#include "nsIWeakReferenceUtils.h"
 #include "nsIWorkerDebugger.h"
 #include "nsIXPConnect.h"
 #include "nsPerformance.h"
@@ -54,6 +57,8 @@
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/StructuredClone.h"
 #include "mozilla/dom/WorkerBinding.h"
+#include "mozilla/dom/WorkerDebuggerGlobalScopeBinding.h"
+#include "mozilla/dom/WorkerGlobalScopeBinding.h"
 #include "mozilla/dom/indexedDB/IDBFactory.h"
 #include "mozilla/dom/ipc/BlobChild.h"
 #include "mozilla/dom/ipc/nsIRemoteBlob.h"
@@ -704,13 +709,16 @@ class MainThreadReleaseRunnable MOZ_FINAL : public nsRunnable
 {
   nsTArray<nsCOMPtr<nsISupports>> mDoomed;
   nsTArray<nsCString> mHostObjectURIs;
+  nsCOMPtr<nsILoadGroup> mLoadGroupToCancel;
 
 public:
   MainThreadReleaseRunnable(nsTArray<nsCOMPtr<nsISupports>>& aDoomed,
-                            nsTArray<nsCString>& aHostObjectURIs)
+                            nsTArray<nsCString>& aHostObjectURIs,
+                            nsCOMPtr<nsILoadGroup>& aLoadGroupToCancel)
   {
     mDoomed.SwapElements(aDoomed);
     mHostObjectURIs.SwapElements(aHostObjectURIs);
+    mLoadGroupToCancel.swap(aLoadGroupToCancel);
   }
 
   NS_DECL_ISUPPORTS_INHERITED
@@ -718,6 +726,11 @@ public:
   NS_IMETHOD
   Run() MOZ_OVERRIDE
   {
+    if (mLoadGroupToCancel) {
+      mLoadGroupToCancel->Cancel(NS_BINDING_ABORTED);
+      mLoadGroupToCancel = nullptr;
+    }
+
     mDoomed.Clear();
 
     for (uint32_t index = 0; index < mHostObjectURIs.Length(); index++) {
@@ -761,6 +774,9 @@ private:
   virtual bool
   WorkerRun(JSContext* aCx, WorkerPrivate* aWorkerPrivate) MOZ_OVERRIDE
   {
+    nsCOMPtr<nsILoadGroup> loadGroupToCancel;
+    mFinishedWorker->ForgetOverridenLoadGroup(loadGroupToCancel);
+
     nsTArray<nsCOMPtr<nsISupports>> doomed;
     mFinishedWorker->ForgetMainThreadObjects(doomed);
 
@@ -768,7 +784,7 @@ private:
     mFinishedWorker->StealHostObjectURIs(hostObjectURIs);
 
     nsRefPtr<MainThreadReleaseRunnable> runnable =
-      new MainThreadReleaseRunnable(doomed, hostObjectURIs);
+      new MainThreadReleaseRunnable(doomed, hostObjectURIs, loadGroupToCancel);
     if (NS_FAILED(NS_DispatchToMainThread(runnable))) {
       NS_WARNING("Failed to dispatch, going to leak!");
     }
@@ -816,6 +832,9 @@ private:
 
     runtime->UnregisterWorker(cx, mFinishedWorker);
 
+    nsCOMPtr<nsILoadGroup> loadGroupToCancel;
+    mFinishedWorker->ForgetOverridenLoadGroup(loadGroupToCancel);
+
     nsTArray<nsCOMPtr<nsISupports> > doomed;
     mFinishedWorker->ForgetMainThreadObjects(doomed);
 
@@ -823,7 +842,7 @@ private:
     mFinishedWorker->StealHostObjectURIs(hostObjectURIs);
 
     nsRefPtr<MainThreadReleaseRunnable> runnable =
-      new MainThreadReleaseRunnable(doomed, hostObjectURIs);
+      new MainThreadReleaseRunnable(doomed, hostObjectURIs, loadGroupToCancel);
     if (NS_FAILED(NS_DispatchToCurrentThread(runnable))) {
       NS_WARNING("Failed to dispatch, going to leak!");
     }
@@ -874,13 +893,14 @@ private:
   virtual bool
   WorkerRun(JSContext* aCx, WorkerPrivate* aWorkerPrivate) MOZ_OVERRIDE
   {
-    JS::Rooted<JSObject*> global(aCx,
-      aWorkerPrivate->CreateGlobalScope(aCx));
-    if (!global) {
+    WorkerGlobalScope* globalScope =
+      aWorkerPrivate->GetOrCreateGlobalScope(aCx);
+    if (!globalScope) {
       NS_WARNING("Failed to make global!");
       return false;
     }
 
+    JS::Rooted<JSObject*> global(aCx, globalScope->GetWrapper());
     JSAutoCompartment ac(aCx, global);
     bool result = scriptloader::LoadWorkerScript(aCx);
     if (result) {
@@ -1222,21 +1242,31 @@ public:
       // Now fire an event at the global object, but don't do that if the error
       // code is too much recursion and this is the same script threw the error.
       if (aFireAtScope && (aTarget || aErrorNumber != JSMSG_OVER_RECURSED)) {
-        JS::Rooted<JSObject*> target(aCx, JS::CurrentGlobalOrNull(aCx));
-        NS_ASSERTION(target, "This should never be null!");
+        JS::Rooted<JSObject*> global(aCx, JS::CurrentGlobalOrNull(aCx));
+        NS_ASSERTION(global, "This should never be null!");
 
         nsEventStatus status = nsEventStatus_eIgnore;
         nsIScriptGlobalObject* sgo;
 
         if (aWorkerPrivate) {
-          WorkerGlobalScope* globalTarget = aWorkerPrivate->GlobalScope();
-          MOZ_ASSERT(target == globalTarget->GetWrapperPreserveColor());
+          nsIDOMEventTarget* target = nullptr;
+          WorkerGlobalScope* globalScope = nullptr;
+          UNWRAP_WORKER_OBJECT(WorkerGlobalScope, global, globalScope);
+          if (globalScope) {
+            MOZ_ASSERT(global == globalScope->GetWrapperPreserveColor());
+            target = static_cast<nsIDOMEventTarget*>(globalScope);
+          } else {
+            WorkerDebuggerGlobalScope* globalScope = nullptr;
+            UNWRAP_OBJECT(WorkerDebuggerGlobalScope, global, globalScope);
+            MOZ_ASSERT(globalScope);
+            MOZ_ASSERT(global == globalScope->GetWrapperPreserveColor());
+            target = static_cast<nsIDOMEventTarget*>(globalScope);
+          }
 
           nsRefPtr<ErrorEvent> event =
             ErrorEvent::Constructor(aTarget, NS_LITERAL_STRING("error"), init);
           event->SetTrusted(true);
 
-          nsIDOMEventTarget* target = static_cast<nsIDOMEventTarget*>(globalTarget);
           if (NS_FAILED(EventDispatcher::DispatchDOMEvent(target, nullptr,
                                                           event, nullptr,
                                                           &status))) {
@@ -1244,7 +1274,7 @@ public:
             status = nsEventStatus_eIgnore;
           }
         }
-        else if ((sgo = nsJSUtils::GetStaticScriptGlobal(target))) {
+        else if ((sgo = nsJSUtils::GetStaticScriptGlobal(global))) {
           MOZ_ASSERT(NS_IsMainThread());
 
           if (NS_FAILED(sgo->HandleScriptError(init, &status))) {
@@ -1903,9 +1933,7 @@ NS_IMPL_ISUPPORTS_INHERITED0(TopLevelWorkerFinishedRunnable, nsRunnable)
 
 NS_IMPL_ISUPPORTS(TimerThreadEventTarget, nsIEventTarget)
 
-template <class Derived>
-WorkerPrivateParent<Derived>::
-LoadInfo::LoadInfo()
+WorkerLoadInfo::WorkerLoadInfo()
   : mWindowID(UINT64_MAX)
   , mFromWindow(false)
   , mEvalAllowed(false)
@@ -1916,15 +1944,114 @@ LoadInfo::LoadInfo()
   , mIsInCertifiedApp(false)
   , mIndexedDBAllowed(false)
 {
-  MOZ_COUNT_CTOR(WorkerPrivateParent<Derived>::LoadInfo);
+  MOZ_COUNT_CTOR(WorkerLoadInfo);
+}
+
+WorkerLoadInfo::~WorkerLoadInfo()
+{
+  MOZ_COUNT_DTOR(WorkerLoadInfo);
+}
+
+void
+WorkerLoadInfo::StealFrom(WorkerLoadInfo& aOther)
+{
+  MOZ_ASSERT(!mBaseURI);
+  aOther.mBaseURI.swap(mBaseURI);
+
+  MOZ_ASSERT(!mResolvedScriptURI);
+  aOther.mResolvedScriptURI.swap(mResolvedScriptURI);
+
+  MOZ_ASSERT(!mPrincipal);
+  aOther.mPrincipal.swap(mPrincipal);
+
+  MOZ_ASSERT(!mScriptContext);
+  aOther.mScriptContext.swap(mScriptContext);
+
+  MOZ_ASSERT(!mWindow);
+  aOther.mWindow.swap(mWindow);
+
+  MOZ_ASSERT(!mCSP);
+  aOther.mCSP.swap(mCSP);
+
+  MOZ_ASSERT(!mChannel);
+  aOther.mChannel.swap(mChannel);
+
+  MOZ_ASSERT(!mLoadGroup);
+  aOther.mLoadGroup.swap(mLoadGroup);
+
+  MOZ_ASSERT(!mInterfaceRequestor);
+  aOther.mInterfaceRequestor.swap(mInterfaceRequestor);
+
+  MOZ_ASSERT(!mPrincipalInfo);
+  mPrincipalInfo = aOther.mPrincipalInfo.forget();
+
+  mDomain = aOther.mDomain;
+  mWindowID = aOther.mWindowID;
+  mFromWindow = aOther.mFromWindow;
+  mEvalAllowed = aOther.mEvalAllowed;
+  mReportCSPViolations = aOther.mReportCSPViolations;
+  mXHRParamsAllowed = aOther.mXHRParamsAllowed;
+  mPrincipalIsSystem = aOther.mPrincipalIsSystem;
+  mIsInPrivilegedApp = aOther.mIsInPrivilegedApp;
+  mIsInCertifiedApp = aOther.mIsInCertifiedApp;
+  mIndexedDBAllowed = aOther.mIndexedDBAllowed;
 }
 
 template <class Derived>
-WorkerPrivateParent<Derived>::
-LoadInfo::~LoadInfo()
+class WorkerPrivateParent<Derived>::EventTarget MOZ_FINAL
+  : public nsIEventTarget
 {
-  MOZ_COUNT_DTOR(WorkerPrivateParent<Derived>::LoadInfo);
-}
+  // This mutex protects mWorkerPrivate and must be acquired *before* the
+  // WorkerPrivate's mutex whenever they must both be held.
+  mozilla::Mutex mMutex;
+  WorkerPrivate* mWorkerPrivate;
+  nsIEventTarget* mWeakNestedEventTarget;
+  nsCOMPtr<nsIEventTarget> mNestedEventTarget;
+
+public:
+  explicit EventTarget(WorkerPrivate* aWorkerPrivate)
+  : mMutex("WorkerPrivateParent::EventTarget::mMutex"),
+    mWorkerPrivate(aWorkerPrivate), mWeakNestedEventTarget(nullptr)
+  {
+    MOZ_ASSERT(aWorkerPrivate);
+  }
+
+  EventTarget(WorkerPrivate* aWorkerPrivate, nsIEventTarget* aNestedEventTarget)
+  : mMutex("WorkerPrivateParent::EventTarget::mMutex"),
+    mWorkerPrivate(aWorkerPrivate), mWeakNestedEventTarget(aNestedEventTarget),
+    mNestedEventTarget(aNestedEventTarget)
+  {
+    MOZ_ASSERT(aWorkerPrivate);
+    MOZ_ASSERT(aNestedEventTarget);
+  }
+
+  void
+  Disable()
+  {
+    nsCOMPtr<nsIEventTarget> nestedEventTarget;
+    {
+      MutexAutoLock lock(mMutex);
+
+      MOZ_ASSERT(mWorkerPrivate);
+      mWorkerPrivate = nullptr;
+      mNestedEventTarget.swap(nestedEventTarget);
+    }
+  }
+
+  nsIEventTarget*
+  GetWeakNestedEventTarget() const
+  {
+    MOZ_ASSERT(mWeakNestedEventTarget);
+    return mWeakNestedEventTarget;
+  }
+
+  NS_DECL_THREADSAFE_ISUPPORTS
+  NS_DECL_NSIEVENTTARGET
+
+private:
+  ~EventTarget()
+  { }
+};
 
 template <class Derived>
 class WorkerPrivateParent<Derived>::SynchronizeAndResumeRunnable MOZ_FINAL
@@ -1982,61 +2109,110 @@ private:
   }
 };
 
-template <class Derived>
-class WorkerPrivateParent<Derived>::EventTarget MOZ_FINAL
-  : public nsIEventTarget
+WorkerLoadInfo::
+InterfaceRequestor::InterfaceRequestor(nsIPrincipal* aPrincipal,
+                                       nsILoadGroup* aLoadGroup)
 {
-  // This mutex protects mWorkerPrivate and must be acquired *before* the
-  // WorkerPrivate's mutex whenever they must both be held.
-  mozilla::Mutex mMutex;
-  WorkerPrivate* mWorkerPrivate;
-  nsIEventTarget* mWeakNestedEventTarget;
-  nsCOMPtr<nsIEventTarget> mNestedEventTarget;
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(aPrincipal);
 
-public:
-  explicit EventTarget(WorkerPrivate* aWorkerPrivate)
-  : mMutex("WorkerPrivateParent::EventTarget::mMutex"),
-    mWorkerPrivate(aWorkerPrivate), mWeakNestedEventTarget(nullptr)
-  {
-    MOZ_ASSERT(aWorkerPrivate);
-  }
-
-  EventTarget(WorkerPrivate* aWorkerPrivate, nsIEventTarget* aNestedEventTarget)
-  : mMutex("WorkerPrivateParent::EventTarget::mMutex"),
-    mWorkerPrivate(aWorkerPrivate), mWeakNestedEventTarget(aNestedEventTarget),
-    mNestedEventTarget(aNestedEventTarget)
-  {
-    MOZ_ASSERT(aWorkerPrivate);
-    MOZ_ASSERT(aNestedEventTarget);
-  }
-
-  void
-  Disable()
-  {
-    nsCOMPtr<nsIEventTarget> nestedEventTarget;
-    {
-      MutexAutoLock lock(mMutex);
-
-      MOZ_ASSERT(mWorkerPrivate);
-      mWorkerPrivate = nullptr;
-      mNestedEventTarget.swap(nestedEventTarget);
+  // Look for an existing LoadContext.  This is optional and it's ok if
+  // we don't find one.
+  nsCOMPtr<nsILoadContext> baseContext;
+  if (aLoadGroup) {
+    nsCOMPtr<nsIInterfaceRequestor> callbacks;
+    aLoadGroup->GetNotificationCallbacks(getter_AddRefs(callbacks));
+    if (callbacks) {
+      callbacks->GetInterface(NS_GET_IID(nsILoadContext),
+                              getter_AddRefs(baseContext));
     }
   }
 
-  nsIEventTarget*
-  GetWeakNestedEventTarget() const
-  {
-    MOZ_ASSERT(mWeakNestedEventTarget);
-    return mWeakNestedEventTarget;
+  mLoadContext = new LoadContext(aPrincipal, baseContext);
+}
+
+void
+WorkerLoadInfo::
+InterfaceRequestor::MaybeAddTabChild(nsILoadGroup* aLoadGroup)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  if (!aLoadGroup) {
+    return;
   }
 
-  NS_DECL_THREADSAFE_ISUPPORTS
-  NS_DECL_NSIEVENTTARGET
+  nsCOMPtr<nsIInterfaceRequestor> callbacks;
+  aLoadGroup->GetNotificationCallbacks(getter_AddRefs(callbacks));
+  if (!callbacks) {
+    return;
+  }
 
-private:
-  ~EventTarget()
-  { }
-};
+  nsCOMPtr<nsITabChild> tabChild;
+  callbacks->GetInterface(NS_GET_IID(nsITabChild), getter_AddRefs(tabChild));
+  if (!tabChild) {
+    return;
+  }
+
+  // Use weak references to the tab child.  Holding a strong reference will
+  // not prevent an ActorDestroy() from being called on the TabChild.
+  // Therefore, we should let the TabChild destroy itself as soon as possible.
+  mTabChildList.AppendElement(do_GetWeakReference(tabChild));
+}
+
+NS_IMETHODIMP
+WorkerLoadInfo::
+InterfaceRequestor::GetInterface(const nsIID& aIID, void** aSink)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(mLoadContext);
+
+  if (aIID.Equals(NS_GET_IID(nsILoadContext))) {
+    nsCOMPtr<nsILoadContext> ref = mLoadContext;
+    ref.forget(aSink);
+    return NS_OK;
+  }
+
+  // If we still have an active nsITabChild, then return it.  Its possible,
+  // though, that all of the TabChild objects have been destroyed.  In that
+  // case we return NS_NOINTERFACE.
+  if (aIID.Equals(NS_GET_IID(nsITabChild))) {
+    nsCOMPtr<nsITabChild> tabChild = GetAnyLiveTabChild();
+    if (!tabChild) {
+      return NS_NOINTERFACE;
+    }
+    tabChild.forget(aSink);
+    return NS_OK;
+  }
+
+  return NS_NOINTERFACE;
+}
+
+already_AddRefed<nsITabChild>
+WorkerLoadInfo::
+InterfaceRequestor::GetAnyLiveTabChild()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  // Search our list of known TabChild objects for one that still exists.
+  while (!mTabChildList.IsEmpty()) {
+    nsCOMPtr<nsITabChild> tabChild =
+      do_QueryReferent(mTabChildList.LastElement());
+
+    // Does this tab child still exist?  If so, return it.  We are done.
+    if (tabChild) {
+      return tabChild.forget();
+    }
+
+    // Otherwise remove the stale weak reference and check the next one
+    mTabChildList.RemoveElementAt(mTabChildList.Length() - 1);
+  }
+
+  return nullptr;
+}
+
+NS_IMPL_ADDREF(WorkerLoadInfo::InterfaceRequestor)
+NS_IMPL_RELEASE(WorkerLoadInfo::InterfaceRequestor)
+NS_IMPL_QUERY_INTERFACE(WorkerLoadInfo::InterfaceRequestor, nsIInterfaceRequestor)
 
 struct WorkerPrivate::TimeoutInfo
 {
@@ -2240,7 +2416,7 @@ WorkerPrivateParent<Derived>::WorkerPrivateParent(
                                            bool aIsChromeWorker,
                                            WorkerType aWorkerType,
                                            const nsACString& aSharedWorkerName,
-                                           LoadInfo& aLoadInfo)
+                                           WorkerLoadInfo& aLoadInfo)
 : mMutex("WorkerPrivateParent Mutex"),
   mCondVar(mMutex, "WorkerPrivateParent CondVar"),
   mMemoryReportCondVar(mMutex, "WorkerPrivateParent Memory Report CondVar"),
@@ -2429,6 +2605,37 @@ WorkerPrivateParent<Derived>::DispatchControlRunnable(
 
       JS_RequestInterruptCallback(rt);
     }
+
+    mCondVar.Notify();
+  }
+
+  return NS_OK;
+}
+
+template <class Derived>
+nsresult
+WorkerPrivateParent<Derived>::DispatchDebuggerRunnable(
+                                              WorkerRunnable *aDebuggerRunnable)
+{
+  // May be called on any thread!
+
+  MOZ_ASSERT(aDebuggerRunnable);
+
+  nsRefPtr<WorkerRunnable> runnable = aDebuggerRunnable;
+
+  WorkerPrivate* self = ParentAsWorkerPrivate();
+
+  {
+    MutexAutoLock lock(mMutex);
+
+    if (self->mStatus == Dead) {
+      NS_WARNING("A debugger runnable was posted to a worker that is already "
+                 "shutting down!");
+      return NS_ERROR_UNEXPECTED;
+    }
+
+    // Transfer ownership to the debugger queue.
+    self->mDebuggerQueue.Push(runnable.forget().take());
 
     mCondVar.Notify();
   }
@@ -2835,13 +3042,29 @@ WorkerPrivateParent<Derived>::ModifyBusyCount(JSContext* aCx, bool aIncrease)
 
 template <class Derived>
 void
+WorkerPrivateParent<Derived>::ForgetOverridenLoadGroup(
+                                          nsCOMPtr<nsILoadGroup>& aLoadGroupOut)
+{
+  AssertIsOnParentThread();
+
+  // If we're not overriden, then do nothing here.  Let the load group get
+  // handled in ForgetMainThreadObjects().
+  if (!mLoadInfo.mInterfaceRequestor) {
+    return;
+  }
+
+  mLoadInfo.mLoadGroup.swap(aLoadGroupOut);
+}
+
+template <class Derived>
+void
 WorkerPrivateParent<Derived>::ForgetMainThreadObjects(
                                       nsTArray<nsCOMPtr<nsISupports> >& aDoomed)
 {
   AssertIsOnParentThread();
   MOZ_ASSERT(!mMainThreadObjectsForgotten);
 
-  static const uint32_t kDoomedCount = 8;
+  static const uint32_t kDoomedCount = 9;
 
   aDoomed.SetCapacity(kDoomedCount);
 
@@ -2853,6 +3076,7 @@ WorkerPrivateParent<Derived>::ForgetMainThreadObjects(
   SwapToISupportsArray(mLoadInfo.mChannel, aDoomed);
   SwapToISupportsArray(mLoadInfo.mCSP, aDoomed);
   SwapToISupportsArray(mLoadInfo.mLoadGroup, aDoomed);
+  SwapToISupportsArray(mLoadInfo.mInterfaceRequestor, aDoomed);
   // Before adding anything here update kDoomedCount above!
 
   MOZ_ASSERT(aDoomed.Length() == kDoomedCount);
@@ -3632,6 +3856,16 @@ WorkerPrivateParent<Derived>::StealHostObjectURIs(nsTArray<nsCString>& aArray)
 }
 
 template <class Derived>
+void
+WorkerPrivateParent<Derived>::UpdateOverridenLoadGroup(nsILoadGroup* aBaseLoadGroup)
+{
+  AssertIsOnMainThread();
+
+  // The load group should have been overriden at init time.
+  mLoadInfo.mInterfaceRequestor->MaybeAddTabChild(aBaseLoadGroup);
+}
+
+template <class Derived>
 NS_IMPL_ADDREF_INHERITED(WorkerPrivateParent<Derived>, DOMEventTargetHelper)
 
 template <class Derived>
@@ -3926,7 +4160,7 @@ WorkerPrivate::WorkerPrivate(JSContext* aCx,
                              const nsAString& aScriptURL,
                              bool aIsChromeWorker, WorkerType aWorkerType,
                              const nsACString& aSharedWorkerName,
-                             LoadInfo& aLoadInfo)
+                             WorkerLoadInfo& aLoadInfo)
   : WorkerPrivateParent<WorkerPrivate>(aCx, aParent, aScriptURL,
                                        aIsChromeWorker, aWorkerType,
                                        aSharedWorkerName, aLoadInfo)
@@ -4028,7 +4262,7 @@ WorkerPrivate::Constructor(const GlobalObject& aGlobal,
                            const nsAString& aScriptURL,
                            bool aIsChromeWorker, WorkerType aWorkerType,
                            const nsACString& aSharedWorkerName,
-                           LoadInfo* aLoadInfo, ErrorResult& aRv)
+                           WorkerLoadInfo* aLoadInfo, ErrorResult& aRv)
 {
   JSContext* cx = aGlobal.Context();
   return Constructor(cx, aScriptURL, aIsChromeWorker, aWorkerType,
@@ -4041,7 +4275,7 @@ WorkerPrivate::Constructor(JSContext* aCx,
                            const nsAString& aScriptURL,
                            bool aIsChromeWorker, WorkerType aWorkerType,
                            const nsACString& aSharedWorkerName,
-                           LoadInfo* aLoadInfo, ErrorResult& aRv)
+                           WorkerLoadInfo* aLoadInfo, ErrorResult& aRv)
 {
   WorkerPrivate* parent = NS_IsMainThread() ?
                           nullptr :
@@ -4057,12 +4291,13 @@ WorkerPrivate::Constructor(JSContext* aCx,
   MOZ_ASSERT_IF(aWorkerType == WorkerTypeDedicated,
                 aSharedWorkerName.IsEmpty());
 
-  Maybe<LoadInfo> stackLoadInfo;
+  Maybe<WorkerLoadInfo> stackLoadInfo;
   if (!aLoadInfo) {
     stackLoadInfo.emplace();
 
     nsresult rv = GetLoadInfo(aCx, nullptr, parent, aScriptURL,
-                              aIsChromeWorker, stackLoadInfo.ptr());
+                              aIsChromeWorker, InheritLoadGroup,
+                              stackLoadInfo.ptr());
     if (NS_FAILED(rv)) {
       scriptloader::ReportLoadError(aCx, aScriptURL, rv, !parent);
       aRv.Throw(rv);
@@ -4117,7 +4352,9 @@ WorkerPrivate::Constructor(JSContext* aCx,
 nsresult
 WorkerPrivate::GetLoadInfo(JSContext* aCx, nsPIDOMWindow* aWindow,
                            WorkerPrivate* aParent, const nsAString& aScriptURL,
-                           bool aIsChromeWorker, LoadInfo* aLoadInfo)
+                           bool aIsChromeWorker,
+                           LoadGroupBehavior aLoadGroupBehavior,
+                           WorkerLoadInfo* aLoadInfo)
 {
   using namespace mozilla::dom::workers::scriptloader;
   using mozilla::dom::indexedDB::IDBFactory;
@@ -4129,7 +4366,7 @@ WorkerPrivate::GetLoadInfo(JSContext* aCx, nsPIDOMWindow* aWindow,
     AssertIsOnMainThread();
   }
 
-  LoadInfo loadInfo;
+  WorkerLoadInfo loadInfo;
   nsresult rv;
 
   if (aParent) {
@@ -4350,10 +4587,8 @@ WorkerPrivate::GetLoadInfo(JSContext* aCx, nsPIDOMWindow* aWindow,
       loadInfo.mReportCSPViolations = false;
     }
 
-    if (!loadInfo.mLoadGroup) {
-      rv = NS_NewLoadGroup(getter_AddRefs(loadInfo.mLoadGroup),
-                           loadInfo.mPrincipal);
-      NS_ENSURE_SUCCESS(rv, rv);
+    if (!loadInfo.mLoadGroup || aLoadGroupBehavior == OverrideLoadGroup) {
+      OverrideLoadInfoLoadGroup(loadInfo);
     }
     MOZ_ASSERT(NS_LoadGroupMatchesPrincipal(loadInfo.mLoadGroup,
                                             loadInfo.mPrincipal));
@@ -4371,6 +4606,27 @@ WorkerPrivate::GetLoadInfo(JSContext* aCx, nsPIDOMWindow* aWindow,
 
   aLoadInfo->StealFrom(loadInfo);
   return NS_OK;
+}
+
+// static
+void
+WorkerPrivate::OverrideLoadInfoLoadGroup(WorkerLoadInfo& aLoadInfo)
+{
+  MOZ_ASSERT(!aLoadInfo.mInterfaceRequestor);
+
+  aLoadInfo.mInterfaceRequestor =
+    new WorkerLoadInfo::InterfaceRequestor(aLoadInfo.mPrincipal,
+                                           aLoadInfo.mLoadGroup);
+  aLoadInfo.mInterfaceRequestor->MaybeAddTabChild(aLoadInfo.mLoadGroup);
+
+  nsCOMPtr<nsILoadGroup> loadGroup =
+    do_CreateInstance(NS_LOADGROUP_CONTRACTID);
+
+  nsresult rv =
+    loadGroup->SetNotificationCallbacks(aLoadInfo.mInterfaceRequestor);
+  MOZ_ALWAYS_TRUE(NS_SUCCEEDED(rv));
+
+  aLoadInfo.mLoadGroup = loadGroup.forget();
 }
 
 void
@@ -4394,19 +4650,15 @@ WorkerPrivate::DoRunLoop(JSContext* aCx)
   Maybe<JSAutoCompartment> workerCompartment;
 
   for (;;) {
-    // Workers lazily create a global object in CompileScriptRunnable. We need
-    // to enter the global's compartment as soon as it has been created.
-    if (!workerCompartment && GlobalScope()) {
-      workerCompartment.emplace(aCx, GlobalScope()->GetGlobalJSObject());
-    }
-
     Status currentStatus;
+    bool debuggerRunnablesPending = false;
     bool normalRunnablesPending = false;
 
     {
       MutexAutoLock lock(mMutex);
 
       while (mControlQueue.IsEmpty() &&
+             !(debuggerRunnablesPending = !mDebuggerQueue.IsEmpty()) &&
              !(normalRunnablesPending = NS_HasPendingEvents(mThread))) {
         WaitForWorkerEvents();
       }
@@ -4460,40 +4712,62 @@ WorkerPrivate::DoRunLoop(JSContext* aCx)
         // Clear away our MessagePorts.
         mWorkerPorts.Clear();
 
-        // Unroot the global
+        // Unroot the globals
         mScope = nullptr;
+        mDebuggerScope = nullptr;
 
         return;
       }
     }
 
-    // Nothing to do here if we don't have any runnables in the main queue.
-    if (!normalRunnablesPending) {
-      SetGCTimerMode(IdleTimer);
-      continue;
+    if (debuggerRunnablesPending || normalRunnablesPending) {
+      // Start the periodic GC timer if it is not already running.
+      SetGCTimerMode(PeriodicTimer);
     }
 
-    MOZ_ASSERT(NS_HasPendingEvents(mThread));
+    if (debuggerRunnablesPending) {
+      WorkerRunnable* runnable;
 
-    // Start the periodic GC timer if it is not already running.
-    SetGCTimerMode(PeriodicTimer);
+      {
+        MutexAutoLock lock(mMutex);
 
-    // Process a single runnable from the main queue.
-    MOZ_ALWAYS_TRUE(NS_ProcessNextEvent(mThread, false));
+        mDebuggerQueue.Pop(runnable);
+        debuggerRunnablesPending = !mDebuggerQueue.IsEmpty();
+      }
 
-    // Only perform the Promise microtask checkpoint on the outermost event
-    // loop.  Don't run it, for example, during sync XHR or importScripts.
-    (void)Promise::PerformMicroTaskCheckpoint();
+      MOZ_ASSERT(runnable);
+      static_cast<nsIRunnable*>(runnable)->Run();
+      runnable->Release();
 
-    if (NS_HasPendingEvents(mThread)) {
-      // Now *might* be a good time to GC. Let the JS engine make the decision.
-      if (workerCompartment) {
+      if (debuggerRunnablesPending) {
+        WorkerDebuggerGlobalScope* globalScope = DebuggerGlobalScope();
+        MOZ_ASSERT(globalScope);
+
+        // Now *might* be a good time to GC. Let the JS engine make the decision.
+        JSAutoCompartment ac(aCx, globalScope->GetGlobalJSObject());
+        JS_MaybeGC(aCx);
+      }
+    } else if (normalRunnablesPending) {
+      MOZ_ASSERT(NS_HasPendingEvents(mThread));
+
+      // Process a single runnable from the main queue.
+      MOZ_ALWAYS_TRUE(NS_ProcessNextEvent(mThread, false));
+
+      // Only perform the Promise microtask checkpoint on the outermost event
+      // loop.  Don't run it, for example, during sync XHR or importScripts.
+      (void)Promise::PerformMicroTaskCheckpoint();
+
+      normalRunnablesPending = NS_HasPendingEvents(mThread);
+      if (normalRunnablesPending && GlobalScope()) {
+        // Now *might* be a good time to GC. Let the JS engine make the decision.
+        JSAutoCompartment ac(aCx, GlobalScope()->GetGlobalJSObject());
         JS_MaybeGC(aCx);
       }
     }
-    else {
-      // The normal event queue has been exhausted, cancel the periodic GC timer
-      // and schedule the idle GC timer.
+
+    if (!debuggerRunnablesPending && !normalRunnablesPending) {
+      // Both the debugger event queue and the normal event queue has been
+      // exhausted, cancel the periodic GC timer and schedule the idle GC timer.
       SetGCTimerMode(IdleTimer);
     }
   }
@@ -6313,36 +6587,62 @@ WorkerPrivate::GetMessagePort(uint64_t aMessagePortSerial)
   return nullptr;
 }
 
-JSObject*
-WorkerPrivate::CreateGlobalScope(JSContext* aCx)
+WorkerGlobalScope*
+WorkerPrivate::GetOrCreateGlobalScope(JSContext* aCx)
 {
   AssertIsOnWorkerThread();
 
-  nsRefPtr<WorkerGlobalScope> globalScope;
-  if (IsSharedWorker()) {
-    globalScope = new SharedWorkerGlobalScope(this, SharedWorkerName());
-  } else if (IsServiceWorker()) {
-    globalScope = new ServiceWorkerGlobalScope(this, SharedWorkerName());
-  } else {
-    globalScope = new DedicatedWorkerGlobalScope(this);
+  if (!mScope) {
+    nsRefPtr<WorkerGlobalScope> globalScope;
+    if (IsSharedWorker()) {
+      globalScope = new SharedWorkerGlobalScope(this, SharedWorkerName());
+    } else if (IsServiceWorker()) {
+      globalScope = new ServiceWorkerGlobalScope(this, SharedWorkerName());
+    } else {
+      globalScope = new DedicatedWorkerGlobalScope(this);
+    }
+
+    JS::Rooted<JSObject*> global(aCx);
+    NS_ENSURE_TRUE(globalScope->WrapGlobalObject(aCx, &global), nullptr);
+
+    JSAutoCompartment ac(aCx, global);
+
+    if (!RegisterBindings(aCx, global)) {
+      return nullptr;
+    }
+
+    JS_FireOnNewGlobalObject(aCx, global);
+
+    mScope = globalScope.forget();
   }
 
+  return mScope;
+}
+
+WorkerDebuggerGlobalScope*
+WorkerPrivate::CreateDebuggerGlobalScope(JSContext* aCx)
+{
+  AssertIsOnWorkerThread();
+
+  MOZ_ASSERT(!mDebuggerScope);
+
+  nsRefPtr<WorkerDebuggerGlobalScope> globalScope =
+    new WorkerDebuggerGlobalScope(this);
+
   JS::Rooted<JSObject*> global(aCx);
-  if (!globalScope->WrapGlobalObject(aCx, &global)) {
-    return nullptr;
-  }
+  NS_ENSURE_TRUE(globalScope->WrapGlobalObject(aCx, &global), nullptr);
 
   JSAutoCompartment ac(aCx, global);
 
-  if (!RegisterBindings(aCx, global)) {
+  if (!JS_DefineDebuggerObject(aCx, global)) {
     return nullptr;
   }
 
-  mScope = globalScope.forget();
-
   JS_FireOnNewGlobalObject(aCx, global);
 
-  return global;
+  mDebuggerScope = globalScope.forget();
+
+  return mDebuggerScope;
 }
 
 #ifdef DEBUG

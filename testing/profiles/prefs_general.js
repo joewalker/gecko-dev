@@ -50,6 +50,7 @@ user_pref("browser.panorama.experienced_first_run", true); // Assume experienced
 user_pref("dom.w3c_touch_events.enabled", 1);
 user_pref("dom.undo_manager.enabled", true);
 user_pref("dom.webcomponents.enabled", true);
+user_pref("dom.htmlimports.enabled", true);
 user_pref("dom.animations-api.core.enabled", true);
 // Set a future policy version to avoid the telemetry prompt.
 user_pref("toolkit.telemetry.prompted", 999);
@@ -229,6 +230,11 @@ user_pref('browser.tiles.reportURL', 'http://%(server)s/tests/robocop/robocop_ti
 // We want to collect telemetry, but we don't want to send in the results.
 user_pref('toolkit.telemetry.server', 'https://%(server)s/telemetry-dummy/');
 
+// A couple of preferences with default values to test that telemetry preference
+// watching is working.
+user_pref('toolkit.telemetry.test.pref1', true);
+user_pref('toolkit.telemetry.test.pref2', false);
+
 // We don't want to hit the real Firefox Accounts server for tests.  We don't
 // actually need a functioning FxA server, so just set it to something that
 // resolves and accepts requests, even if they all fail.
@@ -280,6 +286,9 @@ user_pref("browser.uitour.url", "http://%(server)s/uitour-dummy/tour");
 // side-effect of preventing our geoip lookup.
 user_pref("browser.search.isUS", true);
 user_pref("browser.search.countryCode", "US");
+
+// Make sure the self support tab doesn't hit the network.
+user_pref("browser.selfsupport.url", "https://%(server)s/selfsupport-dummy/");
 
 user_pref("media.eme.enabled", true);
 user_pref("media.eme.apiVisible", true);

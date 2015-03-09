@@ -110,7 +110,7 @@ class MediaPipeline : public sigslot::has_slots<> {
 
       // PipelineTransport() will access this->sts_thread_; moved here for safety
       transport_ = new PipelineTransport(this);
-  }
+    }
 
   // Must be called on the STS thread.  Must be called after ShutdownMedia_m().
   void ShutdownTransport_s();
@@ -119,6 +119,12 @@ class MediaPipeline : public sigslot::has_slots<> {
   void ShutdownMedia_m() {
     ASSERT_ON_THREAD(main_thread_);
 
+    if (direction_ == RECEIVE) {
+      conduit_->StopReceiving();
+    } else {
+      conduit_->StopTransmitting();
+    }
+
     if (stream_) {
       DetachMediaStream();
     }
@@ -126,8 +132,15 @@ class MediaPipeline : public sigslot::has_slots<> {
 
   virtual nsresult Init();
 
-  MediaPipelineFilter* UpdateFilterFromRemoteDescription_s(
-      nsAutoPtr<MediaPipelineFilter> filter);
+  void UpdateTransport_m(int level,
+                         RefPtr<TransportFlow> rtp_transport,
+                         RefPtr<TransportFlow> rtcp_transport,
+                         nsAutoPtr<MediaPipelineFilter> filter);
+
+  void UpdateTransport_s(int level,
+                         RefPtr<TransportFlow> rtp_transport,
+                         RefPtr<TransportFlow> rtcp_transport,
+                         nsAutoPtr<MediaPipelineFilter> filter);
 
   virtual Direction direction() const { return direction_; }
   virtual const std::string& trackid() const { return track_id_; }
@@ -160,6 +173,8 @@ class MediaPipeline : public sigslot::has_slots<> {
  protected:
   virtual ~MediaPipeline();
   virtual void DetachMediaStream() {}
+  nsresult AttachTransport_s();
+  void DetachTransport_s();
 
   // Separate class to allow ref counting
   class PipelineTransport : public TransportInterface {
@@ -191,6 +206,13 @@ class MediaPipeline : public sigslot::has_slots<> {
         state_(MP_CONNECTING),
         type_(type) {
         MOZ_ASSERT(flow);
+      }
+
+      void Detach()
+      {
+        transport_ = nullptr;
+        send_srtp_ = nullptr;
+        recv_srtp_ = nullptr;
       }
 
       RefPtr<TransportFlow> transport_;
@@ -236,7 +258,10 @@ class MediaPipeline : public sigslot::has_slots<> {
   std::string track_id_;        // The track on the stream.
                                 // Written and used as with the stream_;
                                 // Not used outside initialization in MediaPipelineTransmit
-  int level_; // The m-line index (starting at 0, to match convention)
+  // The m-line index (starting at 0, to match convention) Atomic because
+  // this value is updated from STS, but read on main, and we don't want to
+  // bother with dispatches just to get an int occasionally.
+  Atomic<int> level_;
   RefPtr<MediaSessionConduit> conduit_;  // Our conduit. Written on the main
                                          // thread. Read on STS thread.
 
@@ -280,11 +305,12 @@ class GenericReceiveListener : public MediaStreamListener
 {
  public:
   GenericReceiveListener(SourceMediaStream *source, TrackID track_id,
-                         TrackRate track_rate)
+                         TrackRate track_rate, bool queue_track)
     : source_(source),
       track_id_(track_id),
       track_rate_(track_rate),
-      played_ticks_(0) {}
+      played_ticks_(0),
+      queue_track_(queue_track) {}
 
   virtual ~GenericReceiveListener() {}
 
@@ -303,6 +329,7 @@ class GenericReceiveListener : public MediaStreamListener
   TrackID track_id_;
   TrackRate track_rate_;
   TrackTicks played_ticks_;
+  bool queue_track_;
 };
 
 class TrackAddedCallback {
@@ -559,12 +586,13 @@ class MediaPipelineReceiveAudio : public MediaPipelineReceive {
                             RefPtr<AudioSessionConduit> conduit,
                             RefPtr<TransportFlow> rtp_transport,
                             RefPtr<TransportFlow> rtcp_transport,
-                            nsAutoPtr<MediaPipelineFilter> filter) :
+                            nsAutoPtr<MediaPipelineFilter> filter,
+                            bool queue_track) :
       MediaPipelineReceive(pc, main_thread, sts_thread,
                            stream, media_stream_track_id, level, conduit,
                            rtp_transport, rtcp_transport, filter),
       listener_(new PipelineListener(stream->AsSourceStream(),
-                                     numeric_track_id, conduit)) {
+                                     numeric_track_id, conduit, queue_track)) {
   }
 
   virtual void DetachMediaStream() MOZ_OVERRIDE {
@@ -582,7 +610,8 @@ class MediaPipelineReceiveAudio : public MediaPipelineReceive {
   class PipelineListener : public GenericReceiveListener {
    public:
     PipelineListener(SourceMediaStream * source, TrackID track_id,
-                     const RefPtr<MediaSessionConduit>& conduit);
+                     const RefPtr<MediaSessionConduit>& conduit,
+                     bool queue_track);
 
     ~PipelineListener()
     {
@@ -629,13 +658,14 @@ class MediaPipelineReceiveVideo : public MediaPipelineReceive {
                             RefPtr<VideoSessionConduit> conduit,
                             RefPtr<TransportFlow> rtp_transport,
                             RefPtr<TransportFlow> rtcp_transport,
-                            nsAutoPtr<MediaPipelineFilter> filter) :
+                            nsAutoPtr<MediaPipelineFilter> filter,
+                            bool queue_track) :
       MediaPipelineReceive(pc, main_thread, sts_thread,
                            stream, media_stream_track_id, level, conduit,
                            rtp_transport, rtcp_transport, filter),
       renderer_(new PipelineRenderer(this)),
       listener_(new PipelineListener(stream->AsSourceStream(),
-                                     numeric_track_id)) {
+                                     numeric_track_id, queue_track)) {
   }
 
   // Called on the main thread.
@@ -687,7 +717,8 @@ class MediaPipelineReceiveVideo : public MediaPipelineReceive {
   // Separate class to allow ref counting
   class PipelineListener : public GenericReceiveListener {
    public:
-    PipelineListener(SourceMediaStream * source, TrackID track_id);
+    PipelineListener(SourceMediaStream * source, TrackID track_id,
+                     bool queue_track);
 
     // Implement MediaStreamListener
     virtual void NotifyQueuedTrackChanges(MediaStreamGraph* graph, TrackID tid,

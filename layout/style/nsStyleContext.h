@@ -73,6 +73,13 @@ public:
   void* operator new(size_t sz, nsPresContext* aPresContext) CPP_THROW_NEW;
   void Destroy();
 
+#ifdef DEBUG
+  /**
+   * Initializes a cached pref, which is only used in DEBUG code.
+   */
+  static void Initialize();
+#endif
+
   nsrefcnt AddRef() {
     if (mRefCnt == UINT32_MAX) {
       NS_WARNING("refcount overflow, leaking object");
@@ -96,6 +103,20 @@ public:
     }
     return mRefCnt;
   }
+
+#ifdef DEBUG
+  void FrameAddRef() {
+    ++mFrameRefCnt;
+  }
+
+  void FrameRelease() {
+    --mFrameRefCnt;
+  }
+
+  uint32_t FrameRefCnt() const {
+    return mFrameRefCnt;
+  }
+#endif
 
   bool HasSingleReference() const {
     NS_ASSERTION(mRefCnt != 0,
@@ -310,8 +331,6 @@ public:
   #include "nsStyleStructList.h"
   #undef STYLE_STRUCT
 
-  void* GetUniqueStyleData(const nsStyleStructID& aSID);
-
   /**
    * Compute the style changes needed during restyling when this style
    * context is being replaced by aOther.  (This is nonsymmetric since
@@ -420,6 +439,9 @@ private:
 
   void AddChild(nsStyleContext* aChild);
   void RemoveChild(nsStyleContext* aChild);
+
+  void* GetUniqueStyleData(const nsStyleStructID& aSID);
+  void* CreateEmptyStyleData(const nsStyleStructID& aSID);
 
   void ApplyStyleFixups(bool aSkipParentDisplayBasedStyleFixup);
 
@@ -551,6 +573,9 @@ private:
   uint32_t                mRefCnt;
 
 #ifdef DEBUG
+  uint32_t                mFrameRefCnt; // number of frames that use this
+                                        // as their style context
+
   nsStyleStructID         mComputingStruct;
 
   static bool DependencyAllowed(nsStyleStructID aOuterSID,

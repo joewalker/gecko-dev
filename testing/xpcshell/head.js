@@ -382,6 +382,7 @@ function _setupDebuggerServer(breakpointFiles, callback) {
   DebuggerServer.init();
   DebuggerServer.addBrowserActors();
   DebuggerServer.addActors("resource://testing-common/dbg-actors.js");
+  DebuggerServer.allowChromeProcess = true;
 
   // An observer notification that tells us when we can "resume" script
   // execution.
@@ -1417,5 +1418,6 @@ try {
       .getService(Components.interfaces.nsIPrefBranch);
 
     prefs.setCharPref("media.gmp-manager.url.override", "http://%(server)s/dummy-gmp-manager.xml");
+    prefs.setCharPref("browser.selfsupport.url", "https://%(server)s/selfsupport-dummy/");
   }
 } catch (e) { }

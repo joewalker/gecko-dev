@@ -11,11 +11,11 @@
 #include "mozilla/FileUtils.h"
 #include "mozilla/HangMonitor.h"
 #include "mozilla/PluginLibrary.h"
-#include "mozilla/plugins/ScopedMethodFactory.h"
 #include "mozilla/plugins/PluginProcessParent.h"
 #include "mozilla/plugins/PPluginModuleParent.h"
 #include "mozilla/plugins/PluginMessageUtils.h"
 #include "mozilla/plugins/PluginTypes.h"
+#include "mozilla/plugins/TaskFactory.h"
 #include "mozilla/TimeStamp.h"
 #include "npapi.h"
 #include "npfunctions.h"
@@ -23,6 +23,9 @@
 #include "nsDataHashtable.h"
 #include "nsHashKeys.h"
 #include "nsIObserver.h"
+#ifdef XP_WIN
+#include "nsWindowsHelpers.h"
+#endif
 
 #ifdef MOZ_CRASHREPORTER
 #include "nsExceptionHandler.h"
@@ -45,6 +48,9 @@ class PluginInstanceParent;
 
 #ifdef XP_WIN
 class PluginHangUIParent;
+#endif
+#ifdef MOZ_CRASHREPORTER_INJECTOR
+class FinishInjectorInitTask;
 #endif
 
 /**
@@ -259,6 +265,7 @@ protected:
     void InitAsyncSurrogates();
 
 protected:
+    void NotifyFlashHang();
     void NotifyPluginCrashed();
     void OnInitFailure();
 
@@ -272,7 +279,7 @@ protected:
     NPNetscapeFuncs* mNPNIface;
     NPPluginFuncs* mNPPIface;
     nsNPAPIPlugin* mPlugin;
-    ScopedMethodFactory<PluginModuleParent> mTaskFactory;
+    TaskFactory<PluginModuleParent> mTaskFactory;
     nsString mPluginDumpID;
     nsString mBrowserDumpID;
     nsString mHangID;
@@ -314,6 +321,10 @@ class PluginModuleContentParent : public PluginModuleParent
 
     virtual ~PluginModuleContentParent();
 
+#if defined(XP_WIN) || defined(XP_MACOSX)
+    nsresult NP_Initialize(NPNetscapeFuncs* bFuncs, NPError* error) MOZ_OVERRIDE;
+#endif
+
   private:
     virtual bool ShouldContinueFromReplyTimeout() MOZ_OVERRIDE;
     virtual void OnExitedSyncSend() MOZ_OVERRIDE;
@@ -340,6 +351,14 @@ class PluginModuleChromeParent
      */
     static PluginLibrary* LoadModule(const char* aFilePath, uint32_t aPluginId,
                                      nsPluginTag* aPluginTag);
+
+    /**
+     * The following two functions are called by SetupBridge to determine
+     * whether an existing plugin module was reused, or whether a new module
+     * was instantiated by the plugin host.
+     */
+    static void ClearInstantiationFlag() { sInstantiated = false; }
+    static bool DidInstantiate() { return sInstantiated; }
 
     virtual ~PluginModuleChromeParent();
 
@@ -432,7 +451,7 @@ private:
     PluginProcessParent* mSubprocess;
     uint32_t mPluginId;
 
-    ScopedMethodFactory<PluginModuleChromeParent> mChromeTaskFactory;
+    TaskFactory<PluginModuleChromeParent> mChromeTaskFactory;
 
     enum HangAnnotationFlags
     {
@@ -480,12 +499,17 @@ private:
     friend class mozilla::plugins::PluginAsyncSurrogate;
 
 #ifdef MOZ_CRASHREPORTER_INJECTOR
+    friend class mozilla::plugins::FinishInjectorInitTask;
+
     void InitializeInjector();
+    void DoInjection(const nsAutoHandle& aSnapshot);
+    static DWORD WINAPI GetToolhelpSnapshot(LPVOID aContext);
 
     void OnCrash(DWORD processID) MOZ_OVERRIDE;
 
     DWORD mFlashProcess1;
     DWORD mFlashProcess2;
+    mozilla::plugins::FinishInjectorInitTask* mFinishInitTask;
 #endif
 
     void OnProcessLaunched(const bool aSucceeded);
@@ -517,6 +541,7 @@ private:
     nsCOMPtr<nsIObserver> mOfflineObserver;
     bool mIsFlashPlugin;
     bool mIsBlocklisted;
+    static bool sInstantiated;
 };
 
 } // namespace plugins

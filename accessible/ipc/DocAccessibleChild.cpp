@@ -9,7 +9,7 @@
 #include "Accessible-inl.h"
 #include "ProxyAccessible.h"
 #include "Relation.h"
-
+#include "HyperTextAccessible-inl.h"
 #include "nsIPersistentProperties2.h"
 #include "nsISimpleEnumerator.h"
 
@@ -127,11 +127,18 @@ DocAccessibleChild::RecvAttributes(const uint64_t& aID, nsTArray<Attribute>* aAt
     return true;
 
   nsCOMPtr<nsIPersistentProperties> props = acc->Attributes();
-  if (!props)
-    return true;
+  return PersistentPropertiesToArray(props, aAttributes);
+}
 
+bool
+DocAccessibleChild::PersistentPropertiesToArray(nsIPersistentProperties* aProps,
+                                                nsTArray<Attribute>* aAttributes)
+{
+  if (!aProps) {
+    return true;
+  }
   nsCOMPtr<nsISimpleEnumerator> propEnum;
-  nsresult rv = props->Enumerate(getter_AddRefs(propEnum));
+  nsresult rv = aProps->Enumerate(getter_AddRefs(propEnum));
   NS_ENSURE_SUCCESS(rv, false);
 
   bool hasMore;
@@ -208,6 +215,44 @@ DocAccessibleChild::RecvRelations(const uint64_t& aID,
 }
 
 bool
+DocAccessibleChild::RecvCaretOffset(const uint64_t& aID, int32_t* aOffset)
+{
+  HyperTextAccessible* acc = IdToHyperTextAccessible(aID);
+  *aOffset = acc && acc->IsTextRole() ? acc->CaretOffset() : 0;
+  return true;
+}
+
+bool
+DocAccessibleChild::RecvSetCaretOffset(const uint64_t& aID,
+                                       const int32_t& aOffset,
+                                       bool* aRetVal)
+{
+  HyperTextAccessible* acc = IdToHyperTextAccessible(aID);
+  *aRetVal = false;
+  if (acc && acc->IsTextRole() && acc->IsValidOffset(aOffset)) {
+    *aRetVal = true;
+    acc->SetCaretOffset(aOffset);
+  }
+  return true;
+}
+
+bool
+DocAccessibleChild::RecvCharacterCount(const uint64_t& aID, int32_t* aCount)
+{
+  HyperTextAccessible* acc = IdToHyperTextAccessible(aID);
+  *aCount = acc ? acc->CharacterCount() : 0;
+  return true;
+}
+
+bool
+DocAccessibleChild::RecvSelectionCount(const uint64_t& aID, int32_t* aCount)
+{
+  HyperTextAccessible* acc = IdToHyperTextAccessible(aID);
+  *aCount = acc ? acc->SelectionCount() : 0;
+  return true;
+}
+
+bool
 DocAccessibleChild::RecvTextSubstring(const uint64_t& aID,
                                       const int32_t& aStartOffset,
                                       const int32_t& aEndOffset,
@@ -225,7 +270,7 @@ DocAccessibleChild::RecvTextSubstring(const uint64_t& aID,
 bool
 DocAccessibleChild::RecvGetTextAfterOffset(const uint64_t& aID,
                                            const int32_t& aOffset,
-                                           const AccessibleTextBoundary& aBoundaryType,
+                                           const int32_t& aBoundaryType,
                                            nsString* aText,
                                            int32_t* aStartOffset,
                                            int32_t* aEndOffset)
@@ -243,7 +288,7 @@ DocAccessibleChild::RecvGetTextAfterOffset(const uint64_t& aID,
 bool
 DocAccessibleChild::RecvGetTextAtOffset(const uint64_t& aID,
                                         const int32_t& aOffset,
-                                        const AccessibleTextBoundary& aBoundaryType,
+                                        const int32_t& aBoundaryType,
                                         nsString* aText,
                                         int32_t* aStartOffset,
                                         int32_t* aEndOffset)
@@ -261,7 +306,7 @@ DocAccessibleChild::RecvGetTextAtOffset(const uint64_t& aID,
 bool
 DocAccessibleChild::RecvGetTextBeforeOffset(const uint64_t& aID,
                                             const int32_t& aOffset,
-                                            const AccessibleTextBoundary& aBoundaryType,
+                                            const int32_t& aBoundaryType,
                                             nsString* aText,
                                             int32_t* aStartOffset,
                                             int32_t* aEndOffset)
@@ -272,6 +317,92 @@ DocAccessibleChild::RecvGetTextBeforeOffset(const uint64_t& aID,
   if (acc) {
     acc->TextBeforeOffset(aOffset, aBoundaryType,
                           aStartOffset, aEndOffset, *aText);
+  }
+  return true;
+}
+
+bool
+DocAccessibleChild::RecvCharAt(const uint64_t& aID,
+                               const int32_t& aOffset,
+                               uint16_t* aChar)
+{
+  HyperTextAccessible* acc = IdToHyperTextAccessible(aID);
+  *aChar = acc && acc->IsTextRole() ?
+    static_cast<uint16_t>(acc->CharAt(aOffset)) : 0;
+  return true;
+}
+
+bool
+DocAccessibleChild::RecvTextAttributes(const uint64_t& aID,
+                                       const bool& aIncludeDefAttrs,
+                                       const int32_t& aOffset,
+                                       nsTArray<Attribute>* aAttributes,
+                                       int32_t* aStartOffset,
+                                       int32_t* aEndOffset)
+{
+  HyperTextAccessible* acc = IdToHyperTextAccessible(aID);
+  if (!acc || !acc->IsTextRole()) {
+    return true;
+  }
+
+  nsCOMPtr<nsIPersistentProperties> props =
+    acc->TextAttributes(aIncludeDefAttrs, aOffset, aStartOffset, aEndOffset);
+  return PersistentPropertiesToArray(props, aAttributes);
+}
+
+bool
+DocAccessibleChild::RecvDefaultTextAttributes(const uint64_t& aID,
+                                              nsTArray<Attribute> *aAttributes)
+{
+  HyperTextAccessible* acc = IdToHyperTextAccessible(aID);
+  if (!acc || !acc->IsTextRole()) {
+    return true;
+  }
+
+  nsCOMPtr<nsIPersistentProperties> props = acc->DefaultTextAttributes();
+  return PersistentPropertiesToArray(props, aAttributes);
+}
+
+bool
+DocAccessibleChild::RecvTextBounds(const uint64_t& aID,
+                                   const int32_t& aStartOffset,
+                                   const int32_t& aEndOffset,
+                                   const uint32_t& aCoordType,
+                                   nsIntRect* aRetVal)
+{
+  HyperTextAccessible* acc = IdToHyperTextAccessible(aID);
+  if (acc && acc->IsTextRole()) {
+    *aRetVal = acc->TextBounds(aStartOffset, aEndOffset, aCoordType);
+  }
+
+  return true;
+}
+
+bool
+DocAccessibleChild::RecvCharBounds(const uint64_t& aID,
+                                   const int32_t& aOffset,
+                                   const uint32_t& aCoordType,
+                                   nsIntRect* aRetVal)
+{
+  HyperTextAccessible* acc = IdToHyperTextAccessible(aID);
+  if (acc && acc->IsTextRole()) {
+    *aRetVal = acc->CharBounds(aOffset, aCoordType);
+  }
+
+  return true;
+}
+
+bool
+DocAccessibleChild::RecvOffsetAtPoint(const uint64_t& aID,
+                                      const int32_t& aX,
+                                      const int32_t& aY,
+                                      const uint32_t& aCoordType,
+                                      int32_t* aRetVal)
+{
+  *aRetVal = -1;
+  HyperTextAccessible* acc = IdToHyperTextAccessible(aID);
+  if (acc && acc->IsTextRole()) {
+    *aRetVal = acc->OffsetAtPoint(aX, aY, aCoordType);
   }
   return true;
 }

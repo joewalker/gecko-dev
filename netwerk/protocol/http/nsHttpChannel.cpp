@@ -76,6 +76,7 @@
 #include "nsIHttpPushListener.h"
 #include "nsIX509Cert.h"
 #include "ScopedNSSTypes.h"
+#include "nsNullPrincipal.h"
 
 namespace mozilla { namespace net {
 
@@ -790,13 +791,10 @@ nsHttpChannel::SetupTransaction()
     nsCOMPtr<nsIInterfaceRequestor> callbacks;
     NS_NewNotificationCallbacksAggregation(mCallbacks, mLoadGroup,
                                            getter_AddRefs(callbacks));
-    if (!callbacks)
-        return NS_ERROR_OUT_OF_MEMORY;
 
     // create the transaction object
     mTransaction = new nsHttpTransaction();
-    if (!mTransaction)
-        return NS_ERROR_OUT_OF_MEMORY;
+    LOG(("nsHttpChannel %p created nsHttpTransaction %p\n", this, mTransaction.get()));
 
     // See bug #466080. Transfer LOAD_ANONYMOUS flag to socket-layer.
     if (mLoadFlags & LOAD_ANONYMOUS)
@@ -1793,7 +1791,13 @@ nsHttpChannel::StartRedirectChannelToURI(nsIURI *upgradedURI, uint32_t flags)
     rv = gHttpHandler->GetIOService(getter_AddRefs(ioService));
     NS_ENSURE_SUCCESS(rv, rv);
 
-    rv = ioService->NewChannelFromURI(upgradedURI, getter_AddRefs(newChannel));
+    rv = NS_NewChannelInternal(getter_AddRefs(newChannel),
+                               upgradedURI,
+                               mLoadInfo,
+                               nullptr, // aLoadGroup
+                               nullptr, // aCallbacks
+                               nsIRequest::LOAD_NORMAL,
+                               ioService);
     NS_ENSURE_SUCCESS(rv, rv);
 
     rv = SetupReplacementChannel(upgradedURI, newChannel, true);
@@ -1897,8 +1901,9 @@ nsHttpChannel::AsyncDoReplaceWithProxy(nsIProxyInfo* pi)
     nsresult rv;
 
     nsCOMPtr<nsIChannel> newChannel;
-    rv = gHttpHandler->NewProxiedChannel(mURI, pi, mProxyResolveFlags,
-                                         mProxyURI, getter_AddRefs(newChannel));
+    rv = gHttpHandler->NewProxiedChannel2(mURI, pi, mProxyResolveFlags,
+                                          mProxyURI, mLoadInfo,
+                                          getter_AddRefs(newChannel));
     if (NS_FAILED(rv))
         return rv;
 
@@ -2544,7 +2549,9 @@ nsHttpChannel::ProcessFallback(bool *waitingForRedirectCallback)
 
     // Create a new channel to load the fallback entry.
     nsRefPtr<nsIChannel> newChannel;
-    rv = gHttpHandler->NewChannel(mURI, getter_AddRefs(newChannel));
+    rv = gHttpHandler->NewChannel2(mURI,
+                                   mLoadInfo,
+                                   getter_AddRefs(newChannel));
     NS_ENSURE_SUCCESS(rv, rv);
 
     rv = SetupReplacementChannel(mURI, newChannel, true);
@@ -2842,6 +2849,15 @@ nsHttpChannel::CheckPartial(nsICacheEntry* aEntry, int64_t *aSize, int64_t *aCon
     *aContentLength = responseHead->ContentLength();
 
     return NS_OK;
+}
+
+void
+nsHttpChannel::UntieValidationRequest()
+{
+    // Make the request unconditional again.
+    mRequestHead.ClearHeader(nsHttp::If_Modified_Since);
+    mRequestHead.ClearHeader(nsHttp::If_None_Match);
+    mRequestHead.ClearHeader(nsHttp::ETag);
 }
 
 NS_IMETHODIMP
@@ -3195,10 +3211,7 @@ nsHttpChannel::OnCacheEntryCheck(nsICacheEntry* entry, nsIApplicationCache* appC
             // If we can't get the entity then we have to act as though we
             // don't have the cache entry.
             if (mDidReval) {
-                // Make the request unconditional again.
-                mRequestHead.ClearHeader(nsHttp::If_Modified_Since);
-                mRequestHead.ClearHeader(nsHttp::If_None_Match);
-                mRequestHead.ClearHeader(nsHttp::ETag);
+                UntieValidationRequest();
                 mDidReval = false;
             }
             mCachedContentIsValid = false;
@@ -3289,12 +3302,14 @@ nsHttpChannel::OnCacheEntryAvailableInternal(nsICacheEntry *entry,
         return NS_ERROR_DOCUMENT_NOT_CACHED;
     }
 
-    if (NS_FAILED(rv))
-      return rv;
+    if (NS_FAILED(rv)) {
+        return rv;
+    }
 
     // We may be waiting for more callbacks...
-    if (AwaitingCacheCallbacks())
-      return NS_OK;
+    if (AwaitingCacheCallbacks()) {
+        return NS_OK;
+    }
 
     return ContinueConnect();
 }
@@ -3310,6 +3325,14 @@ nsHttpChannel::OnNormalCacheEntryAvailable(nsICacheEntry *aEntry,
         // Make sure this flag is dropped.  It may happen the entry is doomed
         // between OnCacheEntryCheck and OnCacheEntryAvailable.
         mCachedContentIsValid = false;
+
+        // From the same reason remove any conditional headers added
+        // in OnCacheEntryCheck.
+        if (mDidReval) {
+            LOG(("  Removing conditional request headers"));
+            UntieValidationRequest();
+            mDidReval = false;
+        }
 
         if (mLoadFlags & LOAD_ONLY_FROM_CACHE) {
             // if this channel is only allowed to pull from the cache, then
@@ -4214,12 +4237,14 @@ nsHttpChannel::InstallCacheListener(int64_t offset)
         do_CreateInstance(kStreamListenerTeeCID, &rv);
     if (NS_FAILED(rv)) return rv;
 
-    nsCOMPtr<nsICacheStorageService> serv =
-        do_GetService("@mozilla.org/netwerk/cache-storage-service;1", &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
-
     nsCOMPtr<nsIEventTarget> cacheIOTarget;
-    serv->GetIoTarget(getter_AddRefs(cacheIOTarget));
+    if (!CacheObserver::UseNewCache()) {
+        nsCOMPtr<nsICacheStorageService> serv =
+            do_GetService("@mozilla.org/netwerk/cache-storage-service;1", &rv);
+        NS_ENSURE_SUCCESS(rv, rv);
+
+        serv->GetIoTarget(getter_AddRefs(cacheIOTarget));
+    }
 
     if (!cacheIOTarget) {
         LOG(("nsHttpChannel::InstallCacheListener sync tee %p rv=%x "
@@ -4426,8 +4451,14 @@ nsHttpChannel::ContinueProcessRedirectionAfterFallback(nsresult rv)
     if (NS_FAILED(rv)) return rv;
 
     nsCOMPtr<nsIChannel> newChannel;
-    rv = ioService->NewChannelFromURI(mRedirectURI, getter_AddRefs(newChannel));
-    if (NS_FAILED(rv)) return rv;
+    rv = NS_NewChannelInternal(getter_AddRefs(newChannel),
+                               mRedirectURI,
+                               mLoadInfo,
+                               nullptr, // aLoadGroup
+                               nullptr, // aCallbacks
+                               nsIRequest::LOAD_NORMAL,
+                               ioService);
+    NS_ENSURE_SUCCESS(rv, rv);
 
     rv = SetupReplacementChannel(mRedirectURI, newChannel, !rewriteToGET);
     if (NS_FAILED(rv)) return rv;
@@ -5121,10 +5152,8 @@ nsHttpChannel::GetProxyInfo(nsIProxyInfo **result)
 
 NS_IMETHODIMP
 nsHttpChannel::GetDomainLookupStart(TimeStamp* _retval) {
-    if (mDNSPrefetch && mDNSPrefetch->TimingsValid())
-        *_retval = mDNSPrefetch->StartTimestamp();
-    else if (mTransaction)
-        *_retval = mTransaction->Timings().domainLookupStart;
+    if (mTransaction)
+        *_retval = mTransaction->GetDomainLookupStart();
     else
         *_retval = mTransactionTimings.domainLookupStart;
     return NS_OK;
@@ -5132,10 +5161,8 @@ nsHttpChannel::GetDomainLookupStart(TimeStamp* _retval) {
 
 NS_IMETHODIMP
 nsHttpChannel::GetDomainLookupEnd(TimeStamp* _retval) {
-    if (mDNSPrefetch && mDNSPrefetch->TimingsValid())
-        *_retval = mDNSPrefetch->EndTimestamp();
-    else if (mTransaction)
-        *_retval = mTransaction->Timings().domainLookupEnd;
+    if (mTransaction)
+        *_retval = mTransaction->GetDomainLookupEnd();
     else
         *_retval = mTransactionTimings.domainLookupEnd;
     return NS_OK;
@@ -5144,7 +5171,7 @@ nsHttpChannel::GetDomainLookupEnd(TimeStamp* _retval) {
 NS_IMETHODIMP
 nsHttpChannel::GetConnectStart(TimeStamp* _retval) {
     if (mTransaction)
-        *_retval = mTransaction->Timings().connectStart;
+        *_retval = mTransaction->GetConnectStart();
     else
         *_retval = mTransactionTimings.connectStart;
     return NS_OK;
@@ -5153,7 +5180,7 @@ nsHttpChannel::GetConnectStart(TimeStamp* _retval) {
 NS_IMETHODIMP
 nsHttpChannel::GetConnectEnd(TimeStamp* _retval) {
     if (mTransaction)
-        *_retval = mTransaction->Timings().connectEnd;
+        *_retval = mTransaction->GetConnectEnd();
     else
         *_retval = mTransactionTimings.connectEnd;
     return NS_OK;
@@ -5162,7 +5189,7 @@ nsHttpChannel::GetConnectEnd(TimeStamp* _retval) {
 NS_IMETHODIMP
 nsHttpChannel::GetRequestStart(TimeStamp* _retval) {
     if (mTransaction)
-        *_retval = mTransaction->Timings().requestStart;
+        *_retval = mTransaction->GetRequestStart();
     else
         *_retval = mTransactionTimings.requestStart;
     return NS_OK;
@@ -5171,7 +5198,7 @@ nsHttpChannel::GetRequestStart(TimeStamp* _retval) {
 NS_IMETHODIMP
 nsHttpChannel::GetResponseStart(TimeStamp* _retval) {
     if (mTransaction)
-        *_retval = mTransaction->Timings().responseStart;
+        *_retval = mTransaction->GetResponseStart();
     else
         *_retval = mTransactionTimings.responseStart;
     return NS_OK;
@@ -5180,7 +5207,7 @@ nsHttpChannel::GetResponseStart(TimeStamp* _retval) {
 NS_IMETHODIMP
 nsHttpChannel::GetResponseEnd(TimeStamp* _retval) {
     if (mTransaction)
-        *_retval = mTransaction->Timings().responseEnd;
+        *_retval = mTransaction->GetResponseEnd();
     else
         *_retval = mTransactionTimings.responseEnd;
     return NS_OK;
@@ -5466,7 +5493,11 @@ nsHttpChannel::OnStopRequest(nsIRequest *request, nsISupports *ctxt, nsresult st
         mTransactionPump = nullptr;
 
         // We no longer need the dns prefetch object
-        if (mDNSPrefetch && mDNSPrefetch->TimingsValid()) {
+        if (mDNSPrefetch && mDNSPrefetch->TimingsValid()
+            && !mTransactionTimings.requestStart.IsNull()
+            && mDNSPrefetch->EndTimestamp() <= mTransactionTimings.requestStart) {
+            // We only need the domainLookup timestamps when not using a
+            // persistent connection, meaning if the endTimestamp < requestStart
             mTransactionTimings.domainLookupStart =
                 mDNSPrefetch->StartTimestamp();
             mTransactionTimings.domainLookupEnd =
@@ -6409,11 +6440,15 @@ nsHttpChannel::OnLookupComplete(nsICancelable *request,
 
     // We no longer need the dns prefetch object. Note: mDNSPrefetch could be
     // validly null if OnStopRequest has already been called.
-    if (mDNSPrefetch && mDNSPrefetch->TimingsValid()) {
-        mTransactionTimings.domainLookupStart =
-            mDNSPrefetch->StartTimestamp();
-        mTransactionTimings.domainLookupEnd =
-            mDNSPrefetch->EndTimestamp();
+    // We only need the domainLookup timestamps when not loading from cache
+    if (mDNSPrefetch && mDNSPrefetch->TimingsValid() && mTransaction) {
+        TimeStamp requestStart = mTransaction->GetRequestStart();
+        // We only set the domainLookup timestamps if we're not using a
+        // persistent connection.
+        if (requestStart.IsNull() || (mDNSPrefetch->EndTimestamp() < requestStart)) {
+            mTransaction->SetDomainLookupStart(mDNSPrefetch->StartTimestamp());
+            mTransaction->SetDomainLookupEnd(mDNSPrefetch->EndTimestamp());
+        }
     }
     mDNSPrefetch = nullptr;
 
@@ -6635,7 +6670,13 @@ nsHttpChannel::OnPush(const nsACString &url, Http2PushedStream *pushedStream)
     NS_ENSURE_SUCCESS(rv, rv);
 
     nsCOMPtr<nsIChannel> pushChannel;
-    rv = ioService->NewChannelFromURI(pushResource, getter_AddRefs(pushChannel));
+    rv = NS_NewChannelInternal(getter_AddRefs(pushChannel),
+                               pushResource,
+                               mLoadInfo,
+                               nullptr, // aLoadGroup
+                               nullptr, // aCallbacks
+                               nsIRequest::LOAD_NORMAL,
+                               ioService);
     NS_ENSURE_SUCCESS(rv, rv);
 
     nsCOMPtr<nsIHttpChannel> pushHttpChannel = do_QueryInterface(pushChannel);

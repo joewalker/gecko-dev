@@ -32,6 +32,7 @@ from .data import (
     Exports,
     FinalTargetFiles,
     GeneratedEventWebIDLFile,
+    GeneratedFile,
     GeneratedInclude,
     GeneratedSources,
     GeneratedWebIDLFile,
@@ -73,7 +74,10 @@ from .data import (
 
 from .reader import SandboxValidationError
 
-from .context import Context
+from .context import (
+    Context,
+    SubContext,
+)
 
 
 class TreeMetadataEmitter(LoggingMixin):
@@ -134,6 +138,11 @@ class TreeMetadataEmitter(LoggingMixin):
                     raise Exception('Unhandled object of type %s' % type(o))
 
         for out in output:
+            # Nothing in sub-contexts is currently of interest to us. Filter
+            # them all out.
+            if isinstance(out, SubContext):
+                continue
+
             if isinstance(out, Context):
                 # Keep all contexts around, we will need them later.
                 contexts[out.objdir] = out
@@ -410,7 +419,6 @@ class TreeMetadataEmitter(LoggingMixin):
             'EXTRA_PP_COMPONENTS',
             'FAIL_ON_WARNINGS',
             'USE_STATIC_LIBS',
-            'GENERATED_FILES',
             'IS_GYP_DIR',
             'MSVC_ENABLE_PGO',
             'NO_DIST_INSTALL',
@@ -517,6 +525,40 @@ class TreeMetadataEmitter(LoggingMixin):
         if exports:
             yield Exports(context, exports,
                 dist_install=not context.get('NO_DIST_INSTALL', False))
+
+        generated_files = context.get('GENERATED_FILES')
+        if generated_files:
+            for f in generated_files:
+                flags = generated_files[f]
+                output = f
+                if flags.script:
+                    method = "main"
+                    # Deal with cases like "C:\\path\\to\\script.py:function".
+                    if not flags.script.endswith('.py') and ':' in flags.script:
+                        script, method = flags.script.rsplit(':', 1)
+                    else:
+                        script = flags.script
+                    script = mozpath.join(context.srcdir, script)
+                    inputs = [mozpath.join(context.srcdir, i) for i in flags.inputs]
+
+                    if not os.path.exists(script):
+                        raise SandboxValidationError(
+                            'Script for generating %s does not exist: %s'
+                            % (f, script), context)
+                    if os.path.splitext(script)[1] != '.py':
+                        raise SandboxValidationError(
+                            'Script for generating %s does not end in .py: %s'
+                            % (f, script), context)
+                    for i in inputs:
+                        if not os.path.exists(i):
+                            raise SandboxValidationError(
+                                'Input for generating %s does not exist: %s'
+                                % (f, i), context)
+                else:
+                    script = None
+                    method = None
+                    inputs = []
+                yield GeneratedFile(context, script, method, output, inputs)
 
         test_harness_files = context.get('TEST_HARNESS_FILES')
         if test_harness_files:
@@ -866,7 +908,8 @@ class TreeMetadataEmitter(LoggingMixin):
         install_prefix = mozpath.join(install_root, install_subdir)
 
         try:
-            m = manifestparser.TestManifest(manifests=[path], strict=True)
+            m = manifestparser.TestManifest(manifests=[path], strict=True,
+                                            rootdir=context.config.topsrcdir)
             defaults = m.manifest_defaults[os.path.normpath(path)]
             if not m.tests and not 'support-files' in defaults:
                 raise SandboxValidationError('Empty test manifest: %s'
@@ -960,8 +1003,10 @@ class TreeMetadataEmitter(LoggingMixin):
                 # Some test files are compiled and should not be copied into the
                 # test package. They function as identifiers rather than files.
                 if package_tests:
+                    manifest_relpath = mozpath.relpath(test['path'],
+                        mozpath.dirname(test['manifest']))
                     obj.installs[mozpath.normpath(test['path'])] = \
-                        (mozpath.join(out_dir, test['relpath']), True)
+                        ((mozpath.join(out_dir, manifest_relpath)), True)
 
                 process_support_files(test)
 

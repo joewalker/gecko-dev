@@ -212,11 +212,6 @@ protected:
     if (rv.Failed()) {
       JS::Rooted<JS::Value> exn(cx);
       if (rv.IsJSException()) {
-        // Enter the compartment of mPromise before stealing the JS exception,
-        // since the StealJSException call will use the current compartment for
-        // a security check that determines how much of the stack we're allowed
-        // to see and we'll be exposing that stack to consumers of mPromise.
-        JSAutoCompartment ac(cx, mPromise->GlobalJSObject());
         rv.StealJSException(cx, &exn);
       } else {
         // Convert the ErrorResult to a JS exception object that we can reject
@@ -282,6 +277,32 @@ NS_IMPL_CYCLE_COLLECTION_TRACE_BEGIN(Promise)
   NS_IMPL_CYCLE_COLLECTION_TRACE_JS_MEMBER_CALLBACK(mFullfillmentStack)
   NS_IMPL_CYCLE_COLLECTION_TRACE_PRESERVED_WRAPPER
 NS_IMPL_CYCLE_COLLECTION_TRACE_END
+
+NS_IMPL_CYCLE_COLLECTION_CAN_SKIP_BEGIN(Promise)
+  if (tmp->IsBlack()) {
+    if (tmp->mResult.isObject()) {
+      JS::ExposeObjectToActiveJS(&(tmp->mResult.toObject()));
+    }
+    if (tmp->mAllocationStack) {
+      JS::ExposeObjectToActiveJS(tmp->mAllocationStack);
+    }
+    if (tmp->mRejectionStack) {
+      JS::ExposeObjectToActiveJS(tmp->mRejectionStack);
+    }
+    if (tmp->mFullfillmentStack) {
+      JS::ExposeObjectToActiveJS(tmp->mFullfillmentStack);
+    }
+    return true;
+  }
+NS_IMPL_CYCLE_COLLECTION_CAN_SKIP_END
+
+NS_IMPL_CYCLE_COLLECTION_CAN_SKIP_IN_CC_BEGIN(Promise)
+  return tmp->IsBlackAndDoesNotNeedTracing(tmp);
+NS_IMPL_CYCLE_COLLECTION_CAN_SKIP_IN_CC_END
+
+NS_IMPL_CYCLE_COLLECTION_CAN_SKIP_THIS_BEGIN(Promise)
+  return tmp->IsBlack();
+NS_IMPL_CYCLE_COLLECTION_CAN_SKIP_THIS_END
 
 NS_IMPL_CYCLE_COLLECTING_ADDREF(Promise)
 NS_IMPL_CYCLE_COLLECTING_RELEASE(Promise)
@@ -584,14 +605,7 @@ Promise::CallInitFunction(const GlobalObject& aGlobal,
 
   if (aRv.IsJSException()) {
     JS::Rooted<JS::Value> value(cx);
-    { // scope for ac
-      // Enter the compartment of our global before stealing the JS exception,
-      // since the StealJSException call will use the current compartment for
-      // a security check that determines how much of the stack we're allowed
-      // to see, and we'll be exposing that stack to consumers of this promise.
-      JSAutoCompartment ac(cx, GlobalJSObject());
-      aRv.StealJSException(cx, &value);
-    }
+    aRv.StealJSException(cx, &value);
 
     // we want the same behavior as this JS implementation:
     // function Promise(arg) { try { arg(a, b); } catch (e) { this.reject(e); }}
