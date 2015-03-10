@@ -114,7 +114,7 @@ exports.items = [
 
       let deferred = context.defer();
 
-      xhr.onreadystatechange = function(aEvt) {
+      xhr.onreadystatechange = function() {
         if (xhr.readyState == 4) {
           if (xhr.status == 200 || xhr.status == 0) {
             let browserDoc = context.environment.chromeDocument;
@@ -126,8 +126,8 @@ exports.items = [
 
             deferred.resolve();
           } else {
-            deferred.resolve("Unable to load page to beautify: " + args.url + " " +
-                             xhr.status + " " + xhr.statusText);
+            deferred.reject("Unable to load page to beautify: " + args.url + " " +
+                            xhr.status + " " + xhr.statusText);
           }
         };
       }
