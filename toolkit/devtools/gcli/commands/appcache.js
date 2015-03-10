@@ -16,7 +16,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "client",
+    runAt: "server",
     name: "appcache validate",
     description: l10n.lookup("appCacheValidateDesc"),
     manual: l10n.lookup("appCacheValidateManual"),
@@ -77,7 +77,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "client",
+    runAt: "server",
     name: "appcache clear",
     description: l10n.lookup("appCacheClearDesc"),
     manual: l10n.lookup("appCacheClearManual"),
@@ -90,7 +90,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "client",
+    runAt: "server",
     name: "appcache list",
     description: l10n.lookup("appCacheListDesc"),
     manual: l10n.lookup("appCacheListManual"),
@@ -166,7 +166,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "client",
+    runAt: "server",
     name: "appcache viewentry",
     description: l10n.lookup("appCacheViewEntryDesc"),
     manual: l10n.lookup("appCacheViewEntryManual"),

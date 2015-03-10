@@ -45,7 +45,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "client",
+    runAt: "server",
     name: "cookie list",
     description: l10n.lookup("cookieListDesc"),
     manual: l10n.lookup("cookieListManual"),

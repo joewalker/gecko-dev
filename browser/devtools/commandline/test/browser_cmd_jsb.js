@@ -29,7 +29,10 @@ function* testTask() {
     {
       setup: 'jsb ' + TEST_URI,
       // Should result in a new scratchpad window
-      exec: { }
+      exec: {
+        output: '',
+        error: false
+      }
     }
   ]);
 

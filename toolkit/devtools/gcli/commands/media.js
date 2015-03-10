@@ -13,7 +13,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "server",
+    runAt: "client",
     name: "media emulate",
     description: l10n.lookup("mediaEmulateDesc"),
     manual: l10n.lookup("mediaEmulateManual"),
@@ -38,7 +38,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "server",
+    runAt: "client",
     name: "media reset",
     description: l10n.lookup("mediaResetDesc"),
     exec: function(args, context) {
