@@ -294,7 +294,7 @@ DeveloperToolbar.prototype.NOTIFICATIONS = NOTIFICATIONS;
  * Is the toolbar open?
  */
 Object.defineProperty(DeveloperToolbar.prototype, "visible", {
-  get: function DT_visible() {
+  get: function() {
     return !this._element.hidden;
   },
   enumerable: true
@@ -306,7 +306,7 @@ let _gSequenceId = 0;
  * Getter for a unique ID.
  */
 Object.defineProperty(DeveloperToolbar.prototype, "sequenceId", {
-  get: function DT_visible() {
+  get: function() {
     return _gSequenceId++;
   },
   enumerable: true
