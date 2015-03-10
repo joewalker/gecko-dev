@@ -52,7 +52,7 @@ exports.items = [
     manual: l10n.lookup("cookieListManual"),
     returnType: "cookies",
     exec: function(args, context) {
-      let host = new URL(context.environment.target.url).host;
+      let host = context.environment.document.location.host;
       if (host == null || host == "") {
         throw new Error(l10n.lookup("cookieListOutNonePage"));
       }
@@ -93,7 +93,7 @@ exports.items = [
       }
     ],
     exec: function(args, context) {
-      let host = new URL(context.environment.target.url).host;
+      let host = context.environment.document.location.host;
       let enm = cookieMgr.getCookiesFromHost(host);
 
       let cookies = [];
@@ -113,7 +113,7 @@ exports.items = [
     to: "view",
     exec: function(cookies, context) {
       if (cookies.length == 0) {
-        let host = context.environment.document.location.host;
+        let host = new URL(context.environment.target.url).host;
         let msg = l10n.lookupFormat("cookieListOutNoneHost", [ host ]);
         return context.createView({ html: "<span>" + msg + "</span>" });
       }
@@ -228,7 +228,7 @@ exports.items = [
       }
     ],
     exec: function(args, context) {
-      let host = new URL(context.environment.target.url).host;
+      let host = context.environment.document.location.host;
       let time = Date.parse(args.expires) / 1000;
 
       cookieMgr.add(args.domain ? "." + args.domain : host,
