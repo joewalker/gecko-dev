@@ -4,6 +4,7 @@
 
 "use strict";
 
+const { Ci, Cc } = require("chrome");
 const l10n = require("gcli/l10n");
 const URL = require("sdk/url").URL;
 
