@@ -4,9 +4,8 @@
 
 "use strict";
 
-const createSystem = require("gcli/system").createSystem;
-const connectFront = require("gcli/system").connectFront;
-const GcliFront = require("devtools/server/actors/gcli").GcliFront;
+const { createSystem, connectFront } = require("gcli/system");
+const { GcliFront } = require("devtools/server/actors/gcli");
 
 /**
  * This is the basic list of modules that should be loaded into each
