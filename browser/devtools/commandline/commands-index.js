@@ -100,7 +100,7 @@ exports.loadForServer = function() {
     systemForServer.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
     systemForServer.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
 
-    let { mozDirLoader } = require("gcli/commands/cmd");
+    const { mozDirLoader } = require("gcli/commands/cmd");
     systemForServer.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
   }
 
@@ -128,13 +128,13 @@ exports.loadForTarget = function(target) {
   }
 
   console.log("Creating GCLI system for " + target.url);
-  let system = createSystem({ location: "client" });
+  const system = createSystem({ location: "client" });
 
   system.addItemsByModule(exports.baseModules, { delayedLoad: true });
   system.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
   system.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
 
-  let { mozDirLoader } = require("gcli/commands/cmd");
+  const { mozDirLoader } = require("gcli/commands/cmd");
   system.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
 
   // Load the client system
