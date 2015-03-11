@@ -121,7 +121,7 @@ exports.testWithHelpers = function(options) {
         }
       },
       exec: {
-        output: 'Exec: tsv optionType=string, optionValue=10'
+        output: 'Exec: tsv optionType=option1 optionValue=10'
       }
     },
     {
@@ -151,7 +151,7 @@ exports.testWithHelpers = function(options) {
         }
       },
       exec: {
-        output: 'Exec: tsv optionType=number, optionValue=10'
+        output: 'Exec: tsv optionType=option2 optionValue=10'
       }
     },
     // Delegated remote types can't transfer value types so we only test for
@@ -163,7 +163,7 @@ exports.testWithHelpers = function(options) {
         args: { optionValue: { value: '10' } }
       },
       exec: {
-        output: 'Exec: tsv optionType=string, optionValue=10'
+        output: 'Exec: tsv optionType=option1 optionValue=10'
       }
     },
     {
@@ -173,7 +173,7 @@ exports.testWithHelpers = function(options) {
         args: { optionValue: { value: 10 } }
       },
       exec: {
-        output: 'Exec: tsv optionType=number, optionValue=10'
+        output: 'Exec: tsv optionType=option2 optionValue=10'
       }
     }
   ]);
@@ -228,7 +228,7 @@ exports.testExecText = function(options) {
         }
       },
       exec: {
-        output: 'Exec: tsr text=fred bloggs'
+        output: 'Exec: tsr text=fred\\ bloggs'
       }
     },
     {
@@ -253,7 +253,7 @@ exports.testExecText = function(options) {
         }
       },
       exec: {
-        output: 'Exec: tsr text=fred bloggs'
+        output: 'Exec: tsr text=fred\\ bloggs'
       }
     },
     {
@@ -278,7 +278,7 @@ exports.testExecText = function(options) {
         }
       },
       exec: {
-        output: 'Exec: tsr text=fred bloggs'
+        output: 'Exec: tsr text=fred\\ bloggs'
       }
     }
   ]);
@@ -434,19 +434,16 @@ exports.testExecNode = function(options) {
         args: {
           command: { name: 'tse' },
           node: {
-            value: mockBody,
             arg: ' :root',
             status: 'VALID',
             message: ''
           },
           nodes: {
-            value: mockEmptyNodeList,
             arg: '',
             status: 'VALID',
             message: ''
           },
           nodes2: {
-            value: mockEmptyNodeList,
             arg: '',
             status: 'VALID',
             message: ''
@@ -455,6 +452,11 @@ exports.testExecNode = function(options) {
       },
       exec: {
         output: /^Exec: tse/
+      },
+      post: function(output) {
+        assert.is(output.data.args.node, ':root', 'node should be :root');
+        assert.is(output.data.args.nodes, 'Error', 'nodes should be Error');
+        assert.is(output.data.args.nodes2, 'Error', 'nodes2 should be Error');
       }
     }
   ]);
@@ -546,7 +548,7 @@ exports.testExecArray = function(options) {
         }
       },
       exec: {
-        output: 'Exec: tselarr num=1, arr='
+        output: 'Exec: tselarr num=1 arr='
       }
     },
     {
@@ -567,7 +569,7 @@ exports.testExecArray = function(options) {
         }
       },
       exec: {
-        output: 'Exec: tselarr num=1, arr=a'
+        output: 'Exec: tselarr num=1 arr=a'
       }
     },
     {
@@ -588,7 +590,7 @@ exports.testExecArray = function(options) {
         }
       },
       exec: {
-        output: 'Exec: tselarr num=1, arr=a,b'
+        output: 'Exec: tselarr num=1 arr=a b'
       }
     }
   ]);
@@ -615,7 +617,7 @@ exports.testExecMultiple = function(options) {
         }
       },
       exec: {
-        output: 'Exec: tsm abc=a, txt=10, num=10'
+        output: 'Exec: tsm abc=a txt=10 num=10'
       }
     }
   ]);
@@ -645,7 +647,7 @@ exports.testExecDefaults = function(options) {
         }
       },
       exec: {
-        output: 'Exec: tsg solo=aaa, txt1=null, bool=false, txt2=d, num=42'
+        output: 'Exec: tsg solo=aaa txt1= bool=false txt2=d num=42'
       }
     }
   ]);

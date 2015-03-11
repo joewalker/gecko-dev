@@ -126,7 +126,7 @@ exports.testInput = function(options) {
       },
       exec: {
         output: [ /^Exec: tsdate/, /2001/, /1980/ ],
-        type: 'string',
+        type: 'testCommandOutput',
         error: false
       }
     },
@@ -172,7 +172,7 @@ exports.testInput = function(options) {
       },
       exec: {
         output: [ /^Exec: tsdate/, /2001/, /1980/ ],
-        type: 'string',
+        type: 'testCommandOutput',
         error: false
       }
     },
@@ -213,7 +213,7 @@ exports.testInput = function(options) {
       },
       exec: {
         output: [ /^Exec: tsdate/, new Date().getFullYear() ],
-        type: 'string',
+        type: 'testCommandOutput',
         error: false
       }
     },
@@ -253,7 +253,7 @@ exports.testInput = function(options) {
       },
       exec: {
         output: [ /^Exec: tsdate/, new Date().getFullYear() ],
-        type: 'string',
+        type: 'testCommandOutput',
         error: false
       }
     }

@@ -83,8 +83,8 @@ exports.testRemoteXhr = function(options) {
       check: {
         args: {
           prefix: {
-            value: function(connection) {
-              assert.is(connection.prefix, 'remote', 'disconnecting remote');
+            value: function(front) {
+              assert.is(front.prefix, 'remote', 'disconnecting remote');
             }
           }
         }
@@ -112,8 +112,8 @@ exports.testRemoteXhr = function(options) {
       check: {
         args: {
           prefix: {
-            value: function(connection) {
-              assert.is(connection.prefix, 'remote', 'disconnecting remote');
+            value: function(front) {
+              assert.is(front.prefix, 'remote', 'disconnecting remote');
             }
           }
         }
@@ -466,8 +466,8 @@ exports.testRemoteXhr = function(options) {
         unassigned: [ ],
         args: {
           prefix: {
-            value: function(connection) {
-              assert.is(connection.prefix, 'remote', 'disconnecting remote');
+            value: function(front) {
+              assert.is(front.prefix, 'remote', 'disconnecting remote');
             },
             arg: ' remote',
             status: 'VALID',

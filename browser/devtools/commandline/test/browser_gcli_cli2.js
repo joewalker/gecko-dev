@@ -408,7 +408,6 @@ exports.testElementWeb = function(options) {
         args: {
           command: { name: 'tse' },
           node: {
-            value: inputElement,
             arg: ' #gcli-root',
             status: 'VALID',
             message: ''

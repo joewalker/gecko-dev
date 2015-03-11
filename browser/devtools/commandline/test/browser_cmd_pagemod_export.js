@@ -302,7 +302,8 @@ function* spawnTest() {
         args: {
           searchAttributes: { value: undefined, status: 'INCOMPLETE' },
           searchElements: { value: undefined, status: 'INCOMPLETE' },
-          root: { value: undefined },
+          // root: { value: undefined }, // 'root' is a node which is remote
+                                         // so we can't see the value in tests
           ignoreCase: { value: false },
         }
       },
@@ -317,7 +318,8 @@ function* spawnTest() {
         args: {
           searchAttributes: { value: 'foo' },
           searchElements: { value: 'bar' },
-          root: { value: undefined },
+          // root: { value: undefined }, // 'root' is a node which is remote
+                                         // so we can't see the value in tests
           ignoreCase: { value: false },
         }
       },
