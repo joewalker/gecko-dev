@@ -22,7 +22,7 @@
 
 var exports = {};
 
-var TEST_URI = "data:text/html;charset=utf-8,<p id='gcli-input'>gcli-testCli2.js</p>";
+var TEST_URI = "data:text/html;charset=utf-8,<div id='gcli-root'>gcli-testCli2.js</div>";
 
 function test() {
   return Task.spawn(function*() {
@@ -403,12 +403,12 @@ exports.testElementWeb = function(options) {
       skipIf: function gcliInputElementExists() {
         return inputElement == null;
       },
-      setup:    'tse #gcli-input',
+      setup:    'tse #gcli-root',
       check: {
-        input:  'tse #gcli-input',
+        input:  'tse #gcli-root',
         hints:                 ' [options]',
-        markup: 'VVVVVVVVVVVVVVV',
-        cursor: 15,
+        markup: 'VVVVVVVVVVVVVV',
+        cursor: 14,
         current: 'node',
         status: 'VALID',
         predictions: [ ],
@@ -417,7 +417,7 @@ exports.testElementWeb = function(options) {
           command: { name: 'tse' },
           node: {
             value: inputElement,
-            arg: ' #gcli-input',
+            arg: ' #gcli-root',
             status: 'VALID',
             message: ''
           },

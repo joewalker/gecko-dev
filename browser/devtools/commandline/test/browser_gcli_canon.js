@@ -22,7 +22,7 @@
 
 var exports = {};
 
-var TEST_URI = "data:text/html;charset=utf-8,<p id='gcli-input'>gcli-testCanon.js</p>";
+var TEST_URI = "data:text/html;charset=utf-8,<div id='gcli-root'>gcli-testCanon.js</div>";
 
 function test() {
   return Task.spawn(function*() {
