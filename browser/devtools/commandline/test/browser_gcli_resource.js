@@ -47,21 +47,6 @@ var util = require('gcli/util/util');
 var resource = require('gcli/types/resource');
 var Status = require('gcli/types/types').Status;
 
-
-var tempDocument;
-
-exports.setup = function(options) {
-  tempDocument = resource.getDocument();
-  if (options.window) {
-    resource.setDocument(options.window.document);
-  }
-};
-
-exports.shutdown = function(options) {
-  resource.setDocument(tempDocument);
-  tempDocument = undefined;
-};
-
 exports.testAllPredictions1 = function(options) {
   if (options.isFirefox || options.isNoDom) {
     assert.log('Skipping checks due to firefox document.stylsheets support.');

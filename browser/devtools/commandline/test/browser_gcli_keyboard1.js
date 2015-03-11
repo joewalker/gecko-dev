@@ -43,18 +43,6 @@ function test() {
 var javascript = require('gcli/types/javascript');
 // var helpers = require('./helpers');
 
-var tempWindow;
-
-exports.setup = function(options) {
-  tempWindow = javascript.getGlobalObject();
-  javascript.setGlobalObject(options.window);
-};
-
-exports.shutdown = function(options) {
-  javascript.setGlobalObject(tempWindow);
-  tempWindow = undefined;
-};
-
 exports.testSimple = function(options) {
   return helpers.audit(options, [
     {

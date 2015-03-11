@@ -42,18 +42,6 @@ function test() {
 
 // var helpers = require('./helpers');
 
-var nodetype = require('gcli/types/node');
-
-exports.setup = function(options) {
-  if (options.window) {
-    nodetype.setDocument(options.window.document);
-  }
-};
-
-exports.shutdown = function(options) {
-  nodetype.unsetDocument();
-};
-
 exports.testSingleString = function(options) {
   return helpers.audit(options, [
     {

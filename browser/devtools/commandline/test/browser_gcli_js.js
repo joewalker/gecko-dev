@@ -44,33 +44,37 @@ function test() {
 // var helpers = require('./helpers');
 var javascript = require('gcli/types/javascript');
 
-var tempWindow;
+// Store the original windowHolder
+var tempWindowHolder;
+
+// Mock windowHolder to check that we're not trespassing on 'donteval'
+var mockWindowHolder = {
+  window: {},
+};
+Object.defineProperty(mockWindowHolder.window, 'donteval', {
+  get: function() {
+    assert.ok(false, 'donteval should not be used');
+    return { cant: '', touch: '', 'this': '' };
+  },
+  enumerable: true,
+  configurable: true
+});
 
 exports.setup = function(options) {
-  if (options.isNoDom) {
+  if (!jsTestAllowed(options)) {
     return;
   }
 
-  tempWindow = javascript.getGlobalObject();
-  Object.defineProperty(options.window, 'donteval', {
-    get: function() {
-      assert.ok(false, 'donteval should not be used');
-      return { cant: '', touch: '', 'this': '' };
-    },
-    enumerable: true,
-    configurable : true
-  });
-  javascript.setGlobalObject(options.window);
+  tempWindowHolder = javascript.getWindowHolder();
+  javascript.setWindowHolder(mockWindowHolder);
 };
 
 exports.shutdown = function(options) {
-  if (options.isNoDom) {
+  if (!jsTestAllowed(options)) {
     return;
   }
 
-  javascript.setGlobalObject(tempWindow);
-  tempWindow = undefined;
-  delete options.window.donteval;
+  javascript.setWindowHolder(tempWindowHolder);
 };
 
 function jsTestAllowed(options) {

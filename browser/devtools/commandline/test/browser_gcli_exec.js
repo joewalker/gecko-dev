@@ -418,9 +418,6 @@ exports.testExecScript = function(options) {
 };
 
 exports.testExecNode = function(options) {
-  var origDoc = nodetype.getDocument();
-  nodetype.setDocument(mockDoc);
-
   return helpers.audit(options, [
     {
       skipIf: options.isNoDom,
@@ -458,9 +455,6 @@ exports.testExecNode = function(options) {
       },
       exec: {
         output: /^Exec: tse/
-      },
-      post: function() {
-        nodetype.setDocument(origDoc);
       }
     }
   ]);

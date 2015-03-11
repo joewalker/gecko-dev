@@ -43,17 +43,6 @@ function test() {
 // var assert = require('../testharness/assert');
 var util = require('gcli/util/util');
 var Promise = require('gcli/util/promise').Promise;
-var nodetype = require('gcli/types/node');
-
-exports.setup = function(options) {
-  if (options.window) {
-    nodetype.setDocument(options.window.document);
-  }
-};
-
-exports.shutdown = function(options) {
-  nodetype.unsetDocument();
-};
 
 function forEachType(options, typeSpec, callback) {
   var types = options.requisition.system.types;
