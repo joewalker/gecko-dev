@@ -67,7 +67,7 @@ exports.testPrefShowStatus = function(options) {
       setup:    'pref show ',
       check: {
         typed:  'pref show ',
-        hints:            'allowSet',
+        hints:            'eagerHelper',
         markup: 'VVVVVVVVVV',
         status: 'ERROR'
       }
@@ -144,7 +144,7 @@ exports.testPrefSetStatus = function(options) {
       setup:    'pref set ',
       check: {
         typed:  'pref set ',
-        hints:           'allowSet <value>',
+        hints:           'eagerHelper <value>',
         markup: 'VVVVVVVVV',
         status: 'ERROR'
       }

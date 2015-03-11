@@ -55,10 +55,6 @@ exports.testPrefExec = function(options) {
     return;
   }
 
-  var allowSet = settings.getSetting('allowSet');
-  var initialAllowSet = allowSet.value;
-  allowSet.value = false;
-
   assert.is(mockSettings.tempNumber.value, 42, 'set to 42');
 
   return helpers.audit(options, [
@@ -98,16 +94,6 @@ exports.testPrefExec = function(options) {
         }
       },
       exec: {
-        output: [ /void your warranty/, /I promise/ ]
-      },
-      post: function() {
-        assert.is(mockSettings.tempNumber.value, 42, 'still set to 42');
-        allowSet.value = true;
-      }
-    },
-    {
-      setup:    'pref set tempNumber 4',
-      exec: {
         output: ''
       },
       post: function() {
@@ -127,8 +113,6 @@ exports.testPrefExec = function(options) {
       },
       post: function() {
         assert.is(mockSettings.tempNumber.value, 42, 'reset to 42');
-
-        allowSet.value = initialAllowSet;
       }
     },
     {

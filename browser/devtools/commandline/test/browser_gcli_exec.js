@@ -42,27 +42,6 @@ function test() {
 
 // var assert = require('../testharness/assert');
 // var helpers = require('./helpers');
-var nodetype = require('gcli/types/node');
-
-var mockBody = {
-  style: {}
-};
-
-var mockEmptyNodeList = {
-  length: 0,
-  item: function() { return null; }
-};
-
-var mockRootNodeList = {
-  length: 1,
-  item: function(i) { return mockBody; }
-};
-
-var mockDoc = {
-  querySelectorAll: function(css) {
-    return (css === ':root') ? mockRootNodeList : mockEmptyNodeList;
-  }
-};
 
 exports.testParamGroup = function(options) {
   var tsg = options.requisition.system.commands.get('tsg');
