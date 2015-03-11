@@ -375,7 +375,7 @@ helpers.runTests = function(options, tests) {
 
   var recover = function(error) {
     ok(false, error);
-    console.error(error);
+    console.error(error, error.stack);
   };
 
   info("SETUP");
@@ -758,15 +758,15 @@ helpers._check = function(options, name, checks) {
   var outstanding = [];
   var suffix = name ? ' (for \'' + name + '\')' : '';
 
-  if (!options.isNoDom && 'input' in checks) {
+  if (!options.isNode && 'input' in checks) {
     assert.is(helpers._actual.input(options), checks.input, 'input' + suffix);
   }
 
-  if (!options.isNoDom && 'cursor' in checks) {
+  if (!options.isNode && 'cursor' in checks) {
     assert.is(helpers._actual.cursor(options), checks.cursor, 'cursor' + suffix);
   }
 
-  if (!options.isNoDom && 'current' in checks) {
+  if (!options.isNode && 'current' in checks) {
     assert.is(helpers._actual.current(options), checks.current, 'current' + suffix);
   }
 
@@ -774,18 +774,18 @@ helpers._check = function(options, name, checks) {
     assert.is(helpers._actual.status(options), checks.status, 'status' + suffix);
   }
 
-  if (!options.isNoDom && 'markup' in checks) {
+  if (!options.isNode && 'markup' in checks) {
     assert.is(helpers._actual.markup(options), checks.markup, 'markup' + suffix);
   }
 
-  if (!options.isNoDom && 'hints' in checks) {
+  if (!options.isNode && 'hints' in checks) {
     var hintCheck = function(actualHints) {
       assert.is(actualHints, checks.hints, 'hints' + suffix);
     };
     outstanding.push(helpers._actual.hints(options).then(hintCheck));
   }
 
-  if (!options.isNoDom && 'predictions' in checks) {
+  if (!options.isNode && 'predictions' in checks) {
     var predictionsCheck = function(actualPredictions) {
       helpers.arrayIs(actualPredictions,
                        checks.predictions,
@@ -794,7 +794,7 @@ helpers._check = function(options, name, checks) {
     outstanding.push(helpers._actual.predictions(options).then(predictionsCheck));
   }
 
-  if (!options.isNoDom && 'predictionsContains' in checks) {
+  if (!options.isNode && 'predictionsContains' in checks) {
     var containsCheck = function(actualPredictions) {
       checks.predictionsContains.forEach(function(prediction) {
         var index = actualPredictions.indexOf(prediction);
@@ -812,26 +812,26 @@ helpers._check = function(options, name, checks) {
   }
 
   /* TODO: Fix this
-  if (!options.isNoDom && 'tooltipState' in checks) {
+  if (!options.isNode && 'tooltipState' in checks) {
     assert.is(helpers._actual.tooltipState(options),
               checks.tooltipState,
               'tooltipState' + suffix);
   }
   */
 
-  if (!options.isNoDom && 'outputState' in checks) {
+  if (!options.isNode && 'outputState' in checks) {
     assert.is(helpers._actual.outputState(options),
               checks.outputState,
               'outputState' + suffix);
   }
 
-  if (!options.isNoDom && 'options' in checks) {
+  if (!options.isNode && 'options' in checks) {
     helpers.arrayIs(helpers._actual.options(options),
                      checks.options,
                      'options' + suffix);
   }
 
-  if (!options.isNoDom && 'error' in checks) {
+  if (!options.isNode && 'error' in checks) {
     assert.is(helpers._actual.message(options), checks.error, 'error' + suffix);
   }
 
@@ -893,7 +893,7 @@ helpers._check = function(options, name, checks) {
                   'arg.' + paramName + '.status' + suffix);
       }
 
-      if (!options.isNoDom && 'message' in check) {
+      if (!options.isNode && 'message' in check) {
         if (typeof check.message.test === 'function') {
           assert.ok(check.message.test(assignment.message),
                     'arg.' + paramName + '.message' + suffix);
@@ -951,12 +951,12 @@ helpers._exec = function(options, name, expected) {
 
       var context = requisition.conversionContext;
       var convertPromise;
-      if (options.isNoDom) {
+      if (options.isNode) {
         convertPromise = output.convert('string', context);
       }
       else {
         convertPromise = output.convert('dom', context).then(function(node) {
-          return node.textContent.trim();
+          return (node == null) ? '' : node.textContent.trim();
         });
       }
 
@@ -1170,9 +1170,8 @@ helpers.audit = function(options, audits) {
             '';
         assert.log('Skipped ' + name + ' ' + skipReason);
 
-        // Tests need at least one pass, fail or todo. Let's create a dummy pass
-        // in case there are none.
-        ok(true, "Each test requires at least one pass, fail or todo so here is a pass.");
+        // Tests need at least one pass, fail or todo. Create a dummy pass
+        assert.ok(true, 'Each test requires at least one pass, fail or todo');
 
         return Promise.resolve(undefined);
       }
