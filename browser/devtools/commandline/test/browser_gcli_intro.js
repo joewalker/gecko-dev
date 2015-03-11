@@ -67,7 +67,6 @@ exports.testIntroStatus = function(options) {
     },
     {
       setup:    'intro',
-      skipIf: options.isNoDom,
       check: {
         typed:  'intro',
         markup: 'VVVVV',

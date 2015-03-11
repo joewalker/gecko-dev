@@ -159,6 +159,7 @@ exports.testPrefSetStatus = function(options) {
       }
     },
     {
+      skipIf: options.isRemote,
       setup:    'pref set tempTBool 4',
       check: {
         typed:  'pref set tempTBool 4',

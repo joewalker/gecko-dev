@@ -126,7 +126,7 @@ exports.testDefault = function(options) {
       }
     },
     {
-      skipIf: options.isPhantomjs, // Phantom goes weird with predictions
+      skipIf: options.isPhantomjs, // PhantomJS gets predictions wrong
       setup:    'unionc1 5',
       check: {
         input:  'unionc1 5',
@@ -160,7 +160,7 @@ exports.testDefault = function(options) {
       }
     },
     {
-      skipRemainingIf: options.isPhantomjs,
+      skipIf: options.isPhantomjs, // PhantomJS URL type is broken
       setup:    'unionc2 on',
       check: {
         input:  'unionc2 on',

@@ -73,7 +73,6 @@ exports.testPrefExec = function(options) {
       }
     },
     {
-      skipRemainingIf: options.isNoDom,
       setup:    'pref set tempNumber 4',
       check: {
         input:  'pref set tempNumber 4',

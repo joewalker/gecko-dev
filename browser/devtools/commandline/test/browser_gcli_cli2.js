@@ -364,7 +364,6 @@ exports.testSingleFloat = function(options) {
       }
     },
     {
-      skipRemainingIf: options.isNoDom,
       name: 'tsf x (cursor=4)',
       setup: function() {
         return helpers.setInput(options, 'tsf x', 4);
@@ -394,15 +393,8 @@ exports.testSingleFloat = function(options) {
 };
 
 exports.testElementWeb = function(options) {
-  var inputElement = options.isNoDom ?
-      null :
-      options.window.document.getElementById('gcli-input');
-
   return helpers.audit(options, [
     {
-      skipIf: function gcliInputElementExists() {
-        return inputElement == null;
-      },
       setup:    'tse #gcli-root',
       check: {
         input:  'tse #gcli-root',
@@ -432,7 +424,6 @@ exports.testElementWeb = function(options) {
 exports.testElement = function(options) {
   return helpers.audit(options, [
     {
-      skipRemainingIf: options.isNoDom,
       setup:    'tse',
       check: {
         input:  'tse',
@@ -593,7 +584,7 @@ exports.testNestedCommand = function(options) {
       }
     },
     {
-      skipIf: options.isPhantomjs,
+      skipIf: options.isPhantomjs, // PhantomJS gets predictions wrong
       setup:    'tsn x',
       check: {
         input:  'tsn x',

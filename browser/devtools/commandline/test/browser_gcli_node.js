@@ -46,7 +46,6 @@ function test() {
 exports.testNode = function(options) {
   return helpers.audit(options, [
     {
-      skipRemainingIf: options.isNoDom,
       setup:    'tse ',
       check: {
         input:  'tse ',
@@ -158,7 +157,6 @@ exports.testNodeDom = function(options) {
 
   return helpers.audit(options, [
     {
-      skipRemainingIf: options.isNoDom,
       setup:    'tse :root',
       check: {
         input:  'tse :root',
@@ -227,7 +225,6 @@ exports.testNodes = function(options) {
 
   return helpers.audit(options, [
     {
-      skipRemainingIf: options.isNoDom,
       setup:    'tse :root --nodes *',
       check: {
         input:  'tse :root --nodes *',

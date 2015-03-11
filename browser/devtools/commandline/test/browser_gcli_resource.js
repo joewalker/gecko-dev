@@ -48,7 +48,7 @@ var resource = require('gcli/types/resource');
 var Status = require('gcli/types/types').Status;
 
 exports.testAllPredictions1 = function(options) {
-  if (options.isFirefox || options.isNoDom) {
+  if (options.isFirefox || options.isNode) {
     assert.log('Skipping checks due to firefox document.stylsheets support.');
     return;
   }
@@ -64,7 +64,7 @@ exports.testAllPredictions1 = function(options) {
 };
 
 exports.testScriptPredictions = function(options) {
-  if (options.isFirefox || options.isNoDom) {
+  if (options.isFirefox || options.isNode) {
     assert.log('Skipping checks due to firefox document.stylsheets support.');
     return;
   }
@@ -81,7 +81,7 @@ exports.testScriptPredictions = function(options) {
 };
 
 exports.testStylePredictions = function(options) {
-  if (options.isFirefox || options.isNoDom) {
+  if (options.isFirefox || options.isNode) {
     assert.log('Skipping checks due to firefox document.stylsheets support.');
     return;
   }
@@ -98,10 +98,6 @@ exports.testStylePredictions = function(options) {
 };
 
 exports.testAllPredictions2 = function(options) {
-  if (options.isNoDom) {
-    assert.log('Skipping checks due to nodom document.stylsheets support.');
-    return;
-  }
   var types = options.requisition.system.types;
 
   var scriptRes = types.createType({ name: 'resource', include: 'text/javascript' });
@@ -119,11 +115,6 @@ exports.testAllPredictions2 = function(options) {
 };
 
 exports.testAllPredictions3 = function(options) {
-  if (options.isNoDom) {
-    assert.log('Skipping checks due to nodom document.stylsheets support.');
-    return;
-  }
-
   var types = options.requisition.system.types;
   var res1 = types.createType({ name: 'resource' });
   return res1.getLookup().then(function(options1) {

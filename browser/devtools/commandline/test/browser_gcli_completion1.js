@@ -183,7 +183,7 @@ exports.testActivate = function(options) {
       }
     },
     {
-      skipIf: options.isPhantomjs,
+      skipIf: options.isPhantomjs, // PhantomJS gets predictions wrong
       setup: 'tsg d',
       check: {
         hints: ' [options] -> ccc'

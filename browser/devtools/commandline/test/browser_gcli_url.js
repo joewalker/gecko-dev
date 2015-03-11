@@ -46,7 +46,7 @@ function test() {
 exports.testDefault = function(options) {
   return helpers.audit(options, [
     {
-      skipRemainingIf: options.isPhantomjs,
+      skipRemainingIf: options.isPhantomjs, // PhantomJS URL type is broken
       setup:    'urlc',
       check: {
         input:  'urlc',

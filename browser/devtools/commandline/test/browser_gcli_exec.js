@@ -420,7 +420,7 @@ exports.testExecScript = function(options) {
 exports.testExecNode = function(options) {
   return helpers.audit(options, [
     {
-      skipIf: options.isNoDom,
+      skipIf: options.isRemote,
       setup:    'tse :root',
       check: {
         input:  'tse :root',
