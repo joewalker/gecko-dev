@@ -202,23 +202,19 @@ let CommandUtils = {
       },
 
       get chromeWindow() {
-        console.error("use of chromeWindow is deprecated from commands");
         return this.target.tab.ownerDocument.defaultView;
       },
 
       get chromeDocument() {
-        console.error("use of chromeDocument is deprecated from commands");
         return this.target.tab.ownerDocument.defaultView.document;
       },
 
       get window() {
-        console.error("use of window is deprecated from commands");
-        return this.target.tab.ownerDocument.defaultView.gBrowser.selectedBrowser.contentWindow;
+        throw new Error("environment.window is not available in runAt:client commands");
       },
 
       get document() {
-        console.error("use of document is deprecated from commands");
-        return this.target.tab.ownerDocument.defaultView.gBrowser.selectedBrowser.contentWindow.document;
+        throw new Error("environment.document is not available in runAt:client commands");
       }
     };
   },
