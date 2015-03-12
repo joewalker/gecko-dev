@@ -49,7 +49,7 @@ function* spawnTest() {
   yield helpers.audit(options, [
     {
       setup: "console close",
-      exec: { output: true }
+      exec: { output: "" }
     }
   ]);
 

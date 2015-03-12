@@ -81,7 +81,7 @@ exports.items = [
     name: "console close",
     description: l10n.lookup("consolecloseDesc"),
     exec: function(args, context) {
-      return gDevTools.closeToolbox(context.environment.target);
+      return gDevTools.closeToolbox(context.environment.target).then(() => {});
     }
   },
   {
@@ -90,7 +90,8 @@ exports.items = [
     name: "console open",
     description: l10n.lookup("consoleopenDesc"),
     exec: function(args, context) {
-      return gDevTools.showToolbox(context.environment.target, "webconsole");
+      const target = context.environment.target;
+      return gDevTools.showToolbox(target, "webconsole").then(() => {});
     }
   }
 ];
