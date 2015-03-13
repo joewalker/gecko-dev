@@ -239,6 +239,7 @@ const GcliActor = ActorClass({
 
         get window() tabActor.window,
         get document() tabActor.window.document,
+        get tabActor() tabActor,
       };
 
       let requisition = new Requisition(system, { environment: environment });

@@ -13,6 +13,7 @@ XPCOMUtils.defineLazyGetter(this, "nodesSelected", function() {
   return Services.strings.createBundle("chrome://browser/locale/devtools/gclicommands.properties");
 });
 XPCOMUtils.defineLazyModuleGetter(this, "PluralForm","resource://gre/modules/PluralForm.jsm");
+const events = require("sdk/event/core");
 
 // How many maximum nodes can be highlighted in parallel
 const MAX_HIGHLIGHTED_ELEMENTS = 100;
@@ -102,14 +103,8 @@ exports.items = [
       let env = context.environment;
 
       // Unhighlight on navigate
-      env.target.once("navigate", unhighlightAll);
-
-      // Build a tab context for the highlighter (which normally takes a
-      // TabActor as parameter to its constructor)
-      let tabContext = {
-        browser: env.chromeWindow.gBrowser.getBrowserForDocument(env.document),
-        window: env.window
-      };
+      // TODO: I changed from navigate to will-navigate. Is that right?
+      events.on(env.tabActor, "will-navigate", unhighlightAll);
 
       let i = 0;
       for (let node of args.selector) {
@@ -117,7 +112,7 @@ exports.items = [
           break;
         }
 
-        let highlighter = new BoxModelHighlighter(tabContext);
+        let highlighter = new BoxModelHighlighter(env.tabActor);
         if (args.fill) {
           highlighter.regionFill[args.region] = args.fill;
         }
@@ -143,6 +138,8 @@ exports.items = [
     }
   },
   {
+    item: "command",
+    runAt: "server",
     name: "unhighlight",
     description: l10n.lookup("unhighlightDesc"),
     manual: l10n.lookup("unhighlightManual"),
