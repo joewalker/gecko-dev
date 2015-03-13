@@ -4,7 +4,8 @@
 
 "use strict";
 
-const { Services } = require("resource://gre/modules/Services.jsm");
+const { Cu } = require("chrome");
+Cu.import("resource://gre/modules/Services.jsm");
 const { gDevTools } = require("resource:///modules/devtools/gDevTools.jsm");
 
 const { defaultTools, defaultThemes } = require("definitions");
