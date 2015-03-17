@@ -22,17 +22,17 @@
 
 var exports = {};
 
-var TEST_URI = "data:text/html;charset=utf-8,<p id='gcli-input'>gcli-testNode.js</p>";
+var TEST_URI = "data:text/html;charset=utf-8,<div id='gcli-root'>gcli-testNode.js</div>";
 
 function test() {
-  return Task.spawn(function() {
+  return Task.spawn(function*() {
     let options = yield helpers.openTab(TEST_URI);
     yield helpers.openToolbar(options);
-    gcli.addItems(mockCommands.items);
+    options.requisition.system.addItems(mockCommands.items);
 
     yield helpers.runTests(options, exports);
 
-    gcli.removeItems(mockCommands.items);
+    options.requisition.system.removeItems(mockCommands.items);
     yield helpers.closeToolbar(options);
     yield helpers.closeTab(options);
   }).then(finish, helpers.handleError);
@@ -42,22 +42,10 @@ function test() {
 
 // var assert = require('../testharness/assert');
 // var helpers = require('./helpers');
-var nodetype = require('gcli/types/node');
-
-exports.setup = function(options) {
-  if (options.window) {
-    nodetype.setDocument(options.window.document);
-  }
-};
-
-exports.shutdown = function(options) {
-  nodetype.unsetDocument();
-};
 
 exports.testNode = function(options) {
   return helpers.audit(options, [
     {
-      skipRemainingIf: options.isNoDom,
       setup:    'tse ',
       check: {
         input:  'tse ',
@@ -165,11 +153,8 @@ exports.testNode = function(options) {
 };
 
 exports.testNodeDom = function(options) {
-  var requisition = options.requisition;
-
   return helpers.audit(options, [
     {
-      skipRemainingIf: options.isNoDom,
       setup:    'tse :root',
       check: {
         input:  'tse :root',
@@ -201,11 +186,15 @@ exports.testNodeDom = function(options) {
           nodes: { status: 'VALID' },
           nodes2: { status: 'VALID' }
         }
+      }
+    },
+    {
+      skipIf: options.isRemote, // arg values are unavailable remotely
+      setup: 'tse :root ',
+      exec: {
       },
-      post: function() {
-        assert.is(requisition.getAssignment('node').value.tagName,
-                  'HTML',
-                  'root id');
+      post: function(output) {
+        assert.is(output.args.node.tagName, 'HTML', ':root tagName');
       }
     },
     {
@@ -234,11 +223,8 @@ exports.testNodeDom = function(options) {
 };
 
 exports.testNodes = function(options) {
-  var requisition = options.requisition;
-
   return helpers.audit(options, [
     {
-      skipRemainingIf: options.isNoDom,
       setup:    'tse :root --nodes *',
       check: {
         input:  'tse :root --nodes *',
@@ -253,10 +239,18 @@ exports.testNodes = function(options) {
           nodes2: { status: 'VALID' }
         }
       },
-      post: function() {
-        assert.is(requisition.getAssignment('node').value.tagName,
-                  'HTML',
-                  '#gcli-input id');
+      exec: {
+      },
+      post: function(output) {
+        if (!options.isRemote) {
+          assert.is(output.args.node.tagName, 'HTML', ':root tagName');
+          assert.ok(output.args.nodes.length > 3, 'nodes length');
+          assert.is(output.args.nodes2.length, 0, 'nodes2 length');
+        }
+
+        assert.is(output.data.args.node, ':root', 'node data');
+        assert.is(output.data.args.nodes, '*', 'nodes data');
+        assert.is(output.data.args.nodes2, 'Error', 'nodes2 data');
       }
     },
     {
@@ -275,10 +269,18 @@ exports.testNodes = function(options) {
           nodes2: { arg: ' --nodes2 div', status: 'VALID' }
         }
       },
-      post: function() {
-        assert.is(requisition.getAssignment('node').value.tagName,
-                  'HTML',
-                  'root id');
+      exec: {
+      },
+      post: function(output) {
+        if (!options.isRemote) {
+          assert.is(output.args.node.tagName, 'HTML', ':root tagName');
+          assert.is(output.args.nodes.length, 0, 'nodes length');
+          assert.is(output.args.nodes2.item(0).tagName, 'DIV', 'div tagName');
+        }
+
+        assert.is(output.data.args.node, ':root', 'node data');
+        assert.is(output.data.args.nodes, 'Error', 'nodes data');
+        assert.is(output.data.args.nodes2, 'div', 'nodes2 data');
       }
     },
     {
@@ -305,13 +307,6 @@ exports.testNodes = function(options) {
           },
           nodes2: { arg: '', status: 'VALID', message: '' }
         }
-      },
-      post: function() {
-        /*
-        assert.is(requisition.getAssignment('nodes2').value.constructor.name,
-                  'NodeList',
-                  '#gcli-input id');
-        */
       }
     },
     {
@@ -333,16 +328,6 @@ exports.testNodes = function(options) {
           nodes: { arg: '', status: 'VALID', message: '' },
           nodes2: { arg: ' --nodes2 ffff', status: 'VALID', message: '' }
         }
-      },
-      post: function() {
-        /*
-        assert.is(requisition.getAssignment('nodes').value.constructor.name,
-                  'NodeList',
-                  '#gcli-input id');
-        assert.is(requisition.getAssignment('nodes2').value.constructor.name,
-                  'NodeList',
-                  '#gcli-input id');
-        */
       }
     },
   ]);

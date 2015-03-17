@@ -22,17 +22,17 @@
 
 var exports = {};
 
-var TEST_URI = "data:text/html;charset=utf-8,<p id='gcli-input'>gcli-testCanon.js</p>";
+var TEST_URI = "data:text/html;charset=utf-8,<div id='gcli-root'>gcli-testCanon.js</div>";
 
 function test() {
-  return Task.spawn(function() {
+  return Task.spawn(function*() {
     let options = yield helpers.openTab(TEST_URI);
     yield helpers.openToolbar(options);
-    gcli.addItems(mockCommands.items);
+    options.requisition.system.addItems(mockCommands.items);
 
     yield helpers.runTests(options, exports);
 
-    gcli.removeItems(mockCommands.items);
+    options.requisition.system.removeItems(mockCommands.items);
     yield helpers.closeToolbar(options);
     yield helpers.closeTab(options);
   }).then(finish, helpers.handleError);
@@ -219,6 +219,9 @@ exports.testAltCommands = function(options) {
       { name: 'num', type: 'number' },
       { name: 'opt', type: { name: 'selection', data: [ '1', '2', '3' ] } },
     ],
+    customProp1: 'localValue',
+    customProp2: true,
+    customProp3: 42,
     exec: function(args, context) {
       return context.commandName + ':' +
               args.str + ':' + args.num + ':' + args.opt;
@@ -233,6 +236,24 @@ exports.testAltCommands = function(options) {
               '{"name":"num","type":"number"},' +
               '{"name":"opt","type":{"name":"selection","data":["1","2","3"]}}' +
             '],"isParent":false}]',
+            'JSON.stringify(commandSpecs)');
+
+  var customProps = [ 'customProp1', 'customProp2', 'customProp3', ];
+  var commandSpecs2 = altCommands.getCommandSpecs(customProps);
+  assert.is(JSON.stringify(commandSpecs2),
+            '[{' +
+              '"item":"command",' +
+              '"name":"tss",' +
+              '"params":[' +
+                '{"name":"str","type":"string"},' +
+                '{"name":"num","type":"number"},' +
+                '{"name":"opt","type":{"name":"selection","data":["1","2","3"]}}' +
+              '],' +
+              '"isParent":false,' +
+              '"customProp1":"localValue",' +
+              '"customProp2":true,' +
+              '"customProp3":42' +
+            '}]',
             'JSON.stringify(commandSpecs)');
 
   var remoter = function(args, context) {

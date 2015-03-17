@@ -22,17 +22,17 @@
 
 var exports = {};
 
-var TEST_URI = "data:text/html;charset=utf-8,<p id='gcli-input'>gcli-testUnion.js</p>";
+var TEST_URI = "data:text/html;charset=utf-8,<div id='gcli-root'>gcli-testUnion.js</div>";
 
 function test() {
-  return Task.spawn(function() {
+  return Task.spawn(function*() {
     let options = yield helpers.openTab(TEST_URI);
     yield helpers.openToolbar(options);
-    gcli.addItems(mockCommands.items);
+    options.requisition.system.addItems(mockCommands.items);
 
     yield helpers.runTests(options, exports);
 
-    gcli.removeItems(mockCommands.items);
+    options.requisition.system.removeItems(mockCommands.items);
     yield helpers.closeToolbar(options);
     yield helpers.closeTab(options);
   }).then(finish, helpers.handleError);
@@ -126,7 +126,7 @@ exports.testDefault = function(options) {
       }
     },
     {
-      skipIf: options.isPhantomjs, // Phantom goes weird with predictions
+      skipIf: options.isPhantomjs, // PhantomJS gets predictions wrong
       setup:    'unionc1 5',
       check: {
         input:  'unionc1 5',
@@ -160,7 +160,7 @@ exports.testDefault = function(options) {
       }
     },
     {
-      skipRemainingIf: options.isPhantomjs,
+      skipIf: options.isPhantomjs, // PhantomJS URL type is broken
       setup:    'unionc2 on',
       check: {
         input:  'unionc2 on',

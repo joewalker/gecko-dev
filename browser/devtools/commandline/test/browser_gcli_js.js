@@ -22,17 +22,17 @@
 
 var exports = {};
 
-var TEST_URI = "data:text/html;charset=utf-8,<p id='gcli-input'>gcli-testJs.js</p>";
+var TEST_URI = "data:text/html;charset=utf-8,<div id='gcli-root'>gcli-testJs.js</div>";
 
 function test() {
-  return Task.spawn(function() {
+  return Task.spawn(function*() {
     let options = yield helpers.openTab(TEST_URI);
     yield helpers.openToolbar(options);
-    gcli.addItems(mockCommands.items);
+    options.requisition.system.addItems(mockCommands.items);
 
     yield helpers.runTests(options, exports);
 
-    gcli.removeItems(mockCommands.items);
+    options.requisition.system.removeItems(mockCommands.items);
     yield helpers.closeToolbar(options);
     yield helpers.closeTab(options);
   }).then(finish, helpers.handleError);
@@ -44,37 +44,45 @@ function test() {
 // var helpers = require('./helpers');
 var javascript = require('gcli/types/javascript');
 
-var tempWindow;
+// Store the original windowHolder
+var tempWindowHolder;
+
+// Mock windowHolder to check that we're not trespassing on 'donteval'
+var mockWindowHolder = {
+  window: {
+    document: {}
+  },
+};
+mockWindowHolder.window = mockWindowHolder;
+Object.defineProperty(mockWindowHolder.window, 'donteval', {
+  get: function() {
+    assert.ok(false, 'donteval should not be used');
+    return { cant: '', touch: '', 'this': '' };
+  },
+  enumerable: true,
+  configurable: true
+});
 
 exports.setup = function(options) {
-  if (options.isNoDom) {
+  if (!jsTestAllowed(options)) {
     return;
   }
 
-  tempWindow = javascript.getGlobalObject();
-  Object.defineProperty(options.window, 'donteval', {
-    get: function() {
-      assert.ok(false, 'donteval should not be used');
-      return { cant: '', touch: '', 'this': '' };
-    },
-    enumerable: true,
-    configurable : true
-  });
-  javascript.setGlobalObject(options.window);
+  tempWindowHolder = javascript.getWindowHolder();
+  javascript.setWindowHolder(mockWindowHolder);
 };
 
 exports.shutdown = function(options) {
-  if (options.isNoDom) {
+  if (!jsTestAllowed(options)) {
     return;
   }
 
-  javascript.setGlobalObject(tempWindow);
-  tempWindow = undefined;
-  delete options.window.donteval;
+  javascript.setWindowHolder(tempWindowHolder);
 };
 
 function jsTestAllowed(options) {
-  return options.isRemote || options.isNoDom ||
+  return options.isRemote || // We're directly accessing the javascript type
+         options.isNode ||
          options.requisition.system.commands.get('{') == null;
 }
 
@@ -348,14 +356,14 @@ exports.testDocument = function(options) {
 };
 
 exports.testDonteval = function(options) {
-  if (!options.isNoDom) {
+  if (jsTestAllowed(options)) {
     // nodom causes an eval here, maybe that's node/v8?
-    assert.ok('donteval' in options.window, 'donteval exists');
+    assert.ok('donteval' in mockWindowHolder.window, 'donteval exists');
   }
 
   return helpers.audit(options, [
     {
-      skipRemainingIf: jsTestAllowed,
+      skipRemainingIf: true, // Commented out until we fix non-enumerable props
       setup:    '{ don',
       check: {
         input:  '{ don',

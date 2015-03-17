@@ -4,58 +4,61 @@
 
 "use strict";
 
-var Cu = require('chrome').Cu;
-var XPCOMUtils = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {}).XPCOMUtils;
-
-XPCOMUtils.defineLazyModuleGetter(this, "console",
-                                  "resource://gre/modules/devtools/Console.jsm");
-XPCOMUtils.defineLazyModuleGetter(this, "CommandUtils",
-                                  "resource:///modules/devtools/DeveloperToolbar.jsm");
-
-XPCOMUtils.defineLazyGetter(this, "Requisition", function() {
-  return require("gcli/cli").Requisition;
-});
-
-XPCOMUtils.defineLazyGetter(this, "centralCanon", function() {
-  return require("gcli/commands/commands").centralCanon;
-});
-
-var util = require('gcli/util/util');
-
-var protocol = require("devtools/server/protocol");
-var method = protocol.method;
-var Arg = protocol.Arg;
-var Option = protocol.Option;
-var RetVal = protocol.RetVal;
+const { Task } = require("resource://gre/modules/Task.jsm");
+const {
+  method, Arg, Option, RetVal, Front, FrontClass, Actor, ActorClass
+} = require("devtools/server/protocol");
+const events = require("sdk/event/core");
 
 /**
  * Manage remote connections that want to talk to GCLI
  */
-var GcliActor = exports.GcliActor = protocol.ActorClass({
+const GcliActor = ActorClass({
   typeName: "gcli",
 
+  events: {
+    "commands-changed" : {
+      type: "commandsChanged",
+      commandsChanged: Arg(0, "json")
+    }
+  },
+
   initialize: function(conn, tabActor) {
-    protocol.Actor.prototype.initialize.call(this, conn);
-    this.tabActor = tabActor;
-    let browser = tabActor.browser;
+    Actor.prototype.initialize.call(this, conn);
 
-    let environment = {
-      chromeWindow: browser.ownerGlobal,
-      chromeDocument: browser.ownerDocument,
-      window: browser.contentWindow,
-      document: browser.contentDocument
-    };
+    this._commandsChanged = this._commandsChanged.bind(this);
 
-    this.requisition = new Requisition({ environment: env });
+    this._tabActor = tabActor;
+    this._requisitionPromise = undefined; // see _getRequisition()
+  },
+
+  destroy: function() {
+    this._requisitionPromise = undefined;
+    this._tabActor = undefined;
+
+    protocol.Actor.prototype.destroy.call(this);
+
+    return this._getRequisition().then(requisition => {
+      requisition.system.commands.onCommandsChange.remove(this._commandsChanged);
+      this._commandsChanged = undefined;
+    });
   },
 
   /**
    * Retrieve a list of the remotely executable commands
+   * @param customProps Array of strings containing additional properties which,
+   * if specified in the command spec, will be included in the JSON. Normally we
+   * transfer only the properties required for GCLI to function.
    */
-  specs: method(function() {
-    return this.requisition.canon.getCommandSpecs();
+  specs: method(function(customProps) {
+    this._lastCustomProps = customProps;
+    return this._getRequisition().then(requisition => {
+      return requisition.system.commands.getCommandSpecs(customProps);
+    });
   }, {
-    request: {},
+    request: {
+      customProps: Arg(0, "nullable:array:string")
+    },
     response: RetVal("json")
   }),
 
@@ -67,8 +70,8 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
    * - error: True if the output was considered an error
    */
   execute: method(function(typed) {
-    return this.requisition.updateExec(typed).then(function(output) {
-      return output.toJson();
+    return this._getRequisition().then(requisition => {
+      return requisition.updateExec(typed).then(output => output.toJson());
     });
   }, {
     request: {
@@ -81,8 +84,10 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
    * Get the state of an input string. i.e. requisition.getStateData()
    */
   state: method(function(typed, start, rank) {
-    return this.requisition.update(typed).then(() => {
-      return this.requisition.getStateData(start, rank);
+    return this._getRequisition().then(requisition => {
+      return requisition.update(typed).then(() => {
+        return requisition.getStateData(start, rank);
+      });
     });
   }, {
     request: {
@@ -100,16 +105,17 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
    * - message: The message to display to the user
    * - predictions: An array of suggested values for the given parameter
    */
-  typeparse: method(function(typed, param) {
-    return this.requisition.update(typed).then(function() {
-      var assignment = this.requisition.getAssignment(param);
-
-      return promise.resolve(assignment.predictions).then(function(predictions) {
-        return {
-          status: assignment.getStatus().toString(),
-          message: assignment.message,
-          predictions: predictions
-        };
+  parseType: method(function(typed, param) {
+    return this._getRequisition().then(requisition => {
+      return requisition.update(typed).then(() => {
+        let assignment = requisition.getAssignment(param);
+        return Promise.resolve(assignment.predictions).then(predictions => {
+          return {
+            status: assignment.getStatus().toString(),
+            message: assignment.message,
+            predictions: predictions
+          };
+        });
       });
     });
   }, {
@@ -124,11 +130,13 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
    * Get the incremented value of some type
    * @return a promise of a string containing the new argument text
    */
-  typeincrement: method(function(typed, param) {
-    return this.requisition.update(typed).then(function() {
-      var assignment = this.requisition.getAssignment(param);
-      return this.requisition.increment(assignment).then(function() {
-        return assignment.arg == null ? undefined : assignment.arg.text;
+  incrementType: method(function(typed, param) {
+    return this._getRequisition().then(requisition => {
+      return requisition.update(typed).then(() => {
+        let assignment = requisition.getAssignment(param);
+        return requisition.increment(assignment).then(() => {
+          return assignment.arg == null ? undefined : assignment.arg.text;
+        });
       });
     });
   }, {
@@ -140,13 +148,15 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
   }),
 
   /**
-   * See typeincrement
+   * See incrementType
    */
-  typedecrement: method(function(typed, param) {
-    return this.requisition.update(typed).then(function() {
-      var assignment = this.requisition.getAssignment(param);
-      return this.requisition.decrement(assignment).then(function() {
-        return assignment.arg == null ? undefined : assignment.arg.text;
+  decrementType: method(function(typed, param) {
+    return this._getRequisition().then(requisition => {
+      return requisition.update(typed).then(() => {
+        let assignment = requisition.getAssignment(param);
+        return requisition.decrement(assignment).then(() => {
+          return assignment.arg == null ? undefined : assignment.arg.text;
+        });
       });
     });
   }, {
@@ -160,44 +170,120 @@ var GcliActor = exports.GcliActor = protocol.ActorClass({
   /**
    * Perform a lookup on a selection type to get the allowed values
    */
-  selectioninfo: method(function(commandName, paramName, action) {
-    var command = this.requisition.canon.getCommand(commandName);
-    if (command == null) {
-      throw new Error('No command called \'' + commandName + '\'');
+  getSelectionLookup: method(function(commandName, paramName) {
+    return this._getRequisition().then(requisition => {
+      let type = this._getType(requisition, commandName, paramName);
+
+      let context = requisition.executionContext;
+      return type.lookup(context).map(info => {
+        // lookup returns an array of objects with name/value properties and
+        // the values might not be JSONable, so remove them
+        return { name: info.name };
+      });
+    });
+  }, {
+    request: {
+      commandName: Arg(0, "string"), // The command containing the parameter in question
+      paramName: Arg(1, "string"),   // The name of the parameter
+    },
+    response: RetVal("json")
+  }),
+
+  /**
+   * Perform a lookup on a selection type to get the allowed values
+   */
+  getSelectionData: method(function(commandName, paramName) {
+    return this._getRequisition().then(requisition => {
+      let type = this._getType(requisition, commandName, paramName);
+
+      let context = requisition.executionContext;
+      return type.data(context);
+    });
+  }, {
+    request: {
+      commandName: Arg(0, "string"), // The command containing the parameter in question
+      paramName: Arg(1, "string"),   // The name of the parameter
+    },
+    response: RetVal("json")
+  }),
+
+  /**
+   * Lazy init for a Requisition
+   */
+  _getRequisition: function() {
+    if (this._requisitionPromise != null) {
+      return this._requisitionPromise;
     }
 
-    var type;
-    command.params.forEach(function(param) {
+    let gcliInit = require("devtools/commandline/commands-index");
+    let Requisition = require("gcli/cli").Requisition;
+    let tabActor = this._tabActor;
+
+    this._requisitionPromise = gcliInit.loadForServer().then(system => {
+      let environment = {
+        get chromeWindow() {
+          throw new Error("environment.chromeWindow is not available in runAt:server commands");
+        },
+
+        get chromeDocument() {
+          throw new Error("environment.chromeDocument is not available in runAt:server commands");
+        },
+
+        get window() tabActor.window,
+        get document() tabActor.window.document,
+        get tabActor() tabActor,
+      };
+
+      let requisition = new Requisition(system, { environment: environment });
+      requisition.system.commands.onCommandsChange.add(this._commandsChanged);
+
+      return requisition;
+    });
+
+    return this._requisitionPromise;
+  },
+
+  /**
+   * Pass events from requisition.system.commands.onCommandsChange upwards
+   */
+  _commandsChanged: function() {
+    events.emit(this, "commands-changed");
+  },
+
+  /**
+   * Helper for #getSelectionLookup and #getSelectionData that finds a type
+   * instance given a commandName and paramName
+   */
+  _getType: function(requisition, commandName, paramName) {
+    let command = requisition.system.commands.get(commandName);
+    if (command == null) {
+      throw new Error("No command called '" + commandName + "'");
+    }
+
+    let type;
+    command.params.forEach(param => {
       if (param.name === paramName) {
         type = param.type;
       }
     });
+
     if (type == null) {
-      throw new Error('No parameter called \'' + paramName + '\' in \'' +
-                      commandName + '\'');
+      throw new Error("No parameter called '" + paramName + "' in '" +
+                      commandName + "'");
     }
 
-    switch (action) {
-      case 'lookup':
-        return type.lookup(context);
-      case 'data':
-        return type.data(context);
-      default:
-        throw new Error('Action must be either \'lookup\' or \'data\'');
-    }
-  }, {
-    request: {
-      typed: Arg(0, "string"), // The command containing the parameter in question
-      param: Arg(1, "string"), // The name of the parameter
-      action: Arg(1, "string") // 'lookup' or 'data' depending on the function to call
-    },
-    response: RetVal("json")
-  })
+    return type;
+  }
 });
 
-exports.GcliFront = protocol.FrontClass(GcliActor, {
+exports.GcliActor = GcliActor;
+
+/**
+ * 
+ */
+const GcliFront = exports.GcliFront = FrontClass(GcliActor, {
   initialize: function(client, tabForm) {
-    protocol.Front.prototype.initialize.call(this, client);
+    Front.prototype.initialize.call(this, client);
     this.actorID = tabForm.gcliActor;
 
     // XXX: This is the first actor type in its hierarchy to use the protocol
@@ -205,3 +291,22 @@ exports.GcliFront = protocol.FrontClass(GcliActor, {
     this.manage(this);
   },
 });
+
+// A cache of created fronts: WeakMap<Client, Front>
+const knownFronts = new WeakMap();
+
+/**
+ * Create a GcliFront only when needed (returns a promise)
+ * For notes on target.makeRemote(), see
+ * https://bugzilla.mozilla.org/show_bug.cgi?id=1016330#c7
+ */
+exports.GcliFront.create = function(target) {
+  return target.makeRemote().then(() => {
+    let front = knownFronts.get(target.client);
+    if (front == null && target.form.gcliActor != null) {
+      front = new GcliFront(target.client, target.form);
+      knownFronts.set(target.client, front);
+    }
+    return front;
+  });
+};

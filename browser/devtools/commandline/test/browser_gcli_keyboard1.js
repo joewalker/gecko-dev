@@ -22,17 +22,17 @@
 
 var exports = {};
 
-var TEST_URI = "data:text/html;charset=utf-8,<p id='gcli-input'>gcli-testKeyboard1.js</p>";
+var TEST_URI = "data:text/html;charset=utf-8,<div id='gcli-root'>gcli-testKeyboard1.js</div>";
 
 function test() {
-  return Task.spawn(function() {
+  return Task.spawn(function*() {
     let options = yield helpers.openTab(TEST_URI);
     yield helpers.openToolbar(options);
-    gcli.addItems(mockCommands.items);
+    options.requisition.system.addItems(mockCommands.items);
 
     yield helpers.runTests(options, exports);
 
-    gcli.removeItems(mockCommands.items);
+    options.requisition.system.removeItems(mockCommands.items);
     yield helpers.closeToolbar(options);
     yield helpers.closeTab(options);
   }).then(finish, helpers.handleError);
@@ -42,18 +42,6 @@ function test() {
 
 var javascript = require('gcli/types/javascript');
 // var helpers = require('./helpers');
-
-var tempWindow;
-
-exports.setup = function(options) {
-  tempWindow = javascript.getGlobalObject();
-  javascript.setGlobalObject(options.window);
-};
-
-exports.shutdown = function(options) {
-  javascript.setGlobalObject(tempWindow);
-  tempWindow = undefined;
-};
 
 exports.testSimple = function(options) {
   return helpers.audit(options, [

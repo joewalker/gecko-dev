@@ -4,12 +4,14 @@
 
 "use strict";
 
-const gcli = require("gcli/index");
+const l10n = require("gcli/l10n");
 
 exports.items = [{
+  item: "command",
+  runAt: "client",
   name: "edit",
-  description: gcli.lookup("editDesc"),
-  manual: gcli.lookup("editManual2"),
+  description: l10n.lookup("editDesc"),
+  manual: l10n.lookup("editManual2"),
   params: [
      {
        name: 'resource',
@@ -17,7 +19,7 @@ exports.items = [{
          name: 'resource',
          include: 'text/css'
        },
-       description: gcli.lookup("editResourceDesc")
+       description: l10n.lookup("editResourceDesc")
      },
      {
        name: "line",
@@ -27,7 +29,7 @@ exports.items = [{
          min: 1,
          step: 10
        },
-       description: gcli.lookup("editLineToJumpToDesc")
+       description: l10n.lookup("editLineToJumpToDesc")
      }
    ],
    exec: function(args, context) {

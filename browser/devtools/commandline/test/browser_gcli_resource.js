@@ -22,17 +22,17 @@
 
 var exports = {};
 
-var TEST_URI = "data:text/html;charset=utf-8,<p id='gcli-input'>gcli-testResource.js</p>";
+var TEST_URI = "data:text/html;charset=utf-8,<div id='gcli-root'>gcli-testResource.js</div>";
 
 function test() {
-  return Task.spawn(function() {
+  return Task.spawn(function*() {
     let options = yield helpers.openTab(TEST_URI);
     yield helpers.openToolbar(options);
-    gcli.addItems(mockCommands.items);
+    options.requisition.system.addItems(mockCommands.items);
 
     yield helpers.runTests(options, exports);
 
-    gcli.removeItems(mockCommands.items);
+    options.requisition.system.removeItems(mockCommands.items);
     yield helpers.closeToolbar(options);
     yield helpers.closeTab(options);
   }).then(finish, helpers.handleError);
@@ -47,23 +47,8 @@ var util = require('gcli/util/util');
 var resource = require('gcli/types/resource');
 var Status = require('gcli/types/types').Status;
 
-
-var tempDocument;
-
-exports.setup = function(options) {
-  tempDocument = resource.getDocument();
-  if (options.window) {
-    resource.setDocument(options.window.document);
-  }
-};
-
-exports.shutdown = function(options) {
-  resource.setDocument(tempDocument);
-  tempDocument = undefined;
-};
-
 exports.testAllPredictions1 = function(options) {
-  if (options.isFirefox || options.isNoDom) {
+  if (options.isFirefox || options.isNode) {
     assert.log('Skipping checks due to firefox document.stylsheets support.');
     return;
   }
@@ -79,7 +64,7 @@ exports.testAllPredictions1 = function(options) {
 };
 
 exports.testScriptPredictions = function(options) {
-  if (options.isFirefox || options.isNoDom) {
+  if (options.isFirefox || options.isNode) {
     assert.log('Skipping checks due to firefox document.stylsheets support.');
     return;
   }
@@ -96,7 +81,7 @@ exports.testScriptPredictions = function(options) {
 };
 
 exports.testStylePredictions = function(options) {
-  if (options.isFirefox || options.isNoDom) {
+  if (options.isFirefox || options.isNode) {
     assert.log('Skipping checks due to firefox document.stylsheets support.');
     return;
   }
@@ -113,10 +98,6 @@ exports.testStylePredictions = function(options) {
 };
 
 exports.testAllPredictions2 = function(options) {
-  if (options.isNoDom) {
-    assert.log('Skipping checks due to nodom document.stylsheets support.');
-    return;
-  }
   var types = options.requisition.system.types;
 
   var scriptRes = types.createType({ name: 'resource', include: 'text/javascript' });
@@ -134,11 +115,6 @@ exports.testAllPredictions2 = function(options) {
 };
 
 exports.testAllPredictions3 = function(options) {
-  if (options.isNoDom) {
-    assert.log('Skipping checks due to nodom document.stylsheets support.');
-    return;
-  }
-
   var types = options.requisition.system.types;
   var res1 = types.createType({ name: 'resource' });
   return res1.getLookup().then(function(options1) {
