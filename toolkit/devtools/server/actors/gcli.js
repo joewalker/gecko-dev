@@ -219,14 +219,6 @@ const GcliActor = ActorClass({
     let Requisition = require("gcli/cli").Requisition;
     let tabActor = this._tabActor;
 
-    let windowHolder = {
-      get window() tabActor.window,
-    };
-    let nodetype = require('gcli/types/node');
-    nodetype.setWindowHolder(windowHolder);
-    let resource = require('gcli/types/resource');
-    resource.setWindowHolder(windowHolder);
-
     this._requisitionPromise = gcliInit.loadForServer().then(system => {
       let environment = {
         get chromeWindow() {
