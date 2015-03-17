@@ -45,6 +45,7 @@ function* navigate(usage, options) {
   yield load1Promise;
   is(options.window.location.href, PAGE_1, "page 1 loaded");
 
+  // Page 2 is a frame in page 1. JS in the page navigates to page 3.
   yield helpers.listenOnce(options.browser, "load", true);
   is(options.window.location.href, PAGE_3, "page 3 loaded");
 
