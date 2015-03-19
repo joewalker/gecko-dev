@@ -44,6 +44,32 @@ const GcliActor = ActorClass({
   },
 
   /**
+   * Load a module into the requisition
+   */
+  _testOnly_addItemsByModule: method(function(names) {
+    return this._getRequisition().then(requisition => {
+      return requisition.system.addItemsByModule(names);
+    });
+  }, {
+    request: {
+      customProps: Arg(0, "array:string")
+    }
+  }),
+
+  /**
+   * Unload a module from the requisition
+   */
+  _testOnly_removeItemsByModule: method(function(names) {
+    return this._getRequisition().then(requisition => {
+      return requisition.system.removeItemsByModule(names);
+    });
+  }, {
+    request: {
+      customProps: Arg(0, "array:string")
+    }
+  }),
+
+  /**
    * Retrieve a list of the remotely executable commands
    * @param customProps Array of strings containing additional properties which,
    * if specified in the command spec, will be included in the JSON. Normally we
