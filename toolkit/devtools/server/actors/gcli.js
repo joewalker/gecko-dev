@@ -18,8 +18,7 @@ const GcliActor = ActorClass({
 
   events: {
     "commands-changed" : {
-      type: "commandsChanged",
-      commandsChanged: Arg(0, "json")
+      type: "commandsChanged"
     }
   },
 
