@@ -426,7 +426,9 @@ const MOCK_COMMANDS_URI = "chrome://mochitests/content/browser/browser/devtools/
 helpers.runTestModule = function(exports, name) {
   return Task.spawn(function*() {
     const uri = "data:text/html;charset=utf-8," +
-                "<div id='gcli-root'>gcli-" + name + "</div>";
+                "<style>div{color:red;}</style>" +
+                "<div id='gcli-root'>" + name + "</div>";
+
     const options = yield helpers.openTab(uri);
     options.isRemote = true;
 
