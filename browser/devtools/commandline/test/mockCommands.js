@@ -15,16 +15,21 @@
  */
 
 'use strict';
-// <INJECTED SOURCE:START>
 
 // THIS FILE IS GENERATED FROM SOURCE IN THE GCLI PROJECT
-// DO NOT EDIT IT DIRECTLY
-
-// <INJECTED SOURCE:END>
-
+// PLEASE TALK TO SOMEONE IN DEVELOPER TOOLS BEFORE EDITING IT
 
 var Promise = require('gcli/util/promise').Promise;
-var mockCommands = {};
+
+var mockCommands;
+if (typeof exports !== 'undefined') {
+  // If we're being loaded via require();
+  mockCommands = exports;
+}
+else {
+  // If we're being loaded via loadScript in mochitest
+  mockCommands = {};
+}
 
 // We use an alias for exports here because this module is used in Firefox
 // mochitests where we don't have define/require
