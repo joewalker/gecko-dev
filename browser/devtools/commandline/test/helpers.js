@@ -31,6 +31,8 @@ var Promise = require('gcli/util/promise').Promise;
 var cli = require('gcli/cli');
 var KeyEvent = require('gcli/util/util').KeyEvent;
 
+const { GcliFront } = require("devtools/server/actors/gcli");
+
 /**
  * See notes in helpers.checkOptions()
  */
@@ -407,6 +409,58 @@ helpers.runTests = function(options, tests) {
         Promise.resolve(tests.shutdown(options)) :
         Promise.resolve();
   }, recover);
+};
+
+const MOCK_COMMANDS_URI = "chrome://mochitests/content/browser/browser/devtools/commandline/test/mockCommands.js";
+
+/**
+ * This does several actions associated with running a GCLI test in mochitest
+ * 1. Create a new tab containing basic markup for GCLI tests
+ * 2. Open the developer toolbar
+ * 3. Register the mock commands with the server process
+ * 4. Wait for the proxy commands to be auto-regitstered with the client
+ * 5. Register the mock converters with the client process
+ * 6. Run all the tests
+ * 7. Tear down all the setup
+ */
+helpers.runTestModule = function(exports, name) {
+  return Task.spawn(function*() {
+    const uri = "data:text/html;charset=utf-8," +
+                "<div id='gcli-root'>gcli-" + name + "</div>";
+    const options = yield helpers.openTab(uri);
+    options.isRemote = true;
+
+    yield helpers.openToolbar(options);
+
+    const system = options.requisition.system;
+    // Register a one time listener with the local set of commands
+    const addPromise = system.commands.onCommandsChange.once();
+
+    // Send a message to add the commands to the content process
+    const front = yield GcliFront.create(options.target);
+    yield front._testOnly_addItemsByModule(MOCK_COMMANDS_URI);
+
+    // This will cause the local set of commands to be updated with the
+    // command proxies, wait for that to complete.
+    yield addPromise;
+
+    // Now we need to add the converters to the local GCLI
+    const converters = mockCommands.items.filter(item => item.item === 'converter');
+    system.addItems(converters);
+
+    // Next run the tests
+    yield helpers.runTests(options, exports);
+
+    // Finally undo the mock commands and converters
+    system.removeItems(converters);
+    const removePromise = system.commands.onCommandsChange.once();
+    yield front._testOnly_removeItemsByModule(MOCK_COMMANDS_URI);
+    yield removePromise;
+
+    // And close everything down
+    yield helpers.closeToolbar(options);
+    yield helpers.closeTab(options);
+  }).then(finish, helpers.handleError);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
