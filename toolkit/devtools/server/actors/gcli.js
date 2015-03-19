@@ -76,7 +76,6 @@ const GcliActor = ActorClass({
    * transfer only the properties required for GCLI to function.
    */
   specs: method(function(customProps) {
-    this._lastCustomProps = customProps;
     return this._getRequisition().then(requisition => {
       return requisition.system.commands.getCommandSpecs(customProps);
     });
@@ -130,10 +129,10 @@ const GcliActor = ActorClass({
    * - message: The message to display to the user
    * - predictions: An array of suggested values for the given parameter
    */
-  parseType: method(function(typed, param) {
+  parseType: method(function(typed, paramName) {
     return this._getRequisition().then(requisition => {
       return requisition.update(typed).then(() => {
-        let assignment = requisition.getAssignment(param);
+        let assignment = requisition.getAssignment(paramName);
         return Promise.resolve(assignment.predictions).then(predictions => {
           return {
             status: assignment.getStatus().toString(),
@@ -146,48 +145,27 @@ const GcliActor = ActorClass({
   }, {
     request: {
       typed: Arg(0, "string"), // The command string
-      param: Arg(1, "string") // The name of the parameter to parse
+      paramName: Arg(1, "string") // The name of the parameter to parse
     },
     response: RetVal("json")
   }),
 
   /**
-   * Get the incremented value of some type
+   * Get the incremented/decremented value of some type
    * @return a promise of a string containing the new argument text
    */
-  incrementType: method(function(typed, param) {
-    return this._getRequisition().then(requisition => {
-      return requisition.update(typed).then(() => {
-        let assignment = requisition.getAssignment(param);
-        return requisition.increment(assignment).then(() => {
-          return assignment.arg == null ? undefined : assignment.arg.text;
-        });
+  nudgeType: method(function(typed, by, paramName) {
+    return this.requisition.update(typed).then(() => {
+      const assignment = this.requisition.getAssignment(paramName);
+      return this.requisition.nudge(assignment, by).then(() => {
+        return assignment.arg == null ? undefined : assignment.arg.text;
       });
     });
   }, {
     request: {
-      typed: Arg(0, "string"), // The command string
-      param: Arg(1, "string") // The name of the parameter to parse
-    },
-    response: RetVal("string")
-  }),
-
-  /**
-   * See incrementType
-   */
-  decrementType: method(function(typed, param) {
-    return this._getRequisition().then(requisition => {
-      return requisition.update(typed).then(() => {
-        let assignment = requisition.getAssignment(param);
-        return requisition.decrement(assignment).then(() => {
-          return assignment.arg == null ? undefined : assignment.arg.text;
-        });
-      });
-    });
-  }, {
-    request: {
-      typed: Arg(0, "string"), // The command string
-      param: Arg(1, "string") // The name of the parameter to parse
+      typed: Arg(0, "string"),    // The command string
+      by: Arg(1, "number"),       // +1/-1 for increment / decrement
+      paramName: Arg(2, "string") // The name of the parameter to parse
     },
     response: RetVal("string")
   }),
