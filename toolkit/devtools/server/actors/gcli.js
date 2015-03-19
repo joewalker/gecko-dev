@@ -197,32 +197,29 @@ const GcliActor = ActorClass({
    */
   getSelectionLookup: method(function(commandName, paramName) {
     return this._getRequisition().then(requisition => {
-      let type = this._getType(requisition, commandName, paramName);
+      const command = requisition.system.commands.get(commandName);
+      if (command == null) {
+        throw new Error("No command called '" + commandName + "'");
+      }
 
-      let context = requisition.executionContext;
-      return type.lookup(context).map(info => {
+      let type;
+      command.params.forEach(param => {
+        if (param.name === paramName) {
+          type = param.type;
+        }
+      });
+
+      if (type == null) {
+        throw new Error("No parameter called '" + paramName + "' in '" +
+                        commandName + "'");
+      }
+
+      const reply = type.getLookup(requisition.executionContext);
+      return Promise.resolve(reply).then(lookup => {
         // lookup returns an array of objects with name/value properties and
         // the values might not be JSONable, so remove them
-        return { name: info.name };
+        return lookup.map(info => ({ name: info.name }));
       });
-    });
-  }, {
-    request: {
-      commandName: Arg(0, "string"), // The command containing the parameter in question
-      paramName: Arg(1, "string"),   // The name of the parameter
-    },
-    response: RetVal("json")
-  }),
-
-  /**
-   * Perform a lookup on a selection type to get the allowed values
-   */
-  getSelectionData: method(function(commandName, paramName) {
-    return this._getRequisition().then(requisition => {
-      let type = this._getType(requisition, commandName, paramName);
-
-      let context = requisition.executionContext;
-      return type.data(context);
     });
   }, {
     request: {
@@ -274,31 +271,6 @@ const GcliActor = ActorClass({
   _commandsChanged: function() {
     events.emit(this, "commands-changed");
   },
-
-  /**
-   * Helper for #getSelectionLookup and #getSelectionData that finds a type
-   * instance given a commandName and paramName
-   */
-  _getType: function(requisition, commandName, paramName) {
-    let command = requisition.system.commands.get(commandName);
-    if (command == null) {
-      throw new Error("No command called '" + commandName + "'");
-    }
-
-    let type;
-    command.params.forEach(param => {
-      if (param.name === paramName) {
-        type = param.type;
-      }
-    });
-
-    if (type == null) {
-      throw new Error("No parameter called '" + paramName + "' in '" +
-                      commandName + "'");
-    }
-
-    return type;
-  }
 });
 
 exports.GcliActor = GcliActor;
