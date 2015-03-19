@@ -25,6 +25,7 @@ function test() {
   helpers.runTestModule(exports, "browser_gcli_resource.js");
 }
 
+// var helpers = require('./helpers');
 // var assert = require('../testharness/assert');
 
 var Promise = require('gcli/util/promise').Promise;
@@ -32,9 +33,20 @@ var util = require('gcli/util/util');
 var resource = require('gcli/types/resource');
 var Status = require('gcli/types/types').Status;
 
+exports.testCommand = function(options) {
+  return helpers.audit(options, [
+    {
+      setup:    'tsres ',
+      check: {
+        predictionsContains: [ 'inline-css' ],
+      }
+    }
+  ]);
+};
+
 exports.testAllPredictions1 = function(options) {
-  if (options.isFirefox || options.isNode) {
-    assert.log('Skipping checks due to firefox document.stylsheets support.');
+  if (options.isRemote) {
+    assert.log('Can\'t directly test remote types locally.');
     return;
   }
 
@@ -50,8 +62,8 @@ exports.testAllPredictions1 = function(options) {
 };
 
 exports.testScriptPredictions = function(options) {
-  if (options.isFirefox || options.isNode) {
-    assert.log('Skipping checks due to firefox document.stylsheets support.');
+  if (options.isRemote || options.isNode) {
+    assert.log('Can\'t directly test remote types locally.');
     return;
   }
 
@@ -68,8 +80,8 @@ exports.testScriptPredictions = function(options) {
 };
 
 exports.testStylePredictions = function(options) {
-  if (options.isFirefox || options.isNode) {
-    assert.log('Skipping checks due to firefox document.stylsheets support.');
+  if (options.isRemote) {
+    assert.log('Can\'t directly test remote types locally.');
     return;
   }
 
@@ -86,6 +98,11 @@ exports.testStylePredictions = function(options) {
 };
 
 exports.testAllPredictions2 = function(options) {
+  if (options.isRemote) {
+    assert.log('Can\'t directly test remote types locally.');
+    return;
+  }
+
   var context = options.requisition.conversionContext;
   var types = options.requisition.system.types;
 
@@ -104,6 +121,11 @@ exports.testAllPredictions2 = function(options) {
 };
 
 exports.testAllPredictions3 = function(options) {
+  if (options.isRemote) {
+    assert.log('Can\'t directly test remote types locally.');
+    return;
+  }
+
   var context = options.requisition.conversionContext;
   var types = options.requisition.system.types;
   var res1 = types.createType({ name: 'resource' });

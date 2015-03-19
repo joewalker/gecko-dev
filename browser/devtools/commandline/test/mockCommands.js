@@ -551,7 +551,7 @@ mockCommands.items = [
     exec: function(args, context) {
       if (args.method === 'reject') {
         return new Promise(function(resolve, reject) {
-          setTimeout(function() {
+          context.environment.window.setTimeout(function() {
             reject('rejected promise');
           }, 10);
         });
@@ -559,7 +559,7 @@ mockCommands.items = [
 
       if (args.method === 'rejecttyped') {
         return new Promise(function(resolve, reject) {
-          setTimeout(function() {
+          context.environment.window.setTimeout(function() {
             reject(context.typedData('number', 54));
           }, 10);
         });
@@ -567,7 +567,7 @@ mockCommands.items = [
 
       if (args.method === 'throwinpromise') {
         return new Promise(function(resolve, reject) {
-          setTimeout(function() {
+          context.environment.window.setTimeout(function() {
             resolve('should be lost');
           }, 10);
         }).then(function() {
@@ -698,7 +698,7 @@ mockCommands.items = [
           name: 'selection',
           data: function(context) {
             return new Promise(function(resolve, reject) {
-              setTimeout(function() {
+              context.environment.window.setTimeout(function() {
                 resolve([
                   'Shalom', 'Namasté', 'Hallo', 'Dydd-da',
                   'Chào', 'Hej', 'Saluton', 'Sawubona'
@@ -781,5 +781,16 @@ mockCommands.items = [
     exec: function(args, context) {
       return args;
     }
+  },
+  {
+    item: 'command',
+    name: 'tsres',
+    params: [
+      {
+        name: 'resource',
+        type: 'resource'
+      }
+    ],
+    exec: createExec('tsres'),
   }
 ];

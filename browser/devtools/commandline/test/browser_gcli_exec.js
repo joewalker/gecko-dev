@@ -367,7 +367,6 @@ exports.testExecScript = function(options) {
         args: {
           command: { name: 'tsj' },
           javascript: {
-            value: '1 + 1',
             arg: ' { 1 + 1 }',
             status: 'VALID',
             message: ''

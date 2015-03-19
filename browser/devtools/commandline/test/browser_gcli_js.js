@@ -29,7 +29,7 @@ function test() {
 // var helpers = require('./helpers');
 
 exports.setup = function(options) {
-  if (!jsTestAllowed(options)) {
+  if (jsTestDisallowed(options)) {
     return;
   }
 
@@ -47,22 +47,23 @@ exports.setup = function(options) {
 };
 
 exports.shutdown = function(options) {
-  if (!jsTestAllowed(options)) {
+  if (jsTestDisallowed(options)) {
     return;
   }
 
   delete options.requisition.environment.window.donteval;
 };
 
-function jsTestAllowed(options) {
+function jsTestDisallowed(options) {
   return options.isRemote || // Altering the environment (which isn't remoted)
+         options.isNode ||
          options.requisition.system.commands.get('{') == null;
 }
 
 exports.testBasic = function(options) {
   return helpers.audit(options, [
     {
-      skipRemainingIf: jsTestAllowed,
+      skipRemainingIf: jsTestDisallowed,
       setup:    '{',
       check: {
         input:  '{',
@@ -217,7 +218,7 @@ exports.testBasic = function(options) {
 exports.testDocument = function(options) {
   return helpers.audit(options, [
     {
-      skipRemainingIf: jsTestAllowed,
+      skipRemainingIf: jsTestDisallowed,
       setup:    '{ docu',
       check: {
         input:  '{ docu',
@@ -453,7 +454,7 @@ exports.testDonteval = function(options) {
 exports.testExec = function(options) {
   return helpers.audit(options, [
     {
-      skipRemainingIf: jsTestAllowed,
+      skipRemainingIf: jsTestDisallowed,
       setup:    '{ 1+1',
       check: {
         input:  '{ 1+1',

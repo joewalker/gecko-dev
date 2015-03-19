@@ -59,7 +59,6 @@ exports.testBasic = function(options) {
         args: {
           command: { name: 'tsslow' },
           hello: {
-            value: undefined,
             arg: '',
             status: 'INCOMPLETE'
           },
@@ -80,7 +79,6 @@ exports.testBasic = function(options) {
         args: {
           command: { name: 'tsslow' },
           hello: {
-            value: undefined,
             arg: ' S',
             status: 'INCOMPLETE'
           },
@@ -101,7 +99,6 @@ exports.testBasic = function(options) {
         args: {
           command: { name: 'tsslow' },
           hello: {
-            value: 'Shalom',
             arg: ' Shalom ',
             status: 'VALID',
             message: ''
