@@ -20,7 +20,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "server",
+    runAt: "client",
     name: 'resize on',
     description: l10n.lookup('resizeModeOnDesc'),
     manual: l10n.lookupFormat('resizeModeManual2', [BRAND_SHORT_NAME]),
@@ -28,7 +28,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "server",
+    runAt: "client",
     name: 'resize off',
     description: l10n.lookup('resizeModeOffDesc'),
     manual: l10n.lookupFormat('resizeModeManual2', [BRAND_SHORT_NAME]),
@@ -36,7 +36,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "server",
+    runAt: "client",
     name: 'resize toggle',
     buttonId: "command-button-responsive",
     buttonClass: "command-button command-button-invertable",
@@ -68,7 +68,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "server",
+    runAt: "client",
     name: 'resize to',
     description: l10n.lookup('resizeModeToDesc'),
     params: [
