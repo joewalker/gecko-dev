@@ -126,7 +126,6 @@ exports.loadForTarget = function(target) {
     return promise;
   }
 
-  console.log("Creating GCLI system for " + target.url);
   const system = createSystem({ location: "client" });
 
   system.addItemsByModule(exports.baseModules, { delayedLoad: true });
