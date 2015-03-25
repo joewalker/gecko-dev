@@ -107,6 +107,18 @@ exports.loadForServer = function() {
 };
 
 /**
+ * Reverse loadServer()
+ */
+exports.releaseServer = function() {
+  if (systemForServer == null) {
+    console.error("TEST-UNEXPECTED-FAIL: " +
+                  "releaseSystem called for unknown target: " + target.name);
+  }
+
+  systemForServer.destroy();
+};
+
+/**
  * WeakMap<Target, Promise<System>>
  */
 var systemForTarget = new WeakMap();
