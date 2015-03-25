@@ -32,14 +32,17 @@ const GcliActor = ActorClass({
   },
 
   destroy: function() {
-    this._requisitionPromise = undefined;
-    this._tabActor = undefined;
-
-    protocol.Actor.prototype.destroy.call(this);
-
     return this._getRequisition().then(requisition => {
       requisition.system.commands.onCommandsChange.remove(this._commandsChanged);
+
+      gcliInit.releaseServer();
+
+      this._requisitionPromise = undefined;
+      this._tabActor = undefined;
+
       this._commandsChanged = undefined;
+
+      protocol.Actor.prototype.destroy.call(this);
     });
   },
 
