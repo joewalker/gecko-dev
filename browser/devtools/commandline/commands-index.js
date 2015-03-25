@@ -91,7 +91,7 @@ var systemForServer;
  * Setup a system for use in a content process and make sure all the
  * `runAt=server` modules are registered.
  */
-exports.loadForServer = function() {
+exports.loadServer = function() {
   if (systemForServer == null) {
     systemForServer = createSystem({ location: "server" });
 
@@ -134,7 +134,7 @@ var customProperties = [ "buttonId", "buttonClass", "tooltipText" ];
  * Create a system which connects to a GCLI in a remote target
  * @return Promise<System> for the given target
  */
-exports.loadForTarget = function(target) {
+exports.getSystem = function(target) {
   const existingLinks = linksForTarget.get(target);
   if (existingLinks != null) {
     existingLinks.refs++;

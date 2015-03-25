@@ -70,7 +70,7 @@ let CommandUtils = {
    * Utility to ensure that things are loaded in the correct order
    */
   createRequisition: function(environment, target) {
-    return gcliInit.loadForTarget(target).then(system => {
+    return gcliInit.getSystem(target).then(system => {
       var Requisition = require("gcli/cli").Requisition;
       return new Requisition(system, { environment: environment });
     });
@@ -402,7 +402,7 @@ DeveloperToolbar.prototype.show = function(focus) {
       this._doc.getElementById("Tools:DevToolbar").setAttribute("checked", "true");
 
       this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
-      return gcliInit.loadForTarget(this.target).then(system => {
+      return gcliInit.getSystem(this.target).then(system => {
         let Requisition = require("gcli/cli").Requisition;
         this.requisition = new Requisition(system, {
           environment: CommandUtils.createEnvironment(this, "target"),
@@ -624,7 +624,7 @@ DeveloperToolbar.prototype.handleEvent = function(ev) {
   if (ev.type == "TabSelect" || ev.type == "load") {
     if (this.visible) {
       this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
-      gcliInit.loadForTarget(this.target).then(system => {
+      gcliInit.getSystem(this.target).then(system => {
         this.requisition.system = system;
       });
 
