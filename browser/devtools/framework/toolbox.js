@@ -1713,7 +1713,7 @@ Toolbox.prototype = {
     let win = this.frame.ownerGlobal;
 
     if (this._requisition) {
-      this._requisition.destroy();
+      CommandUtils.destroyRequisition(this._requisition, this.target);
     }
     this._telemetry.toolClosed("toolbox");
     this._telemetry.destroy();

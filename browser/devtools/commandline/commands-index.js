@@ -4,7 +4,7 @@
 
 "use strict";
 
-const { createSystem, connectFront } = require("gcli/system");
+const { createSystem, connectFront, disconnectFront } = require("gcli/system");
 const { GcliFront } = require("devtools/server/actors/gcli");
 
 /**
@@ -119,9 +119,10 @@ exports.releaseServer = function() {
 };
 
 /**
- * WeakMap<Target, Promise<System>>
+ * This is WeakMap<Target, Links> where Links is an object that looks like
+ *   { refs: number, promise: Promise<System>, front: GcliFront }
  */
-var systemForTarget = new WeakMap();
+var linksForTarget = new WeakMap();
 
 /**
  * The toolbox uses the following properties on a command to allow it to be
@@ -131,11 +132,13 @@ var customProperties = [ "buttonId", "buttonClass", "tooltipText" ];
 
 /**
  * Create a system which connects to a GCLI in a remote target
+ * @return Promise<System> for the given target
  */
 exports.loadForTarget = function(target) {
-  let promise = systemForTarget.get(target);
-  if (promise != null) {
-    return promise;
+  const existingLinks = linksForTarget.get(target);
+  if (existingLinks != null) {
+    existingLinks.refs++;
+    return existingLinks.promise;
   }
 
   const system = createSystem({ location: "client" });
@@ -148,12 +151,37 @@ exports.loadForTarget = function(target) {
   system.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
 
   // Load the client system
-  promise = system.load().then(() => {
-    return GcliFront.create(target).then(front => {
-      return connectFront(system, front, customProperties).then(() => system);
-    });
-  });
+  const links = {
+    refs: 1,
+    system,
+    promise: system.load().then(() => {
+      return GcliFront.create(target).then(front => {
+        links.front = front;
+        return connectFront(system, front, customProperties).then(() => system);
+      });
+    })
+  };
 
-  systemForTarget.set(target, promise);
-  return promise;
+  linksForTarget.set(target, links);
+  return links.promise;
+};
+
+/**
+ * Someone that called getSystem doesn't need it any more, so decrement the
+ * count of users of the system for that target, and destroy if needed
+ */
+exports.releaseSystem = function(target) {
+  const links = linksForTarget.get(target);
+  if (links == null) {
+    console.error("TEST-UNEXPECTED-FAIL: " +
+                  "releaseSystem called for unknown target: " + target.name);
+  }
+
+  links.refs--;
+  if (links.refs === 0) {
+    disconnectFront(links.system, links.front);
+    links.front.destroy();
+    links.system.destroy();
+    linksForTarget.delete(target);
+  }
 };

@@ -77,6 +77,14 @@ let CommandUtils = {
   },
 
   /**
+   * Destroy the remote side of the requisition as well as the local side
+   */
+  destroyRequisition: function(requisition, target) {
+    requisition.destroy();
+    gcliInit.releaseSystem(target);
+  },
+
+  /**
    * Read a toolbarSpec from preferences
    * @param pref The name of the preference to read
    */
@@ -581,10 +589,12 @@ DeveloperToolbar.prototype.destroy = function() {
   this.display.onVisibilityChange.remove(this.tooltipPanel._visibilityChanged, this.tooltipPanel);
   this.display.onOutput.remove(this.outputPanel._outputChanged, this.outputPanel);
   this.display.destroy();
-  this.requisition.destroy();
   this.outputPanel.destroy();
   this.tooltipPanel.destroy();
   delete this._input;
+
+  this.requisition.destroy();
+  gcliInit.releaseSystem(this.target);
 
   // We could "delete this.display" etc if we have hard-to-track-down memory
   // leaks as a belt-and-braces approach, however this prevents our DOM node
