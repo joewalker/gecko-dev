@@ -103,8 +103,7 @@ exports.items = [
       let env = context.environment;
 
       // Unhighlight on navigate
-      // TODO: I changed from navigate to will-navigate. Is that right?
-      events.on(env.tabActor, "will-navigate", unhighlightAll);
+      events.on(env.__deprecatedTabActor, "will-navigate", unhighlightAll);
 
       let i = 0;
       for (let node of args.selector) {
@@ -112,7 +111,7 @@ exports.items = [
           break;
         }
 
-        let highlighter = new BoxModelHighlighter(env.tabActor);
+        let highlighter = new BoxModelHighlighter(env.__deprecatedTabActor);
         if (args.fill) {
           highlighter.regionFill[args.region] = args.fill;
         }
