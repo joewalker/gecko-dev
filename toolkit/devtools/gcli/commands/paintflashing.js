@@ -16,10 +16,17 @@ const eventEmitter = new EventEmitter();
 const gcli = require("gcli/index");
 const l10n = require("gcli/l10n");
 
-function onPaintFlashingChanged(context) {
-  let tab = context.environment.chromeWindow.gBrowser.selectedTab;
-  let target = TargetFactory.forTab(tab);
+/**
+ * Keep a store of the paintFlashing state here. This is a nasty hack but
+ * the only other way to know is to ask the server, which is async and we need
+ * the answer synchronously in "paintflashing toggle".state()
+ */
+let isContentPaintFlashing = false;
 
+/**
+ * Fire events and telemetry when paintFlashing happens
+ */
+function onPaintFlashingChanged(target, value) {
   eventEmitter.emit("changed", { target: target });
   function fireChange() {
     eventEmitter.emit("changed", { target: target });
@@ -28,14 +35,47 @@ function onPaintFlashingChanged(context) {
   target.off("navigate", fireChange);
   target.once("navigate", fireChange);
 
-  let window = context.environment.window;
-  let wUtils = window.QueryInterface(Ci.nsIInterfaceRequestor)
-                     .getInterface(Ci.nsIDOMWindowUtils);
-  if (wUtils.paintFlashing) {
+  if (newValue) {
     telemetry.toolOpened("paintflashing");
   } else {
     telemetry.toolClosed("paintflashing");
   }
+}
+
+/**
+ * Alter the paintFlashing state of a window and report on the new value.
+ * This works with chrome or content windows.
+ *
+ * This is a bizarre method that you could argue should be broken up into
+ * separate getter and setter functions, however keeping it as one helps
+ * to simplify the commands below.
+ *
+ * @param state {string} One of:
+ * - "on" which does window.paintFlashing = true
+ * - "off" which does window.paintFlashing = false
+ * - "toggle" which does window.paintFlashing = !window.paintFlashing
+ * - "query" which does nothing
+ * @return The new value of the window.paintFlashing flag
+ */
+function setPaintFlashing(window, state) {
+  const winUtils = window.QueryInterface(Ci.nsIInterfaceRequestor)
+                         .getInterface(Ci.nsIDOMWindowUtils)
+
+  if (["on", "off", "toggle", "query"].indexOf(state) === -1) {
+    throw new Error("Unsupported state: " + state);
+  }
+
+  if (state === "on") {
+    winUtils.paintFlashing = true;
+  }
+  else if (state === "off") {
+    winUtils.paintFlashing = false;
+  }
+  else if (state === "toggle") {
+    winUtils.paintFlashing = !winUtils.paintFlashing;
+  }
+
+  return winUtils.paintFlashing;
 }
 
 exports.items = [
@@ -45,7 +85,7 @@ exports.items = [
   },
   {
     item: "command",
-    runAt: "server",
+    runAt: "client",
     name: "paintflashing on",
     description: l10n.lookup("paintflashingOnDesc"),
     manual: l10n.lookup("paintflashingManual"),
@@ -60,20 +100,20 @@ exports.items = [
         }
       ]
     }],
-    exec: function(args, context) {
-      let window = args.chrome ?
-                  context.environment.chromeWindow :
-                  context.environment.window;
-
-      window.QueryInterface(Ci.nsIInterfaceRequestor)
-            .getInterface(Ci.nsIDOMWindowUtils)
-            .paintFlashing = true;
-      onPaintFlashingChanged(context);
+    exec: function*(args, context) {
+      if (!args.chrome) {
+        const value = yield context.updateExec("paintflashing_server --state on");
+        isContentPaintFlashing = value;
+        onPaintFlashingChanged(context.environment.target, value);
+      }
+      else {
+        setPaintFlashing(context.environment.chromeWindow, "on");
+      }
     }
   },
   {
     item: "command",
-    runAt: "server",
+    runAt: "client",
     name: "paintflashing off",
     description: l10n.lookup("paintflashingOffDesc"),
     manual: l10n.lookup("paintflashingManual"),
@@ -89,54 +129,54 @@ exports.items = [
       ]
     }],
     exec: function(args, context) {
-      let window = args.chrome ?
-                  context.environment.chromeWindow :
-                  context.environment.window;
-
-      window.QueryInterface(Ci.nsIInterfaceRequestor)
-            .getInterface(Ci.nsIDOMWindowUtils)
-            .paintFlashing = false;
-      onPaintFlashingChanged(context);
+      if (!args.chrome) {
+        const value = yield context.updateExec("paintflashing_server --state off");
+        isContentPaintFlashing = value;
+        onPaintFlashingChanged(context.environment.target, value);
+      }
+      else {
+        setPaintFlashing(context.environment.chromeWindow, "off");
+      }
     }
   },
   {
     item: "command",
-    runAt: "server",
+    runAt: "client",
     name: "paintflashing toggle",
     hidden: true,
     buttonId: "command-button-paintflashing",
     buttonClass: "command-button command-button-invertable",
     state: {
-      isChecked: function(aTarget) {
-        if (aTarget.isLocalTab) {
-          let isChecked = false;
-          let window = aTarget.tab.linkedBrowser.contentWindow;
-          if (window) {
-            let wUtils = window.QueryInterface(Ci.nsIInterfaceRequestor).
-                                getInterface(Ci.nsIDOMWindowUtils);
-            isChecked = wUtils.paintFlashing;
-          }
-          return isChecked;
-        } else {
-          throw new Error("Unsupported target");
-        }
-      },
-      onChange: function(aTarget, aChangeHandler) {
-        eventEmitter.on("changed", aChangeHandler);
-      },
-      offChange: function(aTarget, aChangeHandler) {
-        eventEmitter.off("changed", aChangeHandler);
-      },
+      isChecked: () => isContentPaintFlashing,
+      onChange: (_, handler) => eventEmitter.on("changed", handler),
+      offChange: (_, handler) => eventEmitter.off("changed", handler),
     },
     tooltipText: l10n.lookup("paintflashingTooltip"),
     description: l10n.lookup("paintflashingToggleDesc"),
     manual: l10n.lookup("paintflashingManual"),
     exec: function(args, context) {
-      let window = context.environment.window;
-      let wUtils = window.QueryInterface(Ci.nsIInterfaceRequestor).
-                   getInterface(Ci.nsIDOMWindowUtils);
-      wUtils.paintFlashing = !wUtils.paintFlashing;
-      onPaintFlashingChanged(context);
+      const value = yield context.updateExec("paintflashing_server --state toggle");
+      isContentPaintFlashing = value;
+      onPaintFlashingChanged(context.environment.target, value);
+    }
+  },
+  {
+    item: "command",
+    runAt: "server",
+    name: "paintflashing_server",
+    hidden: true,
+    params: [
+      {
+        name: "state",
+        type: {
+          name: "selection",
+          data: [ "on", "off", "toggle", "query" ]
+        }
+      },
+    ],
+    returnType: "boolean",
+    exec: function(args) {
+      return setPaintFlashing(context.environment.window, args.state);
     }
   }
 ];
