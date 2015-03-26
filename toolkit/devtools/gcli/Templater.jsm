@@ -65,6 +65,10 @@ var template = function(node, data, options) {
   processNode(state, node, data);
 };
 
+if (typeof exports !== 'undefined') {
+  exports.template = template;
+}
+
 /**
  * Helper for the places where we need to act asynchronously and keep track of
  * where we are right now
@@ -537,10 +541,6 @@ function property(state, path, data, newValue) {
 /**
  * Like eval, but that creates a context of the variables in <tt>env</tt> in
  * which the script is evaluated.
- * WARNING: This script uses 'with' which is generally regarded to be evil.
- * The alternative is to create a Function at runtime that takes X parameters
- * according to the X keys in the env object, and then call that function using
- * the values in the env object. This is likely to be slow, but workable.
  * @param script The string to be evaluated.
  * @param data The environment in which to eval the script.
  * @param frame Optional debugging string in case of failure.
@@ -568,12 +568,7 @@ function envEval(state, script, data, frame) {
       // keys in 'data' and with 'script' as its function body.
       // We then call this function with the values in 'data'
       var keys = allKeys(data);
-      var args = keys.join(', ');
-      var func = 'function(' + args + ') { return ' + script + '; }';
-
-      // In order to extract this function from the eval, we wrap it in an IIFE
-      func = '(function() { return ' + func + ' })();';
-      func = eval(func);
+      var func = Function.apply(null, keys.concat("return " + script));
 
       var values = keys.map(function(key) { return data[key]; });
       return func.apply(null, values);
@@ -585,10 +580,6 @@ function envEval(state, script, data, frame) {
       // code above, the global is null. (Using 'func.apply(data, values)'
       // changes 'this' in the 'foo()' frame, but not in the inside the body
       // of 'foo', so that wouldn't help)
-
-      // TODO: Come ES6 we can probably do something like this:
-      //   let func = new Function(...keys, 'return ' + script);
-      //   return func(...keys.map(key => data[key]));
     }
   }
   catch (ex) {
