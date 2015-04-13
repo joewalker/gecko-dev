@@ -111,8 +111,7 @@ exports.loadServer = function() {
  */
 exports.releaseServer = function() {
   if (systemForServer == null) {
-    console.error("TEST-UNEXPECTED-FAIL: " +
-                  "releaseSystem called for unknown target: " + target.name);
+    throw new Error("releaseServer called with systemForServer == null");
   }
 
   systemForServer.destroy();
@@ -173,8 +172,7 @@ exports.getSystem = function(target) {
 exports.releaseSystem = function(target) {
   const links = linksForTarget.get(target);
   if (links == null) {
-    console.error("TEST-UNEXPECTED-FAIL: " +
-                  "releaseSystem called for unknown target: " + target.name);
+    throw new Error("releaseSystem called for unknown target");
   }
 
   links.refs--;
