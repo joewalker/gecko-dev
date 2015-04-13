@@ -18,7 +18,7 @@
 
 // A copy of this code exists in firefox mochitests. They should be kept
 // in sync. Hence the exports synonym for non AMD contexts.
-var { helpers, gcli, assert } = (function() {
+var { helpers, assert } = (function() {
 
 var helpers = {};
 
@@ -30,7 +30,8 @@ var util = require('gcli/util/util');
 var Promise = require('gcli/util/promise').Promise;
 var cli = require('gcli/cli');
 var KeyEvent = require('gcli/util/util').KeyEvent;
-var gcli = require('gcli/index');
+
+const { GcliFront } = require("devtools/server/actors/gcli");
 
 /**
  * See notes in helpers.checkOptions()
@@ -376,7 +377,7 @@ helpers.runTests = function(options, tests) {
 
   var recover = function(error) {
     ok(false, error);
-    console.error(error);
+    console.error(error, error.stack);
   };
 
   info("SETUP");
@@ -408,6 +409,60 @@ helpers.runTests = function(options, tests) {
         Promise.resolve(tests.shutdown(options)) :
         Promise.resolve();
   }, recover);
+};
+
+const MOCK_COMMANDS_URI = "chrome://mochitests/content/browser/browser/devtools/commandline/test/mockCommands.js";
+
+/**
+ * This does several actions associated with running a GCLI test in mochitest
+ * 1. Create a new tab containing basic markup for GCLI tests
+ * 2. Open the developer toolbar
+ * 3. Register the mock commands with the server process
+ * 4. Wait for the proxy commands to be auto-regitstered with the client
+ * 5. Register the mock converters with the client process
+ * 6. Run all the tests
+ * 7. Tear down all the setup
+ */
+helpers.runTestModule = function(exports, name) {
+  return Task.spawn(function*() {
+    const uri = "data:text/html;charset=utf-8," +
+                "<style>div{color:red;}</style>" +
+                "<div id='gcli-root'>" + name + "</div>";
+
+    const options = yield helpers.openTab(uri);
+    options.isRemote = true;
+
+    yield helpers.openToolbar(options);
+
+    const system = options.requisition.system;
+    // Register a one time listener with the local set of commands
+    const addPromise = system.commands.onCommandsChange.once();
+
+    // Send a message to add the commands to the content process
+    const front = yield GcliFront.create(options.target);
+    yield front._testOnly_addItemsByModule(MOCK_COMMANDS_URI);
+
+    // This will cause the local set of commands to be updated with the
+    // command proxies, wait for that to complete.
+    yield addPromise;
+
+    // Now we need to add the converters to the local GCLI
+    const converters = mockCommands.items.filter(item => item.item === 'converter');
+    system.addItems(converters);
+
+    // Next run the tests
+    yield helpers.runTests(options, exports);
+
+    // Finally undo the mock commands and converters
+    system.removeItems(converters);
+    const removePromise = system.commands.onCommandsChange.once();
+    yield front._testOnly_removeItemsByModule(MOCK_COMMANDS_URI);
+    yield removePromise;
+
+    // And close everything down
+    yield helpers.closeToolbar(options);
+    yield helpers.closeTab(options);
+  }).then(finish, helpers.handleError);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -759,15 +814,15 @@ helpers._check = function(options, name, checks) {
   var outstanding = [];
   var suffix = name ? ' (for \'' + name + '\')' : '';
 
-  if (!options.isNoDom && 'input' in checks) {
+  if (!options.isNode && 'input' in checks) {
     assert.is(helpers._actual.input(options), checks.input, 'input' + suffix);
   }
 
-  if (!options.isNoDom && 'cursor' in checks) {
+  if (!options.isNode && 'cursor' in checks) {
     assert.is(helpers._actual.cursor(options), checks.cursor, 'cursor' + suffix);
   }
 
-  if (!options.isNoDom && 'current' in checks) {
+  if (!options.isNode && 'current' in checks) {
     assert.is(helpers._actual.current(options), checks.current, 'current' + suffix);
   }
 
@@ -775,18 +830,18 @@ helpers._check = function(options, name, checks) {
     assert.is(helpers._actual.status(options), checks.status, 'status' + suffix);
   }
 
-  if (!options.isNoDom && 'markup' in checks) {
+  if (!options.isNode && 'markup' in checks) {
     assert.is(helpers._actual.markup(options), checks.markup, 'markup' + suffix);
   }
 
-  if (!options.isNoDom && 'hints' in checks) {
+  if (!options.isNode && 'hints' in checks) {
     var hintCheck = function(actualHints) {
       assert.is(actualHints, checks.hints, 'hints' + suffix);
     };
     outstanding.push(helpers._actual.hints(options).then(hintCheck));
   }
 
-  if (!options.isNoDom && 'predictions' in checks) {
+  if (!options.isNode && 'predictions' in checks) {
     var predictionsCheck = function(actualPredictions) {
       helpers.arrayIs(actualPredictions,
                        checks.predictions,
@@ -795,12 +850,16 @@ helpers._check = function(options, name, checks) {
     outstanding.push(helpers._actual.predictions(options).then(predictionsCheck));
   }
 
-  if (!options.isNoDom && 'predictionsContains' in checks) {
+  if (!options.isNode && 'predictionsContains' in checks) {
     var containsCheck = function(actualPredictions) {
       checks.predictionsContains.forEach(function(prediction) {
         var index = actualPredictions.indexOf(prediction);
         assert.ok(index !== -1,
                   'predictionsContains:' + prediction + suffix);
+        if (index === -1) {
+          log('Actual predictions (' + actualPredictions.length + '): ' +
+              actualPredictions.join(', '));
+        }
       });
     };
     outstanding.push(helpers._actual.predictions(options).then(containsCheck));
@@ -813,26 +872,26 @@ helpers._check = function(options, name, checks) {
   }
 
   /* TODO: Fix this
-  if (!options.isNoDom && 'tooltipState' in checks) {
+  if (!options.isNode && 'tooltipState' in checks) {
     assert.is(helpers._actual.tooltipState(options),
               checks.tooltipState,
               'tooltipState' + suffix);
   }
   */
 
-  if (!options.isNoDom && 'outputState' in checks) {
+  if (!options.isNode && 'outputState' in checks) {
     assert.is(helpers._actual.outputState(options),
               checks.outputState,
               'outputState' + suffix);
   }
 
-  if (!options.isNoDom && 'options' in checks) {
+  if (!options.isNode && 'options' in checks) {
     helpers.arrayIs(helpers._actual.options(options),
                      checks.options,
                      'options' + suffix);
   }
 
-  if (!options.isNoDom && 'error' in checks) {
+  if (!options.isNode && 'error' in checks) {
     assert.is(helpers._actual.message(options), checks.error, 'error' + suffix);
   }
 
@@ -894,7 +953,7 @@ helpers._check = function(options, name, checks) {
                   'arg.' + paramName + '.status' + suffix);
       }
 
-      if (!options.isNoDom && 'message' in check) {
+      if (!options.isNode && 'message' in check) {
         if (typeof check.message.test === 'function') {
           assert.ok(check.message.test(assignment.message),
                     'arg.' + paramName + '.message' + suffix);
@@ -952,12 +1011,12 @@ helpers._exec = function(options, name, expected) {
 
       var context = requisition.conversionContext;
       var convertPromise;
-      if (options.isNoDom) {
+      if (options.isNode) {
         convertPromise = output.convert('string', context);
       }
       else {
         convertPromise = output.convert('dom', context).then(function(node) {
-          return node.textContent.trim();
+          return (node == null) ? '' : node.textContent.trim();
         });
       }
 
@@ -1171,9 +1230,8 @@ helpers.audit = function(options, audits) {
             '';
         assert.log('Skipped ' + name + ' ' + skipReason);
 
-        // Tests need at least one pass, fail or todo. Let's create a dummy pass
-        // in case there are none.
-        ok(true, "Each test requires at least one pass, fail or todo so here is a pass.");
+        // Tests need at least one pass, fail or todo. Create a dummy pass
+        assert.ok(true, 'Each test requires at least one pass, fail or todo');
 
         return Promise.resolve(undefined);
       }
@@ -1270,5 +1328,5 @@ function log(message) {
   }
 }
 
-return { helpers: helpers, gcli: gcli, assert: assert };
+return { helpers: helpers, assert: assert };
 })();

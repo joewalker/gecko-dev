@@ -54,6 +54,13 @@ function* runTest() {
   is(tooltipPanel._dimensions.start, 0,
           'search param start, when cursor at start');
   ok(getLeftMargin() > 9, 'tooltip offset, when cursor at start')
+
+  info("Hide toolbar");
+  let hidePromise = observeOnce(DeveloperToolbar.NOTIFICATIONS.HIDE);
+  document.getElementById("Tools:DevToolbar").doCommand();
+  yield hidePromise;
+
+  info("Done test");
 }
 
 function getLeftMargin() {
