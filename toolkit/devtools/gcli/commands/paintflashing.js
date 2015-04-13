@@ -35,7 +35,7 @@ function onPaintFlashingChanged(target, value) {
   target.off("navigate", fireChange);
   target.once("navigate", fireChange);
 
-  if (newValue) {
+  if (value) {
     telemetry.toolOpened("paintflashing");
   } else {
     telemetry.toolClosed("paintflashing");
@@ -175,7 +175,7 @@ exports.items = [
       },
     ],
     returnType: "boolean",
-    exec: function(args) {
+    exec: function(args, context) {
       return setPaintFlashing(context.environment.window, args.state);
     }
   }
