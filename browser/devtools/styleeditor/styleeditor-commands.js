@@ -6,6 +6,22 @@
 
 const l10n = require("gcli/l10n");
 
+/**
+ * The `edit` command opens the toolbox to the style editor, with a given
+ * stylesheet open.
+ *
+ * This command is tricky. The 'edit' command uses the toolbox, so it's
+ * clearly runAt:client, but it uses the 'resource' type which accesses the
+ * DOM, so it must also be runAt:server.
+ *
+ * Our solution is to have the command technically be runAt:server, but to not
+ * actually do anything other than basically `return args;`, and have the
+ * converter (all converters are runAt:client) do the actual work of opening
+ * a toolbox.
+ *
+ * For alternative solutions that we considered, see the comment on commit
+ * 2645af7.
+ */
 exports.items = [{
   item: "command",
   runAt: "server",
@@ -34,7 +50,6 @@ exports.items = [{
    ],
    returnType: "editArgs",
    exec: args => {
-     console.log(args);
      return { href: args.resource.name, line: args.line };
    }
 }, {
