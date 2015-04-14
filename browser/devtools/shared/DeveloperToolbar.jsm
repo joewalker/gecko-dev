@@ -218,11 +218,13 @@ let CommandUtils = {
       },
 
       get window() {
-        throw new Error("environment.window is not available in runAt:client commands");
+        // throw new Error("environment.window is not available in runAt:client commands");
+        return this.chromeWindow.gBrowser.contentWindowAsCPOW;
       },
 
       get document() {
-        throw new Error("environment.document is not available in runAt:client commands");
+        // throw new Error("environment.document is not available in runAt:client commands");
+        return this.chromeWindow.gBrowser.contentDocumentAsCPOW;
       }
     };
   },
