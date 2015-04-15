@@ -9,6 +9,7 @@ const {
   method, Arg, Option, RetVal, Front, FrontClass, Actor, ActorClass
 } = require("devtools/server/protocol");
 const events = require("sdk/event/core");
+const { createSystem } = require("gcli/system");
 
 /**
  * Manage remote connections that want to talk to GCLI
@@ -31,18 +32,24 @@ const GcliActor = ActorClass({
     this._requisitionPromise = undefined; // see _getRequisition()
   },
 
-  destroy: function() {
-    return this._getRequisition().then(requisition => {
-      requisition.system.commands.onCommandsChange.remove(this._commandsChanged);
+  disconnect: function() {
+    return this.destroy();
+  },
 
-      gcliInit.releaseServer();
+  destroy: function() {
+    Actor.prototype.destroy.call(this);
+
+    return this._getRequisition().then(requisition => {
+      requisition.destroy();
+
+      this._system.commands.onCommandsChange.remove(this._commandsChanged);
+      this._system.destroy();
+      this._system = undefined;
 
       this._requisitionPromise = undefined;
       this._tabActor = undefined;
 
       this._commandsChanged = undefined;
-
-      protocol.Actor.prototype.destroy.call(this);
     });
   },
 
@@ -214,16 +221,25 @@ const GcliActor = ActorClass({
    * Lazy init for a Requisition
    */
   _getRequisition: function() {
+    if (this._tabActor == null) {
+      throw new Error('GcliActor used post-destroy');
+    }
+
     if (this._requisitionPromise != null) {
       return this._requisitionPromise;
     }
 
-    let gcliInit = require("devtools/commandline/commands-index");
-    let Requisition = require("gcli/cli").Requisition;
-    let tabActor = this._tabActor;
+    const Requisition = require("gcli/cli").Requisition;
+    const tabActor = this._tabActor;
 
-    this._requisitionPromise = gcliInit.loadServer().then(system => {
-      let environment = {
+    this._system = createSystem({ location: "server" });
+    this._system.commands.onCommandsChange.add(this._commandsChanged);
+
+    const gcliInit = require("devtools/commandline/commands-index");
+    gcliInit.addAllItemsByModule(this._system);
+
+    this._requisitionPromise = this._system.load().then(() => {
+      const environment = {
         get chromeWindow() {
           throw new Error("environment.chromeWindow is not available in runAt:server commands");
         },
@@ -237,10 +253,7 @@ const GcliActor = ActorClass({
         get __deprecatedTabActor() tabActor,
       };
 
-      let requisition = new Requisition(system, { environment: environment });
-      requisition.system.commands.onCommandsChange.add(this._commandsChanged);
-
-      return requisition;
+      return new Requisition(this._system, { environment: environment });
     });
 
     return this._requisitionPromise;

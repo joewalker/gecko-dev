@@ -84,38 +84,15 @@ exports.devtoolsToolModules = defaultTools.map(def => def.commands || [])
                                  .reduce((prev, curr) => prev.concat(curr), []);
 
 /**
- * Cache of the system we created
+ * Add modules to a system for use in a content process (but don't call load)
  */
-var systemForServer;
+exports.addAllItemsByModule = function(system) {
+  system.addItemsByModule(exports.baseModules, { delayedLoad: true });
+  system.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
+  system.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
 
-/**
- * Setup a system for use in a content process and make sure all the
- * `runAt=server` modules are registered.
- */
-exports.loadServer = function() {
-  if (systemForServer == null) {
-    systemForServer = createSystem({ location: "server" });
-
-    systemForServer.addItemsByModule(exports.baseModules, { delayedLoad: true });
-    systemForServer.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
-    systemForServer.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
-
-    const { mozDirLoader } = require("gcli/commands/cmd");
-    systemForServer.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
-  }
-
-  return systemForServer.load().then(() => systemForServer);
-};
-
-/**
- * Reverse loadServer()
- */
-exports.releaseServer = function() {
-  if (systemForServer == null) {
-    throw new Error("releaseServer called with systemForServer == null");
-  }
-
-  systemForServer.destroy();
+  const { mozDirLoader } = require("gcli/commands/cmd");
+  system.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
 };
 
 /**
@@ -143,12 +120,7 @@ exports.getSystem = function(target) {
 
   const system = createSystem({ location: "client" });
 
-  system.addItemsByModule(exports.baseModules, { delayedLoad: true });
-  system.addItemsByModule(exports.devtoolsModules, { delayedLoad: true });
-  system.addItemsByModule(exports.devtoolsToolModules, { delayedLoad: true });
-
-  const { mozDirLoader } = require("gcli/commands/cmd");
-  system.addItemsByModule("mozcmd", { delayedLoad: true, loader: mozDirLoader });
+  exports.addAllItemsByModule(system);
 
   // Load the client system
   const links = {
@@ -179,7 +151,6 @@ exports.releaseSystem = function(target) {
   links.refs--;
   if (links.refs === 0) {
     disconnectFront(links.system, links.front);
-    links.front.destroy();
     links.system.destroy();
     linksForTarget.delete(target);
   }
