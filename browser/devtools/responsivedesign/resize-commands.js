@@ -45,15 +45,20 @@ exports.items = [
     manual: l10n.lookupFormat('resizeModeManual2', [BRAND_SHORT_NAME]),
     state: {
       isChecked: function(aTarget) {
+        if (!aTarget.tab) {
+          return false;
+        }
         let browserWindow = aTarget.tab.ownerDocument.defaultView;
         let mgr = browserWindow.ResponsiveUI.ResponsiveUIManager;
         return mgr.isActiveForTab(aTarget.tab);
       },
       onChange: function(aTarget, aChangeHandler) {
-        let browserWindow = aTarget.tab.ownerDocument.defaultView;
-        let mgr = browserWindow.ResponsiveUI.ResponsiveUIManager;
-        mgr.on("on", aChangeHandler);
-        mgr.on("off", aChangeHandler);
+        if (aTarget.tab) {
+          let browserWindow = aTarget.tab.ownerDocument.defaultView;
+          let mgr = browserWindow.ResponsiveUI.ResponsiveUIManager;
+          mgr.on("on", aChangeHandler);
+          mgr.on("off", aChangeHandler);
+        }
       },
       offChange: function(aTarget, aChangeHandler) {
         if (aTarget.tab) {

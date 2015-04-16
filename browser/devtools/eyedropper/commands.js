@@ -22,6 +22,9 @@ exports.items = [{
   tooltipText: l10n.lookup("eyedropperTooltip"),
   state: {
     isChecked: function(target) {
+      if (!target.tab) {
+        return false;
+      }
       let chromeWindow = target.tab.ownerDocument.defaultView;
       let dropper = EyedropperManager.getInstance(chromeWindow);
       if (dropper) {
