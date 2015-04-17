@@ -413,6 +413,15 @@ helpers.runTests = function(options, tests) {
 
 const MOCK_COMMANDS_URI = "chrome://mochitests/content/browser/browser/devtools/commandline/test/mockCommands.js";
 
+const defer = function() {
+  const deferred = { };
+  deferred.promise = new Promise(function(resolve, reject) {
+    deferred.resolve = resolve;
+    deferred.reject = reject;
+  });
+  return deferred;
+};
+
 /**
  * This does several actions associated with running a GCLI test in mochitest
  * 1. Create a new tab containing basic markup for GCLI tests
@@ -435,8 +444,26 @@ helpers.runTestModule = function(exports, name) {
     yield helpers.openToolbar(options);
 
     const system = options.requisition.system;
+
     // Register a one time listener with the local set of commands
-    const addPromise = system.commands.onCommandsChange.once();
+    const addedDeferred = defer();
+    const removedDeferred = defer();
+    let state = 'preAdd'; // Then 'postAdd' then 'postRemove'
+
+    system.commands.onCommandsChange.add(function(ev) {
+      if (system.commands.get('tsslow') != null) {
+        if (state === 'preAdd') {
+          addedDeferred.resolve();
+          state = 'postAdd';
+        }
+      }
+      else {
+        if (state === 'postAdd') {
+          removedDeferred.resolve();
+          state = 'postRemove';
+        }
+      }
+    });
 
     // Send a message to add the commands to the content process
     const front = yield GcliFront.create(options.target);
@@ -444,7 +471,7 @@ helpers.runTestModule = function(exports, name) {
 
     // This will cause the local set of commands to be updated with the
     // command proxies, wait for that to complete.
-    yield addPromise;
+    yield addedDeferred.promise;
 
     // Now we need to add the converters to the local GCLI
     const converters = mockCommands.items.filter(item => item.item === 'converter');
@@ -457,7 +484,7 @@ helpers.runTestModule = function(exports, name) {
     system.removeItems(converters);
     const removePromise = system.commands.onCommandsChange.once();
     yield front._testOnly_removeItemsByModule(MOCK_COMMANDS_URI);
-    yield removePromise;
+    yield removedDeferred.promise;
 
     // And close everything down
     yield helpers.closeToolbar(options);
