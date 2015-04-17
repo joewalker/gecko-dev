@@ -23,7 +23,7 @@ const BRAND_SHORT_NAME = Cc["@mozilla.org/intl/stringbundle;1"]
 const FILENAME_DEFAULT_VALUE = " ";
 
 /*
- * There are 2 commands and 2 converter here. The 2 commands are nearly
+ * There are 2 commands and 1 converter here. The 2 commands are nearly
  * identical except that one runs on the client and one in the server.
  *
  * The server command is hidden, and is designed to be called from the client
