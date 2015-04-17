@@ -20,8 +20,12 @@ function* spawnTest() {
   // Setup
   let options = yield helpers.openTab(TEST_URI);
 
-  let gcliInit = require("devtools/commandline/commands-index");
-  let system = yield gcliInit.loadServer();
+  const { createSystem } = require("gcli/system");
+  const system = createSystem({ location: "server" });
+
+  const gcliInit = require("devtools/commandline/commands-index");
+  gcliInit.addAllItemsByModule(system);
+  yield system.load();
 
   let settings = system.settings;
 
