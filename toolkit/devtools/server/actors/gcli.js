@@ -39,6 +39,13 @@ const GcliActor = ActorClass({
   destroy: function() {
     Actor.prototype.destroy.call(this);
 
+    // If _getRequisition has not been called, just bail quickly
+    if (this._requisitionPromise == null) {
+      this._commandsChanged = undefined;
+      this._tabActor = undefined;
+      return Promise.resolve();
+    }
+
     return this._getRequisition().then(requisition => {
       requisition.destroy();
 
@@ -238,6 +245,9 @@ const GcliActor = ActorClass({
     const gcliInit = require("devtools/commandline/commands-index");
     gcliInit.addAllItemsByModule(this._system);
 
+    // this._requisitionPromise should be created synchronously with the call
+    // to _getRequisition so that destroy can tell whether there is an async
+    // init in progress
     this._requisitionPromise = this._system.load().then(() => {
       const environment = {
         get chromeWindow() {
