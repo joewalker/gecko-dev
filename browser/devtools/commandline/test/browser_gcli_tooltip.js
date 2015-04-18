@@ -29,11 +29,6 @@ function test() {
 // var helpers = require('./helpers');
 
 exports.testActivate = function(options) {
-  if (!options.display) {
-    assert.log('No display. Skipping activate tests');
-    return;
-  }
-
   return helpers.audit(options, [
     {
       setup:    ' ',

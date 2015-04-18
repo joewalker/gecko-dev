@@ -36,18 +36,18 @@ const { GcliFront } = require("devtools/server/actors/gcli");
 /**
  * See notes in helpers.checkOptions()
  */
-var createFFDisplayAutomator = function(display) {
+var createDeveloperToolbarAutomator = function(toolbar) {
   var automator = {
     setInput: function(typed) {
-      return display.inputter.setInput(typed);
+      return toolbar.inputter.setInput(typed);
     },
 
     setCursor: function(cursor) {
-      return display.inputter.setCursor(cursor);
+      return toolbar.inputter.setCursor(cursor);
     },
 
     focus: function() {
-      return display.inputter.focus();
+      return toolbar.inputter.focus();
     },
 
     fakeKey: function(keyCode) {
@@ -57,36 +57,36 @@ var createFFDisplayAutomator = function(display) {
         timeStamp: new Date().getTime()
       };
 
-      display.inputter.onKeyDown(fakeEvent);
+      toolbar.inputter.onKeyDown(fakeEvent);
 
       if (keyCode === KeyEvent.DOM_VK_BACK_SPACE) {
-        var input = display.inputter.element;
+        var input = toolbar.inputter.element;
         input.value = input.value.slice(0, -1);
       }
 
-      return display.inputter.handleKeyUp(fakeEvent);
+      return toolbar.inputter.handleKeyUp(fakeEvent);
     },
 
     getInputState: function() {
-      return display.inputter.getInputState();
+      return toolbar.inputter.getInputState();
     },
 
     getCompleterTemplateData: function() {
-      return display.completer._getCompleterTemplateData();
+      return toolbar.completer._getCompleterTemplateData();
     },
 
     getErrorMessage: function() {
-      return display.tooltip.errorEle.textContent;
+      return toolbar.tooltip.errorEle.textContent;
     }
   };
 
   Object.defineProperty(automator, 'focusManager', {
-    get: function() { return display.focusManager; },
+    get: function() { return toolbar.focusManager; },
     enumerable: true
   });
 
   Object.defineProperty(automator, 'field', {
-    get: function() { return display.tooltip.field; },
+    get: function() { return toolbar.tooltip.field; },
     enumerable: true
   });
 
@@ -224,9 +224,9 @@ helpers.openToolbar = function(options) {
   options.chromeWindow = options.chromeWindow || window;
 
   return options.chromeWindow.DeveloperToolbar.show(true).then(function() {
-    var display = options.chromeWindow.DeveloperToolbar.display;
-    options.automator = createFFDisplayAutomator(display);
-    options.requisition = display.requisition;
+    var toolbar = options.chromeWindow.DeveloperToolbar;
+    options.automator = createDeveloperToolbarAutomator(toolbar);
+    options.requisition = toolbar.requisition;
     return options;
   });
 };
@@ -332,17 +332,17 @@ helpers.promiseify = function(functionWithLastParamCallback, scope) {
  * Warning: For use with Firefox Mochitests only.
  *
  * As addTab, but that also opens the developer toolbar. In addition a new
- * 'automator' property is added to the options object with the display from GCLI
- * in the developer toolbar
+ * 'automator' property is added to the options object which uses the
+ * developer toolbar
  */
 helpers.addTabWithToolbar = function(url, callback, options) {
   return helpers.addTab(url, function(innerOptions) {
     var win = innerOptions.chromeWindow;
 
     return win.DeveloperToolbar.show(true).then(function() {
-      var display = win.DeveloperToolbar.display;
-      innerOptions.automator = createFFDisplayAutomator(display);
-      innerOptions.requisition = display.requisition;
+      var toolbar = win.DeveloperToolbar;
+      innerOptions.automator = createDeveloperToolbarAutomator(toolbar);
+      innerOptions.requisition = toolbar.requisition;
 
       var reply = callback.call(null, innerOptions);
 

@@ -411,24 +411,47 @@ DeveloperToolbar.prototype.show = function(focus) {
           document: this.outputPanel.document,
         });
 
-        var FFDisplay = require("gcli/mozui/ffdisplay").FFDisplay;
-        this.display = new FFDisplay(system, {
+        const Inputter = require('gcli/mozui/inputter').Inputter;
+        const Completer = require('gcli/mozui/completer').Completer;
+        const Tooltip = require('gcli/mozui/tooltip').Tooltip;
+        const FocusManager = require('gcli/ui/focus').FocusManager;
+
+        this.onOutput = this.requisition.commandOutputManager.onOutput;
+
+        this.focusManager = new FocusManager(this._doc, system.settings);
+
+        this.inputter = new Inputter({
           requisition: this.requisition,
-          chromeDocument: this._doc,
-          hintElement: this.tooltipPanel.hintElement,
-          inputElement: this._input,
-          completeElement: this._doc.querySelector(".gclitoolbar-complete-node"),
-          backgroundElement: this._doc.querySelector(".gclitoolbar-stack-node"),
+          focusManager: this.focusManager,
+          element: this._input,
         });
 
-        this.display.focusManager.addMonitoredElement(this.outputPanel._frame);
-        this.display.focusManager.addMonitoredElement(this._element);
+        console.log('FFDisplay: this.inputter.element.value=' + this.inputter.element.value);
 
-        this.display.onVisibilityChange.add(this.outputPanel._visibilityChanged,
-                                            this.outputPanel);
-        this.display.onVisibilityChange.add(this.tooltipPanel._visibilityChanged,
-                                            this.tooltipPanel);
-        this.display.onOutput.add(this.outputPanel._outputChanged, this.outputPanel);
+        this.completer = new Completer({
+          requisition: this.requisition,
+          inputter: this.inputter,
+          backgroundElement: this._doc.querySelector(".gclitoolbar-stack-node"),
+          element: this._doc.querySelector(".gclitoolbar-complete-node"),
+        });
+
+        this.tooltip = new Tooltip({
+          requisition: this.requisition,
+          focusManager: this.focusManager,
+          inputter: this.inputter,
+          element: this.tooltipPanel.hintElement,
+        });
+
+        this.inputter.tooltip = this.tooltip;
+
+        this.focusManager.addMonitoredElement(this.outputPanel._frame);
+        this.focusManager.addMonitoredElement(this._element);
+
+        this.focusManager.onVisibilityChange.add(this.outputPanel._visibilityChanged,
+                                                 this.outputPanel);
+        this.focusManager.onVisibilityChange.add(this.tooltipPanel._visibilityChanged,
+                                                 this.tooltipPanel);
+        this.onOutput.add(this.outputPanel._outputChanged, this.outputPanel);
 
         let tabbrowser = this._chromeWindow.gBrowser;
         tabbrowser.tabContainer.addEventListener("TabSelect", this, false);
@@ -584,29 +607,26 @@ DeveloperToolbar.prototype.destroy = function() {
   Services.obs.removeObserver(this._devtoolsLoaded, "devtools-loaded");
   Array.prototype.forEach.call(tabbrowser.tabs, this._stopErrorsCount, this);
 
-  this.display.focusManager.removeMonitoredElement(this.outputPanel._frame);
-  this.display.focusManager.removeMonitoredElement(this._element);
+  this.focusManager.removeMonitoredElement(this.outputPanel._frame);
+  this.focusManager.removeMonitoredElement(this._element);
 
-  this.display.onVisibilityChange.remove(this.outputPanel._visibilityChanged, this.outputPanel);
-  this.display.onVisibilityChange.remove(this.tooltipPanel._visibilityChanged, this.tooltipPanel);
-  this.display.onOutput.remove(this.outputPanel._outputChanged, this.outputPanel);
-  this.display.destroy();
+  this.focusManager.onVisibilityChange.remove(this.outputPanel._visibilityChanged,
+                                              this.outputPanel);
+  this.focusManager.onVisibilityChange.remove(this.tooltipPanel._visibilityChanged,
+                                              this.tooltipPanel);
+  this.onOutput.remove(this.outputPanel._outputChanged, this.outputPanel);
+
+  this.tooltip.destroy();
+  this.completer.destroy();
+  this.inputter.destroy();
+  this.focusManager.destroy();
+
   this.outputPanel.destroy();
   this.tooltipPanel.destroy();
   delete this._input;
 
   this.requisition.destroy();
   gcliInit.releaseSystem(this.target);
-
-  // We could "delete this.display" etc if we have hard-to-track-down memory
-  // leaks as a belt-and-braces approach, however this prevents our DOM node
-  // hunter from looking in all the nooks and crannies, so it's better if we
-  // can be leak-free without
-  /*
-  delete this.display;
-  delete this.outputPanel;
-  delete this.tooltipPanel;
-  */
 };
 
 /**
