@@ -411,76 +411,76 @@ DeveloperToolbar.prototype.show = function(focus) {
           document: this.outputPanel.document,
         });
 
-        const Inputter = require('gcli/mozui/inputter').Inputter;
-        const Completer = require('gcli/mozui/completer').Completer;
-        const Tooltip = require('gcli/mozui/tooltip').Tooltip;
-        const FocusManager = require('gcli/ui/focus').FocusManager;
+        return this.requisition.update(this._input.value).then(() => {
+          const Inputter = require('gcli/mozui/inputter').Inputter;
+          const Completer = require('gcli/mozui/completer').Completer;
+          const Tooltip = require('gcli/mozui/tooltip').Tooltip;
+          const FocusManager = require('gcli/ui/focus').FocusManager;
 
-        this.onOutput = this.requisition.commandOutputManager.onOutput;
+          this.onOutput = this.requisition.commandOutputManager.onOutput;
 
-        this.focusManager = new FocusManager(this._doc, system.settings);
+          this.focusManager = new FocusManager(this._doc, system.settings);
 
-        this.inputter = new Inputter({
-          requisition: this.requisition,
-          focusManager: this.focusManager,
-          element: this._input,
+          this.inputter = new Inputter({
+            requisition: this.requisition,
+            focusManager: this.focusManager,
+            element: this._input,
+          });
+
+          this.completer = new Completer({
+            requisition: this.requisition,
+            inputter: this.inputter,
+            backgroundElement: this._doc.querySelector(".gclitoolbar-stack-node"),
+            element: this._doc.querySelector(".gclitoolbar-complete-node"),
+          });
+
+          this.tooltip = new Tooltip({
+            requisition: this.requisition,
+            focusManager: this.focusManager,
+            inputter: this.inputter,
+            element: this.tooltipPanel.hintElement,
+          });
+
+          this.inputter.tooltip = this.tooltip;
+
+          this.focusManager.addMonitoredElement(this.outputPanel._frame);
+          this.focusManager.addMonitoredElement(this._element);
+
+          this.focusManager.onVisibilityChange.add(this.outputPanel._visibilityChanged,
+                                                   this.outputPanel);
+          this.focusManager.onVisibilityChange.add(this.tooltipPanel._visibilityChanged,
+                                                   this.tooltipPanel);
+          this.onOutput.add(this.outputPanel._outputChanged, this.outputPanel);
+
+          let tabbrowser = this._chromeWindow.gBrowser;
+          tabbrowser.tabContainer.addEventListener("TabSelect", this, false);
+          tabbrowser.tabContainer.addEventListener("TabClose", this, false);
+          tabbrowser.addEventListener("load", this, true);
+          tabbrowser.addEventListener("beforeunload", this, true);
+
+          this._initErrorsCount(tabbrowser.selectedTab);
+          this._devtoolsUnloaded = this._devtoolsUnloaded.bind(this);
+          this._devtoolsLoaded = this._devtoolsLoaded.bind(this);
+          Services.obs.addObserver(this._devtoolsUnloaded, "devtools-unloaded", false);
+          Services.obs.addObserver(this._devtoolsLoaded, "devtools-loaded", false);
+
+          this._element.hidden = false;
+
+          if (focus) {
+            this._input.focus();
+          }
+
+          this._notify(NOTIFICATIONS.SHOW);
+
+          if (!DeveloperToolbar.introShownThisSession) {
+            let intro = require("gcli/ui/intro");
+            intro.maybeShowIntro(this.requisition.commandOutputManager,
+                                 this.requisition.conversionContext);
+            DeveloperToolbar.introShownThisSession = true;
+          }
+
+          this._showPromise = null;
         });
-
-        console.log('FFDisplay: this.inputter.element.value=' + this.inputter.element.value);
-
-        this.completer = new Completer({
-          requisition: this.requisition,
-          inputter: this.inputter,
-          backgroundElement: this._doc.querySelector(".gclitoolbar-stack-node"),
-          element: this._doc.querySelector(".gclitoolbar-complete-node"),
-        });
-
-        this.tooltip = new Tooltip({
-          requisition: this.requisition,
-          focusManager: this.focusManager,
-          inputter: this.inputter,
-          element: this.tooltipPanel.hintElement,
-        });
-
-        this.inputter.tooltip = this.tooltip;
-
-        this.focusManager.addMonitoredElement(this.outputPanel._frame);
-        this.focusManager.addMonitoredElement(this._element);
-
-        this.focusManager.onVisibilityChange.add(this.outputPanel._visibilityChanged,
-                                                 this.outputPanel);
-        this.focusManager.onVisibilityChange.add(this.tooltipPanel._visibilityChanged,
-                                                 this.tooltipPanel);
-        this.onOutput.add(this.outputPanel._outputChanged, this.outputPanel);
-
-        let tabbrowser = this._chromeWindow.gBrowser;
-        tabbrowser.tabContainer.addEventListener("TabSelect", this, false);
-        tabbrowser.tabContainer.addEventListener("TabClose", this, false);
-        tabbrowser.addEventListener("load", this, true);
-        tabbrowser.addEventListener("beforeunload", this, true);
-
-        this._initErrorsCount(tabbrowser.selectedTab);
-        this._devtoolsUnloaded = this._devtoolsUnloaded.bind(this);
-        this._devtoolsLoaded = this._devtoolsLoaded.bind(this);
-        Services.obs.addObserver(this._devtoolsUnloaded, "devtools-unloaded", false);
-        Services.obs.addObserver(this._devtoolsLoaded, "devtools-loaded", false);
-
-        this._element.hidden = false;
-
-        if (focus) {
-          this._input.focus();
-        }
-
-        this._notify(NOTIFICATIONS.SHOW);
-
-        if (!DeveloperToolbar.introShownThisSession) {
-          let intro = require("gcli/ui/intro");
-          intro.maybeShowIntro(this.requisition.commandOutputManager,
-                               this.requisition.conversionContext);
-          DeveloperToolbar.introShownThisSession = true;
-        }
-
-        this._showPromise = null;
       });
     });
   });
