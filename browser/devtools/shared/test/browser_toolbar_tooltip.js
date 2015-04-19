@@ -76,6 +76,23 @@ add_task(function* testThemes() {
      "light", "Tooltip panel has correct theme");
 });
 
+
+add_task(function* hideToolbar() {
+  info("Ending browser_toolbar_tooltip.js");
+  yield DeveloperToolbar.inputter.setInput('');
+
+  ok(DeveloperToolbar.visible, "DeveloperToolbar is visible in hideToolbar");
+
+  info("Hide toolbar");
+  let hidePromise = observeOnce(DeveloperToolbar.NOTIFICATIONS.HIDE);
+  document.getElementById("Tools:DevToolbar").doCommand();
+  yield hidePromise;
+
+  ok(!DeveloperToolbar.visible, "DeveloperToolbar is not visible in hideToolbar");
+
+  info("Done test");
+});
+
 function getLeftMargin() {
   let style = DeveloperToolbar.tooltipPanel._panel.style.marginLeft;
   return parseInt(style.slice(0, -2), 10);
