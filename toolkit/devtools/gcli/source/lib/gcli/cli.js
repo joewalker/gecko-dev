@@ -2096,6 +2096,7 @@ Requisition.prototype._contextUpdateExec = function(typed, options) {
   };
   var child = new Requisition(this.system, reqOpts);
   return child.updateExec(typed, options).then(function(reply) {
+    child.destroy();
     return reply;
   }.bind(child));
 };
