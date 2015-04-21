@@ -69,10 +69,10 @@ let CommandUtils = {
   /**
    * Utility to ensure that things are loaded in the correct order
    */
-  createRequisition: function(environment, target) {
+  createRequisition: function(target, options) {
     return gcliInit.getSystem(target).then(system => {
       var Requisition = require("gcli/cli").Requisition;
-      return new Requisition(system, { environment: environment });
+      return new Requisition(system, options);
     });
   },
 
@@ -404,12 +404,12 @@ DeveloperToolbar.prototype.show = function(focus) {
       this._doc.getElementById("Tools:DevToolbar").setAttribute("checked", "true");
 
       this.target = TargetFactory.forTab(this._chromeWindow.gBrowser.selectedTab);
-      return gcliInit.getSystem(this.target).then(system => {
-        let Requisition = require("gcli/cli").Requisition;
-        this.requisition = new Requisition(system, {
-          environment: CommandUtils.createEnvironment(this, "target"),
-          document: this.outputPanel.document,
-        });
+      const options = {
+        environment: CommandUtils.createEnvironment(this, "target"),
+        document: this.outputPanel.document,
+      };
+      return CommandUtils.createRequisition(this.target, options).then(requisition => {
+        this.requisition = requisition;
 
         return this.requisition.update(this._input.value).then(() => {
           const Inputter = require('gcli/mozui/inputter').Inputter;
@@ -419,7 +419,7 @@ DeveloperToolbar.prototype.show = function(focus) {
 
           this.onOutput = this.requisition.commandOutputManager.onOutput;
 
-          this.focusManager = new FocusManager(this._doc, system.settings);
+          this.focusManager = new FocusManager(this._doc, requisition.system.settings);
 
           this.inputter = new Inputter({
             requisition: this.requisition,
@@ -625,8 +625,7 @@ DeveloperToolbar.prototype.destroy = function() {
   this.tooltipPanel.destroy();
   delete this._input;
 
-  this.requisition.destroy();
-  gcliInit.releaseSystem(this.target);
+  CommandUtils.destroyRequisition(this.requisition, this.target);
 };
 
 /**
