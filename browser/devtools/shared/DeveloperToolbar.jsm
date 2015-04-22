@@ -626,6 +626,7 @@ DeveloperToolbar.prototype.destroy = function() {
   delete this._input;
 
   CommandUtils.destroyRequisition(this.requisition, this.target);
+  this.target = undefined;
 };
 
 /**
