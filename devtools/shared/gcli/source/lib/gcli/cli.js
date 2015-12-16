@@ -38,11 +38,12 @@ var ScriptArgument = require('./types/types').ScriptArgument;
 
 var RESOLVED = Promise.resolve(undefined);
 
-// Helper to produce a `deferred` object
-// using DOM Promise
+/**
+ * Helper to produce a `deferred` object using DOM Promise
+ */
 function defer() {
   let resolve, reject;
-  let p = new Promise((a, b) => {
+  let p = new Promise(function(a, b) {
     resolve = a;
     reject = b;
   });
@@ -614,7 +615,6 @@ Object.defineProperty(Requisition.prototype, 'conversionContext', {
     if (this._conversionContext == null) {
       this._conversionContext = {
         defer: defer,
-
         createView: view.createView,
         exec: this.exec.bind(this),
         update: this._contextUpdate.bind(this),
@@ -1168,7 +1168,9 @@ Requisition.prototype.getInputStatusMarkup = function(cursor) {
     var argTrace = argTraces[i];
     var arg = argTrace.arg;
     var status = Status.VALID;
-    if (argTrace.part === 'text') {
+    // When things get very async we can get here while something else is
+    // doing an update, in which case arg.assignment == null, so we check first
+    if (argTrace.part === 'text' && arg.assignment != null) {
       status = arg.assignment.getStatus(arg);
       // Promote INCOMPLETE to ERROR  ...
       if (status === Status.INCOMPLETE) {
